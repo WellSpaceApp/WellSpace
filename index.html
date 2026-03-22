@@ -3,20 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="google-site-verification" content="qsXmgDHGCNEmiyuirnpCXJUSPWvDCoy9l6swUOu6nDk" />
-
-  <!-- SEO -->
-  <title>WellSpace – Student Wellness, Mood Tracking & AI Coaching</title>
-  <meta name="description" content="WellSpace is a free student wellness app for high school students. Track your daily mood, set weekly goals, get AI-powered schedule coaching, and access mental health support — all in one place."/>
-  <meta name="keywords" content="student wellness app, mood tracker for students, high school productivity, student mental health, AI study coach, student goals planner, Ontario student app, wellbeing app for teens"/>
-  <meta name="author" content="WellSpace"/>
-  <meta name="robots" content="index, follow"/>
-  <link rel="canonical" href="https://wellspaceapp.github.io/WellSpace/"/>
-  <meta property="og:title" content="WellSpace – Student Wellness & AI Coaching"/>
-  <meta property="og:description" content="Free app for students — track moods, set goals, get AI schedule coaching & access mental health support."/>
-  <meta property="og:type" content="website"/>
-  <meta property="og:url" content="https://wellspaceapp.github.io/WellSpace/"/>
-
+  <title>WellSpace – Student Wellness & Productivity</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%230f2942'/%3E%3Cpath d='M50 50 C32 36 24 18 32 8 C40-2 54 4 56 24 C57 34 55 44 50 50Z' fill='%232e9e6b'/%3E%3Cpath d='M50 50 C68 36 80 20 78 8 C74-4 58 2 54 22 C52 32 51 42 50 50Z' fill='%234fd49a'/%3E%3Cpath d='M50 50 C34 62 28 78 36 88 C44 98 56 92 56 74 C56 64 54 56 50 50Z' fill='%232e9e6b'/%3E%3Cpath d='M50 50 C66 64 70 80 62 90 C54 100 44 94 46 76 C47 66 48 57 50 50Z' fill='%233db87a'/%3E%3Ccircle cx='50' cy='50' r='4' fill='%23a7f3d0'/%3E%3C/svg%3E"/>
   <link rel="manifest" href="manifest.json"/>
   <meta name="theme-color" content="#0f2942"/>
@@ -115,6 +102,8 @@
         </div>
         <div id="login-err" class="ferr hidden"></div>
         <button class="btn-main" onclick="doLogin()">Log In</button>
+        <p style="text-align:center;margin-top:12px;font-size:.85rem"><a href="#" onclick="openModal('forgot-modal')" style="color:var(--blue)">Forgot your password?</a></p>
+        
       </div>
 
       <!-- SIGNUP FORM (shared, fields toggled by role) -->
@@ -187,7 +176,7 @@
           <label for="su-privacy">I agree to the <a href="#" onclick="showPrivacy()">Privacy Policy</a> — my data is private and never shared without consent</label>
         </div>
         <div id="signup-err" class="ferr hidden"></div>
-        <button class="btn-main" onclick="doSignup()">Create Account</button>
+        <button class="btn-main" onclick="startSignupVerification()">Create Account</button>
       </div>
     </div>
   </div>
@@ -784,9 +773,66 @@
   </div>
 </div>
 
+<!-- EMAIL VERIFICATION MODAL -->
+<div id="verify-modal" class="modal-bg hidden">
+  <div class="modal">
+    <div class="modal-hdr"><h3>✉️ Verify Your Email</h3></div>
+    <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">We sent a 6-digit code to <strong id="verify-email-display"></strong>. Enter it below to complete signup.</p>
+    <div class="fgroup">
+      <label>Verification Code</label>
+      <input type="text" id="verify-code-input" placeholder="Enter 6-digit code" maxlength="6" style="letter-spacing:4px;font-size:1.2rem;text-align:center"/>
+    </div>
+    <div id="verify-err" class="ferr hidden"></div>
+    <div id="verify-ok" class="success-note hidden">✓ Code verified! Creating your account...</div>
+    <div class="modal-foot">
+      <button class="btn-main" onclick="confirmVerifyCode()">Verify & Create Account</button>
+      <button class="btn-outline" onclick="resendVerifyCode()">Resend Code</button>
+    </div>
+    <p style="font-size:.78rem;color:var(--muted);text-align:center;margin-top:12px">Code expires in 10 minutes</p>
+  </div>
+</div>
+
+<!-- FORGOT PASSWORD MODAL -->
+<div id="forgot-modal" class="modal-bg hidden">
+  <div class="modal">
+    <div class="modal-hdr"><h3>🔑 Reset Password</h3><button class="modal-close" onclick="closeModal('forgot-modal')">✕</button></div>
+    <div id="forgot-step-1">
+      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Enter your email address and we'll send you a reset code.</p>
+      <div class="fgroup">
+        <label>Email Address</label>
+        <input type="email" id="forgot-email" placeholder="you@email.com"/>
+      </div>
+      <div id="forgot-err" class="ferr hidden"></div>
+      <button class="btn-main" onclick="sendResetCode()">Send Reset Code</button>
+    </div>
+    <div id="forgot-step-2" class="hidden">
+      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Enter the 6-digit code we sent to <strong id="forgot-email-display"></strong> and choose a new password.</p>
+      <div class="fgroup">
+        <label>Reset Code</label>
+        <input type="text" id="forgot-code-input" placeholder="6-digit code" maxlength="6" style="letter-spacing:4px;font-size:1.2rem;text-align:center"/>
+      </div>
+      <div class="fgroup">
+        <label>New Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="forgot-new-pass" placeholder="8+ chars, uppercase, number, symbol"/>
+          <button class="pw-toggle" onclick="togglePw('forgot-new-pass',this)">👁</button>
+        </div>
+      </div>
+      <div id="forgot-reset-err" class="ferr hidden"></div>
+      <div id="forgot-reset-ok" class="success-note hidden">✓ Password reset! You can now log in.</div>
+      <div class="modal-foot">
+        <button class="btn-main" onclick="confirmResetPassword()">Reset Password</button>
+        <button class="btn-outline" onclick="resendResetCode()">Resend Code</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast" class="toast hidden"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>emailjs.init('hgQbp6YnQ4Y8QabYh');</script>
 <script src="script.js"></script>
 </body>
 </html>
