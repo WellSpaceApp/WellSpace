@@ -2350,8 +2350,196 @@ function executeDeleteAccount(){
 }
 
 // ─────────────────────────────────────────────
-// INIT
+// EMAIL VERIFICATION & FORGOT PASSWORD
 // ─────────────────────────────────────────────
+const EMAILJS_SERVICE  = 'service_jm737lr';
+const EMAILJS_TEMPLATE = 'template_6w1574v';
+
+let pendingVerify = null; // stores signup data + code while waiting for verification
+let pendingReset  = null; // stores email + code for password reset
+
+function generateCode(){
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Called when user clicks "Create Account" — sends verification email first
+function startSignupVerification(){
+  const name     = document.getElementById('su-name').value.trim();
+  const email    = document.getElementById('su-email').value.trim().toLowerCase();
+  const pass     = document.getElementById('su-pass').value;
+  const privacyOk= document.getElementById('su-privacy').checked;
+  const errEl    = document.getElementById('signup-err');
+
+  if(!name||!email||!pass) return showErr(errEl,'Please fill in all required fields.');
+  if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address.');
+  if(!validPw(pass))       return showErr(errEl,'Password must be 8+ chars with uppercase, number & special character.');
+  if(!privacyOk)           return showErr(errEl,'Please accept the privacy policy to continue.');
+
+  if(authRole==='student'){
+    const grade = document.getElementById('su-grade').value;
+    const code  = document.getElementById('su-code').value.trim().toUpperCase();
+    if(!grade) return showErr(errEl,'Please select your grade.');
+    if(gs().find(s=>s.email===email)) return showErr(errEl,'An account with this email already exists.');
+    let classIds=[];
+    if(code){
+      const cls=gc().find(c=>c.code===code);
+      if(!cls) return showErr(errEl,`Class code "${code}" not found.`);
+      classIds=[cls.id];
+    }
+    pendingVerify = { name, email, pass, grade, classIds, role:'student' };
+  } else {
+    const province = document.getElementById('su-province').value;
+    const school   = document.getElementById('su-school').value.trim();
+    if(!province) return showErr(errEl,'Please select your province.');
+    if(gt().find(t=>t.email===email)) return showErr(errEl,'An account with this email already exists.');
+    pendingVerify = { name, email, pass, province, school, role:'teacher' };
+  }
+
+  const verifyCode = generateCode();
+  pendingVerify.code    = verifyCode;
+  pendingVerify.expires = Date.now() + 10*60*1000; // 10 min
+
+  // Send verification email via EmailJS
+  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+    to_name:  name,
+    to_email: email,
+    code:     verifyCode,
+  }).then(()=>{
+    document.getElementById('verify-email-display').textContent = email;
+    document.getElementById('verify-code-input').value = '';
+    document.getElementById('verify-err').classList.add('hidden');
+    document.getElementById('verify-ok').classList.add('hidden');
+    openModal('verify-modal');
+    toast('Verification code sent to your email! 📧');
+  }).catch(err=>{
+    console.error('EmailJS error:', err);
+    showErr(errEl, 'Could not send verification email. Please check your email address and try again.');
+  });
+}
+
+function confirmVerifyCode(){
+  const input  = document.getElementById('verify-code-input').value.trim();
+  const errEl  = document.getElementById('verify-err');
+  const okEl   = document.getElementById('verify-ok');
+
+  if(!pendingVerify) return showErr(errEl,'Something went wrong. Please try signing up again.');
+  if(Date.now() > pendingVerify.expires) return showErr(errEl,'Code expired. Please request a new one.');
+  if(input !== pendingVerify.code) return showErr(errEl,'Incorrect code. Please check your email and try again.');
+
+  okEl.classList.remove('hidden');
+
+  // Create the account
+  setTimeout(()=>{
+    const { name, email, pass, role } = pendingVerify;
+    if(role === 'student'){
+      const u = {id:'s'+uid(), name, email, password:pass, grade:pendingVerify.grade, classIds:pendingVerify.classIds, periodOrder:[], joined:today(), verified:true};
+      const students=gs(); students.push(u); S.set('students',students);
+      CU={role:'student',...u};
+      S.set('session',{role:'student',id:u.id});
+    } else {
+      const u = {id:'t'+uid(), name, email, password:pass, province:pendingVerify.province, school:pendingVerify.school, socialWorker:null, joined:today(), verified:true};
+      const teachers=gt(); teachers.push(u); S.set('teachers',teachers);
+      CU={role:'teacher',...u};
+      S.set('session',{role:'teacher',id:u.id});
+    }
+    pendingVerify = null;
+    closeModal('verify-modal');
+    toast(`Account created! Welcome, ${name} 🎉`);
+    if(CU.role==='student') loadStudentDash(); else loadTeacherDash();
+  }, 1200);
+}
+
+function resendVerifyCode(){
+  if(!pendingVerify) return;
+  const newCode = generateCode();
+  pendingVerify.code    = newCode;
+  pendingVerify.expires = Date.now() + 10*60*1000;
+  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+    to_name:  pendingVerify.name,
+    to_email: pendingVerify.email,
+    code:     newCode,
+  }).then(()=>toast('New code sent! 📧')).catch(()=>toast('Could not resend. Try again.'));
+}
+
+// FORGOT PASSWORD
+function sendResetCode(){
+  const email = document.getElementById('forgot-email').value.trim().toLowerCase();
+  const errEl = document.getElementById('forgot-err');
+  if(!email||!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
+
+  const student = gs().find(s=>s.email===email);
+  const teacher = gt().find(t=>t.email===email);
+  const user    = student || teacher;
+
+  if(!user) return showErr(errEl,'No account found with that email address.');
+
+  const code = generateCode();
+  pendingReset = { email, code, role: student?'student':'teacher', expires: Date.now()+10*60*1000 };
+
+  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+    to_name:  user.name,
+    to_email: email,
+    code:     code,
+  }).then(()=>{
+    document.getElementById('forgot-email-display').textContent = email;
+    document.getElementById('forgot-step-1').classList.add('hidden');
+    document.getElementById('forgot-step-2').classList.remove('hidden');
+    toast('Reset code sent to your email! 📧');
+  }).catch(()=>showErr(errEl,'Could not send email. Please try again.'));
+}
+
+function confirmResetPassword(){
+  const code    = document.getElementById('forgot-code-input').value.trim();
+  const newPass = document.getElementById('forgot-new-pass').value;
+  const errEl   = document.getElementById('forgot-reset-err');
+  const okEl    = document.getElementById('forgot-reset-ok');
+
+  if(!pendingReset) return showErr(errEl,'Session expired. Please start again.');
+  if(Date.now() > pendingReset.expires) return showErr(errEl,'Code expired. Please request a new one.');
+  if(code !== pendingReset.code) return showErr(errEl,'Incorrect code. Please check your email.');
+  if(!validPw(newPass)) return showErr(errEl,'Password needs 8+ chars, uppercase, number & special character.');
+
+  if(pendingReset.role === 'student'){
+    const students = gs();
+    const s = students.find(x=>x.email===pendingReset.email);
+    if(s){ s.password=newPass; S.set('students',students); }
+  } else {
+    const teachers = gt();
+    const t = teachers.find(x=>x.email===pendingReset.email);
+    if(t){ t.password=newPass; S.set('teachers',teachers); }
+  }
+
+  pendingReset = null;
+  okEl.classList.remove('hidden');
+  setTimeout(()=>{
+    closeModal('forgot-modal');
+    // Reset modal state
+    document.getElementById('forgot-step-1').classList.remove('hidden');
+    document.getElementById('forgot-step-2').classList.add('hidden');
+    document.getElementById('forgot-email').value='';
+    document.getElementById('forgot-code-input').value='';
+    document.getElementById('forgot-new-pass').value='';
+    okEl.classList.add('hidden');
+    toast('Password reset! You can now log in. 🎉');
+  }, 2000);
+}
+
+function resendResetCode(){
+  if(!pendingReset) return;
+  const newCode = generateCode();
+  pendingReset.code    = newCode;
+  pendingReset.expires = Date.now()+10*60*1000;
+  const user = pendingReset.role==='student'
+    ? gs().find(s=>s.email===pendingReset.email)
+    : gt().find(t=>t.email===pendingReset.email);
+  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+    to_name:  user?.name||'User',
+    to_email: pendingReset.email,
+    code:     newCode,
+  }).then(()=>toast('New code sent! 📧')).catch(()=>toast('Could not resend. Try again.'));
+}
+
+
 document.addEventListener('DOMContentLoaded',()=>{
   seedDemo();
   // Auto-login if session exists
@@ -2370,4 +2558,3 @@ document.addEventListener('DOMContentLoaded',()=>{
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
 });
- 
