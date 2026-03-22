@@ -904,6 +904,22 @@ function savePeriodOrder(){
   toast('Period order saved! ✓');
 }
 
+function homeJoinClass(){
+  const inp = document.getElementById('home-join-code');
+  const code = inp ? inp.value.trim().toUpperCase() : '';
+  if(!code) return toast('Please enter a class code.');
+  const cls = gc().find(c => c.code === code);
+  if(!cls) return toast('Class code not found. Double-check with your teacher.');
+  if(CU.classIds && CU.classIds.includes(cls.id)) return toast("You are already in this class!");
+  const students = gs();
+  const s = students.find(x => x.id === CU.id);
+  if(s){ s.classIds = [...(s.classIds||[]), cls.id]; S.set('students', students); CU.classIds = s.classIds; }
+  if(inp) inp.value = '';
+  toast('Joined ' + cls.subject + '! Check My Classes in the sidebar.');
+  updateStudentNav();
+  renderHome();
+}
+
 function joinClass(){
   const code=document.getElementById('join-code').value.trim().toUpperCase();
   if(!code)return toast('Please enter a class code.');
