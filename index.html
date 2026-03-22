@@ -803,7 +803,7 @@
         <input type="email" id="forgot-email" placeholder="you@email.com"/>
       </div>
       <div id="forgot-err" class="ferr hidden"></div>
-      <button class="btn-main" onclick="sendResetCode()">Send Reset Code</button>
+      <button class="btn-main" id="forgot-send-btn" onclick="sendResetCode()">Send Reset Code</button>
     </div>
     <div id="forgot-step-2" class="hidden">
       <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Enter the 6-digit code we sent to <strong id="forgot-email-display"></strong> and choose a new password.</p>
@@ -831,4 +831,7 @@
 <!-- TOAST -->
 <div id="toast" class="toast hidden"></div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-sta
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
