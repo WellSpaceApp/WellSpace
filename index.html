@@ -4,6 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>WellSpace – Student Wellness & Productivity</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%230f2942'/%3E%3Cpath d='M50 50 C32 36 24 18 32 8 C40-2 54 4 56 24 C57 34 55 44 50 50Z' fill='%232e9e6b'/%3E%3Cpath d='M50 50 C68 36 80 20 78 8 C74-4 58 2 54 22 C52 32 51 42 50 50Z' fill='%234fd49a'/%3E%3Cpath d='M50 50 C34 62 28 78 36 88 C44 98 56 92 56 74 C56 64 54 56 50 50Z' fill='%232e9e6b'/%3E%3Cpath d='M50 50 C66 64 70 80 62 90 C54 100 44 94 46 76 C47 66 48 57 50 50Z' fill='%233db87a'/%3E%3Ccircle cx='50' cy='50' r='4' fill='%23a7f3d0'/%3E%3C/svg%3E"/>
   <link rel="manifest" href="manifest.json"/>
   <meta name="theme-color" content="#0f2942"/>
   <meta name="mobile-web-app-capable" content="yes"/>
@@ -28,7 +29,17 @@
     <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
   </div>
   <div class="entry-glass">
-    <div class="entry-brand"><span class="brand-leaf">🌿</span><span class="brand-name">WellSpace</span></div>
+    <div class="entry-brand">
+      <svg width="44" height="44" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="48" fill="#0f2942"/>
+        <path d="M50 50 C32 36 24 18 32 8 C40-2 54 4 56 24 C57 34 55 44 50 50Z" fill="#2e9e6b"/>
+        <path d="M50 50 C68 36 80 20 78 8 C74-4 58 2 54 22 C52 32 51 42 50 50Z" fill="#34a87a"/>
+        <path d="M50 50 C34 62 28 78 36 88 C44 98 56 92 56 74 C56 64 54 56 50 50Z" fill="#2e9e6b" opacity=".85"/>
+        <path d="M50 50 C66 64 70 80 62 90 C54 100 44 94 46 76 C47 66 48 57 50 50Z" fill="#3db87a" opacity=".75"/>
+        <circle cx="50" cy="50" r="4" fill="#a7f3d0"/>
+      </svg>
+      <span class="brand-name">WellSpace</span>
+    </div>
     <p class="entry-sub">Wellness · Productivity · Balance</p>
     <div class="entry-cards">
       <button class="role-card student-card" onclick="gotoAuth('student')">
@@ -175,7 +186,7 @@
 <div id="screen-student" class="screen">
   <div class="app-layout">
     <aside class="sidebar" id="s-sidebar">
-      <div class="sb-brand"><span>🌿</span> WellSpace</div>
+      <div class="sb-brand"><svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="48" fill="#1d5fa6"/><path d="M50 50 C32 36 24 18 32 8 C40-2 54 4 56 24 C57 34 55 44 50 50Z" fill="#2e9e6b"/><path d="M50 50 C68 36 80 20 78 8 C74-4 58 2 54 22 C52 32 51 42 50 50Z" fill="#4fd49a"/><path d="M50 50 C34 62 28 78 36 88 C44 98 56 92 56 74 C56 64 54 56 50 50Z" fill="#2e9e6b" opacity=".85"/><path d="M50 50 C66 64 70 80 62 90 C54 100 44 94 46 76 C47 66 48 57 50 50Z" fill="#3db87a" opacity=".75"/><circle cx="50" cy="50" r="4" fill="#a7f3d0"/></svg> WellSpace</div>
       <nav class="sb-nav">
         <a class="sn active" onclick="sSection('home')"    ><i>🏠</i> Home</a>
         <a class="sn"        onclick="sSection('mood')"    ><i>😊</i> Mood Check</a>
@@ -425,7 +436,7 @@
 <div id="screen-teacher" class="screen">
   <div class="app-layout">
     <aside class="sidebar teacher-sb" id="t-sidebar">
-      <div class="sb-brand"><span>📋</span> WellSpace</div>
+      <div class="sb-brand"><svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="48" fill="#1d5fa6"/><path d="M50 50 C32 36 24 18 32 8 C40-2 54 4 56 24 C57 34 55 44 50 50Z" fill="#2e9e6b"/><path d="M50 50 C68 36 80 20 78 8 C74-4 58 2 54 22 C52 32 51 42 50 50Z" fill="#4fd49a"/><path d="M50 50 C34 62 28 78 36 88 C44 98 56 92 56 74 C56 64 54 56 50 50Z" fill="#2e9e6b" opacity=".85"/><path d="M50 50 C66 64 70 80 62 90 C54 100 44 94 46 76 C47 66 48 57 50 50Z" fill="#3db87a" opacity=".75"/><circle cx="50" cy="50" r="4" fill="#a7f3d0"/></svg> WellSpace</div>
       <nav class="sb-nav">
         <a class="sn active" onclick="tSection('overview')"><i>🏠</i> Overview</a>
         <a class="sn"        onclick="tSection('classes')" ><i>📚</i> Classes</a>
