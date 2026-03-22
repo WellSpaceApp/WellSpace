@@ -206,12 +206,15 @@ function doLogin(){
     const u=gs().find(s=>s.email===email&&s.password===pass);
     if(!u)return showErr(errEl,'Email or password incorrect. Check your details.');
     CU={role:'student',...u};
+    // Save session so they don't need to log in again
+    S.set('session',{role:'student',id:u.id});
     toast(`Welcome back, ${u.name}! 👋`);
     loadStudentDash();
   } else {
     const u=gt().find(t=>t.email===email&&t.password===pass);
     if(!u)return showErr(errEl,'Email or password incorrect.');
     CU={role:'teacher',...u};
+    S.set('session',{role:'teacher',id:u.id});
     toast(`Welcome back, ${u.name}! 📋`);
     loadTeacherDash();
   }
@@ -247,6 +250,7 @@ function doSignup(){
     const u={id:'s'+uid(),name,email,password:pass,grade,classIds,periodOrder:[],joined:today()};
     const students=gs(); students.push(u); S.set('students',students);
     CU={role:'student',...u};
+    S.set('session',{role:'student',id:u.id});
     toast(`Account created! Welcome, ${name} 🎉`);
     loadStudentDash();
 
@@ -258,15 +262,16 @@ function doSignup(){
     const u={id:'t'+uid(),name,email,password:pass,province,school,socialWorker:null,joined:today()};
     const teachers=gt(); teachers.push(u); S.set('teachers',teachers);
     CU={role:'teacher',...u};
+    S.set('session',{role:'teacher',id:u.id});
     toast(`Account created! Welcome, ${name} 📋`);
     loadTeacherDash();
   }
 }
 
 function logout(){
-  // Clear session state but keep persistent AI profile in localStorage
   CU=null; authRole=null;
   aiHistory=[]; aiConversation=[]; pendingSuggestion=null;
+  S.set('session', null);
   showScreen('screen-entry');
 }
 
@@ -2349,9 +2354,20 @@ function executeDeleteAccount(){
 // ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
   seedDemo();
+  // Auto-login if session exists
+  const session = S.get('session');
+  if(session){
+    if(session.role==='student'){
+      const u=gs().find(s=>s.id===session.id);
+      if(u){ CU={role:'student',...u}; loadStudentDash(); return; }
+    } else if(session.role==='teacher'){
+      const u=gt().find(t=>t.id===session.id);
+      if(u){ CU={role:'teacher',...u}; loadTeacherDash(); return; }
+    }
+  }
   showScreen('screen-entry');
-  // Register service worker for PWA / offline support
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
 });
+ 
