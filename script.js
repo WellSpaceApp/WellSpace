@@ -303,7 +303,7 @@ function updateStudentNav(){
   const navItems = document.querySelectorAll('#s-sidebar .sn');
   // navMap index 8 = classes
   if(navItems[8]){
-    navItems[8].style.display = hasClasses() ? '' : 'none';
+    navItems[8].style.display = ''; // always show My Classes
   }
 }
 
@@ -2540,7 +2540,12 @@ function resendResetCode(){
 }
 
 
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
+  initFirebase();
+  await fbLoadShared();
   seedDemo();
   // Auto-login if session exists
   const session = S.get('session');
@@ -2554,7 +2559,62 @@ document.addEventListener('DOMContentLoaded',()=>{
     }
   }
   showScreen('screen-entry');
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  }
 });
+
+// ─────────────────────────────────────────────
+// FIREBASE SYNC
+// ─────────────────────────────────────────────
+const FB_CFG = {
+  apiKey: "AIzaSyCpUsu0Y2zbd7PH6a8b-NP6B7yEB7UL9Go",
+  authDomain: "wellspace-71c0c.firebaseapp.com",
+  projectId: "wellspace-71c0c",
+};
+
+let fbDb = null;
+
+function initFirebase(){
+  try {
+    if(!firebase.apps.length) firebase.initializeApp(FB_CFG);
+    fbDb = firebase.firestore();
+  } catch(e){ fbDb = null; }
+}
+
+const SHARED_KEYS = ['students','teachers','classes','moods','goals','wellness','messages','journals','responsibilities'];
+
+async function fbSaveShared(key, value){
+  if(!fbDb) return;
+  try {
+    await fbDb.collection('shared').doc('data').set({ [key]: JSON.stringify(value) }, { merge: true });
+  } catch(e){}
+}
+
+async function fbLoadShared(){
+  if(!fbDb) return;
+  try {
+    const doc = await fbDb.collection('shared').doc('data').get();
+    if(!doc.exists) return;
+    const data = doc.data();
+    Object.entries(data).forEach(([key, val]) => {
+      try {
+        const existing = S.get(key, []);
+        const incoming = JSON.parse(val);
+        if(Array.isArray(incoming) && Array.isArray(existing)){
+          const merged = [...existing];
+          incoming.forEach(item => {
+            const idx = merged.findIndex(x => x.id === item.id);
+            if(idx >= 0) merged[idx] = item;
+            else merged.push(item);
+          });
+          localStorage.setItem('ws_'+key, JSON.stringify(merged));
+        }
+      } catch(e){}
+    });
+  } catch(e){}
+}
+
+// Override S.set to also push to Firebase
+const _origSet = S.set.bind(S);
+S.set = function(k, v){
+  _origSet(k, v);
+  if(SHARED_KEYS.includes(k)) fbSaveShared(k, v);
+};
