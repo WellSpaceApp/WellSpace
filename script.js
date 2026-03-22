@@ -272,7 +272,6 @@ function logout(){
   CU=null; authRole=null;
   aiHistory=[]; aiConversation=[]; pendingSuggestion=null;
   S.set('session', null);
-  localStorage.removeItem('ws_session');
   showScreen('screen-entry');
 }
 
@@ -2400,26 +2399,19 @@ function startSignupVerification(){
   pendingVerify.code    = verifyCode;
   pendingVerify.expires = Date.now() + 10*60*1000; // 10 min
 
-  // Show sending animation
-  const btn = document.querySelector('#form-signup .btn-main');
-  const origText = btn ? btn.textContent : '';
-  if(btn){ btn.textContent = '📧 Sending code...'; btn.disabled = true; }
-
   // Send verification email via EmailJS
   emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
     to_name:  name,
     to_email: email,
     code:     verifyCode,
   }).then(()=>{
-    if(btn){ btn.textContent = origText; btn.disabled = false; }
     document.getElementById('verify-email-display').textContent = email;
     document.getElementById('verify-code-input').value = '';
     document.getElementById('verify-err').classList.add('hidden');
     document.getElementById('verify-ok').classList.add('hidden');
     openModal('verify-modal');
-    toast('✅ Verification code sent! Check your inbox.');
+    toast('Verification code sent to your email! 📧');
   }).catch(err=>{
-    if(btn){ btn.textContent = origText; btn.disabled = false; }
     console.error('EmailJS error:', err);
     showErr(errEl, 'Could not send verification email. Please check your email address and try again.');
   });
@@ -2484,24 +2476,16 @@ function sendResetCode(){
   const code = generateCode();
   pendingReset = { email, code, role: student?'student':'teacher', expires: Date.now()+10*60*1000 };
 
-  // Show sending animation
-  const btn = document.getElementById('forgot-send-btn');
-  if(btn){ btn.textContent = '📧 Sending...'; btn.disabled = true; }
-
   emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
     to_name:  user.name,
     to_email: email,
     code:     code,
   }).then(()=>{
-    if(btn){ btn.textContent = '✅ Code Sent!'; btn.disabled = false; }
     document.getElementById('forgot-email-display').textContent = email;
     document.getElementById('forgot-step-1').classList.add('hidden');
     document.getElementById('forgot-step-2').classList.remove('hidden');
-    toast('✅ Reset code sent! Check your inbox 📧');
-  }).catch(()=>{
-    if(btn){ btn.textContent = 'Send Reset Code'; btn.disabled = false; }
-    showErr(errEl,'Could not send email. Please try again.');
-  });
+    toast('Reset code sent to your email! 📧');
+  }).catch(()=>showErr(errEl,'Could not send email. Please try again.'));
 }
 
 function confirmResetPassword(){
@@ -2557,31 +2541,20 @@ function resendResetCode(){
 
 
 document.addEventListener('DOMContentLoaded',()=>{
-  // Init EmailJS
-  if(typeof emailjs !== 'undefined'){
-    emailjs.init('hgQbp6YnQ4Y8QabYh');
-  }
-
   seedDemo();
-
+  // Auto-login if session exists
+  const session = S.get('session');
+  if(session){
+    if(session.role==='student'){
+      const u=gs().find(s=>s.id===session.id);
+      if(u){ CU={role:'student',...u}; loadStudentDash(); return; }
+    } else if(session.role==='teacher'){
+      const u=gt().find(t=>t.id===session.id);
+      if(u){ CU={role:'teacher',...u}; loadTeacherDash(); return; }
+    }
+  }
+  showScreen('screen-entry');
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
-
-  // AUTO-LOGIN — restore session on reload
-  try {
-    const session = S.get('session');
-    if(session && session.role && session.id){
-      if(session.role === 'student'){
-        const u = gs().find(s => s.id === session.id);
-        if(u){ CU={role:'student',...u}; loadStudentDash(); return; }
-      } else if(session.role === 'teacher'){
-        const u = gt().find(t => t.id === session.id);
-        if(u){ CU={role:'teacher',...u}; loadTeacherDash(); return; }
-      }
-    }
-    S.set('session', null);
-  } catch(e){ S.set('session', null); }
-
-  showScreen('screen-entry');
 });
