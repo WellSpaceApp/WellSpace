@@ -223,7 +223,7 @@ function doLogin(){
 // ─────────────────────────────────────────────
 // AUTH — SIGNUP
 // ─────────────────────────────────────────────
-function doSignup(){
+async function doSignup(){
   const name =document.getElementById('su-name').value.trim();
   const email=document.getElementById('su-email').value.trim().toLowerCase();
   const pass =document.getElementById('su-pass').value;
@@ -234,6 +234,9 @@ function doSignup(){
   if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address (e.g. name@domain.com).');
   if(!validPw(pass))       return showErr(errEl,'Password must be 8+ chars with an uppercase letter, number, and special character.');
   if(!privacyOk)           return showErr(errEl,'Please accept the privacy policy to continue.');
+
+  // Sync from Firebase before checking class codes so cross-device codes work
+  await fbLoadShared();
 
   if(authRole==='student'){
     const grade=document.getElementById('su-grade').value;
@@ -303,7 +306,7 @@ function updateStudentNav(){
   const navItems = document.querySelectorAll('#s-sidebar .sn');
   // navMap index 8 = classes
   if(navItems[8]){
-    navItems[8].style.display = hasClasses() ? '' : 'none';
+    navItems[8].style.display = ''; // always show My Classes
   }
 }
 
@@ -904,9 +907,28 @@ function savePeriodOrder(){
   toast('Period order saved! ✓');
 }
 
-function joinClass(){
+async function homeJoinClass(){
+  const inp = document.getElementById('home-join-code');
+  const code = inp ? inp.value.trim().toUpperCase() : '';
+  if(!code) return toast('Please enter a class code.');
+  // Sync from Firebase first so codes from other devices work
+  await fbLoadShared();
+  const cls = gc().find(c => c.code === code);
+  if(!cls) return toast('Class code not found. Double-check with your teacher.');
+  if(CU.classIds && CU.classIds.includes(cls.id)) return toast("You are already in this class!");
+  const students = gs();
+  const s = students.find(x => x.id === CU.id);
+  if(s){ s.classIds = [...(s.classIds||[]), cls.id]; S.set('students', students); CU.classIds = s.classIds; }
+  if(inp) inp.value = '';
+  toast('Joined ' + cls.subject + '! Check My Classes in the sidebar.');
+  updateStudentNav();
+  renderHome();
+}
+
+async function joinClass(){
   const code=document.getElementById('join-code').value.trim().toUpperCase();
   if(!code)return toast('Please enter a class code.');
+  await fbLoadShared();
   const cls=gc().find(c=>c.code===code);
   if(!cls)return toast(`Class code "${code}" not found. Double-check with your teacher.`);
   if(CU.classIds?.includes(cls.id))return toast('You\'re already in this class!');
