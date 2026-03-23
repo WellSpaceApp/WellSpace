@@ -1421,7 +1421,10 @@ function buildGeneralResponse(text, ctx){
 async function fetchWeatherResponse(text, location, date, ctx){
   try {
     // Use Open-Meteo geocoding + weather (free, no API key needed)
-    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`, { signal: controller.signal });
+    clearTimeout(timeout);
     const geoData = await geoRes.json();
     if(!geoData.results || !geoData.results.length){
       return `I couldn't find "${location}" — try being more specific (e.g. "St. Catharines, Ontario"). I can check weather for any city!`;
