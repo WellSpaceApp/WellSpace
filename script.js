@@ -223,7 +223,7 @@ function doLogin(){
 // ─────────────────────────────────────────────
 // AUTH — SIGNUP
 // ─────────────────────────────────────────────
-function doSignup(){
+async function doSignup(){
   const name =document.getElementById('su-name').value.trim();
   const email=document.getElementById('su-email').value.trim().toLowerCase();
   const pass =document.getElementById('su-pass').value;
@@ -234,6 +234,9 @@ function doSignup(){
   if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address (e.g. name@domain.com).');
   if(!validPw(pass))       return showErr(errEl,'Password must be 8+ chars with an uppercase letter, number, and special character.');
   if(!privacyOk)           return showErr(errEl,'Please accept the privacy policy to continue.');
+
+  // Sync from Firebase before checking class codes so cross-device codes work
+  await fbLoadShared();
 
   if(authRole==='student'){
     const grade=document.getElementById('su-grade').value;
@@ -904,10 +907,12 @@ function savePeriodOrder(){
   toast('Period order saved! ✓');
 }
 
-function homeJoinClass(){
+async function homeJoinClass(){
   const inp = document.getElementById('home-join-code');
   const code = inp ? inp.value.trim().toUpperCase() : '';
   if(!code) return toast('Please enter a class code.');
+  // Sync from Firebase first so codes from other devices work
+  await fbLoadShared();
   const cls = gc().find(c => c.code === code);
   if(!cls) return toast('Class code not found. Double-check with your teacher.');
   if(CU.classIds && CU.classIds.includes(cls.id)) return toast("You are already in this class!");
@@ -920,9 +925,10 @@ function homeJoinClass(){
   renderHome();
 }
 
-function joinClass(){
+async function joinClass(){
   const code=document.getElementById('join-code').value.trim().toUpperCase();
   if(!code)return toast('Please enter a class code.');
+  await fbLoadShared();
   const cls=gc().find(c=>c.code===code);
   if(!cls)return toast(`Class code "${code}" not found. Double-check with your teacher.`);
   if(CU.classIds?.includes(cls.id))return toast('You\'re already in this class!');
@@ -1116,155 +1122,186 @@ function normaliseTime(t){
   return extractTimeFromText(t)||null;
 }
 
-async function respondAI(text){
+function respondAI(text){
   const msgs = document.getElementById('ai-messages');
-  const typing = document.createElement('div');
-  typing.className='msg-ai'; typing.id='ai-typing';
-  typing.innerHTML=`<div class="msg-ai-icon">AI</div><div class="ai-typing"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
-  msgs.appendChild(typing); msgs.scrollTop=msgs.scrollHeight;
+  const lc = text.toLowerCase();
+  const name = CU.name.split(' ')[0];
+  const goals = ggo().filter(g=>g.studentId===CU.id&&!g.done);
+  const todayDay = new Date().toLocaleDateString('en-CA',{weekday:'long'});
+  const todayGoals = goals.filter(g=>g.day===todayDay);
+  let response = '';
+  let suggestion = null;
 
-  const ctx = buildUserContext();
-  const mem = getMemory();
-  const lc  = text.toLowerCase();
-  let response='', suggestion=null;
+  // GYM / WORKOUT
+  if(lc.includes('gym')||lc.includes('workout')||lc.includes('just finished')||lc.includes('just did')){
+    response = `Great work getting that session in! Here is what I recommend:
 
-  // ── Follow-up / correction using memory ──────────────────
-  const isCorrection = lc.includes('but ') || lc.includes('actually') || lc.includes('no,') ||
-    lc.includes('come back') || lc.includes('arrive') || lc.includes('get home') ||
-    lc.includes('back by') || lc.includes('back at') || lc.includes('return') ||
-    lc.includes('instead') || (lc.includes("don't") && !lc.includes("don't want")) || lc.includes('not that');
+**Right now (0-30 min):** Protein snack and water — your body needs fuel to recover.
+**30-60 min:** Light review only — re-read notes, nothing intense.
+**2-3 hours from now:** This is your peak focus window. Schedule your hardest task here.
+**Tonight:** Wind down by 9:30pm. Sleep is when the gains happen.
 
-  if(isCorrection && (mem.activity || pendingSuggestion)){
-    const activity  = mem.activity || pendingSuggestion?.task || 'activity';
-    const targetDay = mem.day || pendingSuggestion?.day || new Date().toLocaleDateString('en-CA',{weekday:'long'});
-    const rawTime   = extractTimeFromText(text);
-    const constraintT = rawTime || mem.timeConstraint;
-
-    if(constraintT){
-      const minMins   = timeToMins(constraintT) + 30;
-      const freeAfter = ctx.freeSlots.filter(s => s.day===targetDay && timeToMins(s.time)>=minMins);
-      const oldCard   = document.getElementById('ai-suggest-card'); if(oldCard) oldCard.remove();
-      if(freeAfter.length){
-        const best = freeAfter[0];
-        response = `Got it — you're back by ${formatTime(constraintT)} on ${targetDay}. Here's the adjusted slot:\n\nBest time for your **${activity}**: **${formatTime(best.time)}** on ${targetDay} (${getDayDate(targetDay)}) — gives you 30 min to get home and change. Want me to add it?`;
-        suggestion = {type:'other', day:targetDay, time:best.time, duration:'1 hour', task:activity};
-      } else {
-        response = `Got it — you're back by ${formatTime(constraintT)} on ${targetDay} and the rest looks busy. How about a different day?\n\n${ctx.freeSlots.filter(s=>s.day!==targetDay).slice(0,3).map(s=>`• **${s.day} (${getDayDate(s.day)}) at ${formatTime(s.time)}**`).join('\n')}`;
-      }
-    } else {
-      response = `Got it! When do you get back on ${targetDay}? (e.g. "I get home at 4:30pm")`;
-    }
+${todayGoals.length ? `You still have ${todayGoals.length} task${todayGoals.length>1?'s':''} today — want me to suggest the best order?` : 'You have no tasks left today — great time to rest!'}`;
   }
 
-  // ── Just a city name as reply ──────────────────────────────
-  else if(text.trim().split(/\s+/).length <= 5 && !lc.includes('?') && mem.activity && (extractLocation(text)||text.match(/st\.?\s*cath/i))){
-    const loc     = extractLocation(text) || text.trim();
-    const dayName = mem.day || new Date().toLocaleDateString('en-CA',{weekday:'long'});
-    const dateStr = extractDateFromText(dayName);
-    const weatherPart = await fetchWeatherResponse(`${mem.activity} in ${loc} on ${dayName}`, loc, dateStr, ctx);
-    const slotResult  = suggestActivitySlot(mem.activity, ctx, mem.activity);
-    response  = weatherPart+(slotResult.message?`\n\n---\n${slotResult.message}`:'');
-    suggestion = slotResult.suggestion;
-  }
-
-  // ── WEATHER ───────────────────────────────────────────────
-  else if(lc.includes('weather')||lc.includes('temperature')||lc.includes('rain')||lc.includes('snow')||lc.includes('forecast')){
-    const loc  = extractLocation(text)||mem.location||'Ontario';
-    const date = extractDateFromText(text)||(mem.day?extractDateFromText(mem.day):null);
-    response = await fetchWeatherResponse(text, loc, date, ctx);
-  }
-
-  // ── RUN / OUTDOOR ─────────────────────────────────────────
-  else if(lc.includes('run')||lc.includes('5k')||lc.includes('jog')||lc.includes('walk')||lc.includes('bike')||lc.includes('outdoor')){
-    const actLabel = lc.includes('run')||lc.includes('5k')||lc.includes('jog')?'🏃 Run':lc.includes('walk')?'🚶 Walk':'🚴 Bike ride';
-    const loc = extractLocation(text)||mem.location;
-    const dayTarget = extractDayFromText(text)||mem.day;
-    if(loc && loc.length>2){
-      const dateStr = dayTarget?extractDateFromText(dayTarget):null;
-      const wp = await fetchWeatherResponse(text, loc, dateStr, ctx);
-      const sr = suggestActivitySlot(text, ctx, actLabel);
-      response = wp+(sr.message?`\n\n---\n${sr.message}`:'');
-      suggestion = sr.suggestion;
-    } else {
-      const result = suggestActivitySlot(text, ctx, actLabel);
-      response = result.message+`\n\nAlso — want me to check the weather? Just tell me your city!`;
-      suggestion = result.suggestion;
-    }
-  }
-
-  // ── GYM ───────────────────────────────────────────────────
-  else if(lc.includes('gym')&&(lc.includes('when')||lc.includes('slot')||lc.includes('time')||lc.includes('schedule')||lc.includes('best'))){
-    const result = suggestActivitySlot(text, ctx,'🏋️ Gym session');
-    response=result.message; suggestion=result.suggestion;
-  }
-
-  // ── PLAN WEEK ─────────────────────────────────────────────
-  else if(lc.includes('plan')&&(lc.includes('week')||lc.includes('schedule'))){
-    response = buildWeekPlan(ctx);
-  }
-
-  // ── TEST / EXAM ───────────────────────────────────────────
+  // TEST / EXAM
   else if(lc.includes('test')||lc.includes('exam')||lc.includes('quiz')){
-    response = buildTestPrepPlan(text, ctx);
-  }
+    const tomorrow = lc.includes('tomorrow')||lc.includes("haven't")||lc.includes('tonight');
+    if(tomorrow){
+      response = `Here is an emergency study plan:
 
-  // ── JUST DID GYM ─────────────────────────────────────────
-  else if(lc.includes('just')&&(lc.includes('gym')||lc.includes('workout')||lc.includes('exercis'))){
-    response=`💪 Great work!\n\n**Next 30 min:** Protein + water.\n**30–60 min:** Light review — re-read notes only.\n**2–3 hrs from now:** Peak focus window — schedule hardest task here.\n**Tonight:** Wind down by 9:30pm.${ctx.recentSleep&&parseFloat(ctx.recentSleep.hours)<7?`\n\n⚠️ Only ${ctx.recentSleep.hours}h sleep — be extra gentle today.`:''}`;
-  }
+**Right now (25 min):** Brain dump everything you already know — no notes yet.
+**Break (5 min):** Walk around, drink water.
+**Next 25 min:** Read notes and textbook — just read, do not re-copy.
+**Break (5 min)**
+**Final 25 min:** Practice questions only. Focus on what you got wrong.
 
-  // ── SLEEP / TIRED ─────────────────────────────────────────
-  else if(lc.includes('sleep')||lc.includes('tired')||lc.includes('exhausted')||lc.match(/\d+ hours? (of )?sleep/)){
-    const h=text.match(/(\d+\.?\d*)\s*h/i);
-    response=buildSleepResponse(h?parseFloat(h[1]):ctx.recentSleep?parseFloat(ctx.recentSleep.hours):null, ctx);
-  }
-
-  // ── OVERWHELMED ───────────────────────────────────────────
-  else if(lc.includes('overwhelm')||lc.includes('stress')||lc.includes('too much')||lc.includes('anxious')){
-    response=buildOverwhelmedResponse(ctx);
-    if(ctx.burnout) response=`💙 I noticed you've been having a rough time — your mood logs show that.\n\n`+response;
-  }
-
-  // ── MOTIVATION ────────────────────────────────────────────
-  else if(lc.includes('motivat')||lc.includes('procrastinat')||lc.includes("can't start")||lc.includes("don't want")){
-    response=`🔥 Starting is the hardest part.\n\n**2-minute rule:** Open your notebook. Read one sentence. Momentum kicks in.\n**Shrink it:** "Study math" → "Look at question 1 only."\n**Phone in another room** — having it visible cuts focus 20%.\n**Reward after 25 min** → something you actually want.\n\nWant me to pick your most urgent task?`;
-  }
-
-  // ── SPECIFIC TIME + ACTIVITY ──────────────────────────────
-  else if(extractTimeFromText(text)&&(extractActivity(text)||mem.activity)){
-    const result=suggestSpecificSlot(extractActivity(text)||mem.activity, extractTimeFromText(text), ctx);
-    response=result.message; suggestion=result.suggestion;
-  }
-
-  // ── DAY QUERY ─────────────────────────────────────────────
-  else if(extractDayFromText(text)){
-    const day=extractDayFromText(text);
-    const classes=ctx.myClasses.filter(c=>c.days?.includes(day));
-    const tasks=ggo().filter(g=>g.studentId===CU.id&&g.day===day);
-    const free=ctx.freeSlots.filter(s=>s.day===day);
-    response=`Here's your **${day} (${getDayDate(day)})**:\n\n${classes.length?`🏫 ${classes.map(c=>`${c.subject} ${c.startTime}–${c.endTime}`).join(', ')}\n`:'📭 No classes\n'}${tasks.length?`📌 ${tasks.map(t=>t.task).join(', ')}\n`:''}${free.length?`\n✅ Free: ${free.slice(0,3).map(s=>formatTime(s.time)).join(', ')}`:'\n⚠️ Busy day!'}\n\nWhat do you want to do on ${day}?`;
-  }
-
-  // ── DEFAULT ───────────────────────────────────────────────
-  else {
-    // If we have context from memory, use it
-    if(mem.activity && mem.day){
-      response=`I remember you wanted to do **${mem.activity}** on **${mem.day}**. ${mem.location?`And you mentioned ${mem.location} for the weather check.`:''}\n\nJust to confirm — do you still want me to find you a time for that? Or has something changed?`;
+**Tonight:** Hard stop 1 hour before bed. Sleep beats cramming — memory consolidates while you sleep.
+**Morning:** 10 min review of key points only. No new material.`;
     } else {
-      response=buildGeneralResponse(text, ctx, mem);
+      response = `Let us build a study plan. Here is what works:
+
+**Spread it out:** 3 sessions of 45 min beats 1 session of 3 hours.
+**Active recall:** Test yourself instead of re-reading.
+**Prioritize weak spots:** Spend 70% of time on what you do not know.
+
+What subject is the test on? I can help you break it down further.`;
     }
+  }
+
+  // SLEEP / TIRED
+  else if(lc.includes('sleep')||lc.includes('tired')||lc.includes('exhausted')||lc.includes('no sleep')){
+    const hoursMatch = text.match(/(\d+)\s*h/i);
+    const hours = hoursMatch ? parseInt(hoursMatch[1]) : null;
+    if(hours && hours < 6){
+      response = `${hours} hours is rough. Here is how to protect your energy today:
+
+**Morning:** Sit near the front in class — natural light and engagement help alertness.
+**Lunch:** A 10-20 min nap (set an alarm — over 20 min causes grogginess).
+**Avoid:** Sugar and energy drinks. They cause crashes exactly when you need focus.
+**Tonight:** Get to bed by 9:30pm no matter what. One good night fixes a lot.
+
+One task at a time today — sleep deprivation hurts multitasking the most.`;
+    } else {
+      response = `If you are still tired even with decent sleep, try:
+
+**Consistent wake time** — same time every day including weekends.
+**No screens 1 hour before bed** — the blue light delays your sleep cycle.
+**10-20 min nap at lunch** — set an alarm, this is surprisingly powerful.
+**Drink more water** — dehydration causes fatigue that feels like tiredness.
+
+Want me to look at your schedule and find a better wind-down time?`;
+    }
+  }
+
+  // OVERWHELMED / STRESSED
+  else if(lc.includes('overwhelm')||lc.includes('stress')||lc.includes('too much')||lc.includes('anxious')||lc.includes('panic')){
+    const topTask = goals.sort((a,b)=>a.time.localeCompare(b.time))[0];
+    response = `Let us slow this down.
+
+**Step 1 — Brain dump:** Write every single worry on paper. Get it out of your head — this alone reduces anxiety significantly.
+
+**Step 2 — Sort ruthlessly:** What actually must happen today? Circle only those. Everything else can wait.
+
+**Step 3 — One thing:** ${topTask ? `Your next task right now is **${topTask.task}** on ${topTask.day} at ${topTask.time}.` : 'Pick the smallest thing on your list and do only that for 25 minutes.'}
+
+**Step 4 — Breathe:** Inhale 4 seconds, hold 4, exhale 4. Repeat 3 times right now.
+
+You do not need to do everything today. You just need to do the next right thing.`;
+  }
+
+  // MOTIVATION / PROCRASTINATION
+  else if(lc.includes('motivat')||lc.includes('procrastin')||lc.includes("can't start")||lc.includes("don't want")||lc.includes('lazy')){
+    response = `Starting is the hardest part. Here is the trick:
+
+**The 2-minute rule:** Just open your textbook and read one sentence. That is it. Once you start, momentum takes over.
+
+**Shrink the task:** Instead of "study chemistry" make it "read page 47 only."
+
+**Phone in another room** — not face down, another room. Having it visible cuts focus by 20%.
+
+**Promise yourself a reward:** After 25 minutes, something you actually want — YouTube, a snack, anything.
+
+Motivation follows action, not the other way around. Start tiny.`;
+  }
+
+  // GOALS / PLAN WEEK
+  else if(lc.includes('plan')||lc.includes('schedule')||lc.includes('week')||lc.includes('organize')){
+    const byDay = {};
+    goals.forEach(g=>{ if(!byDay[g.day]) byDay[g.day]=[]; byDay[g.day].push(g); });
+    const days = DAYS.filter(d=>byDay[d]);
+    if(days.length){
+      response = `Here is your week at a glance:
+
+${days.map(d=>`**${d}:** ${byDay[d].map(g=>g.task).join(', ')}`).join('
+')}
+
+Tip: Do your hardest task first each day when your energy is highest. Want me to suggest a specific task to start with today?`;
+      const todayFree = !byDay[todayDay] || byDay[todayDay].length === 0;
+      if(todayFree) response += `
+
+${todayDay} looks free — good day to get ahead.`;
+    } else {
+      response = `You have no tasks planned yet. Here is a simple weekly framework:
+
+**After school (3-5pm):** Extracurriculars, gym, or chores.
+**5-7pm:** Study block 1 — hardest subject first.
+**7-8pm:** Dinner and real break — no studying.
+**8-9:30pm:** Study block 2 — lighter review.
+**9:30pm:** Wind down, no screens, prep for next day.
+
+Want me to add some tasks to your schedule?`;
+    }
+  }
+
+  // GOALS CHECK
+  else if(lc.includes('goal')||lc.includes('task')||lc.includes('todo')||lc.includes('to do')){
+    if(todayGoals.length){
+      response = `You have ${todayGoals.length} task${todayGoals.length>1?'s':''} for today:
+
+${todayGoals.map(g=>`• **${g.task}** at ${g.time}`).join('
+')}
+
+I recommend starting with the earliest one. Want me to add anything to your schedule?`;
+      suggestion = { task: todayGoals[0].task, day: todayDay, time: todayGoals[0].time, duration: todayGoals[0].duration, type: todayGoals[0].type };
+    } else {
+      response = `You have no tasks for ${todayDay}. Want me to suggest some based on your classes? Or tell me what you need to get done and I will add it to your schedule.`;
+    }
+  }
+
+  // GREETING / GENERAL
+  else if(lc.includes('hi')||lc.includes('hello')||lc.includes('hey')||lc.includes('what can you')||lc.includes('help')){
+    response = `Hey ${name}! Here is what I can help with:
+
+• **Study plans** — tell me about a test or subject
+• **Schedule advice** — ask me to plan your week
+• **Gym and workout** — recovery and study timing
+• **Sleep and energy** — how to protect focus on low sleep
+• **Motivation** — when you cannot get started
+• **Overwhelm** — breaking down big workloads
+
+What is going on today?`;
+  }
+
+  // DEFAULT
+  else {
+    response = `Got it. Here is my take:
+
+Break whatever you are dealing with into the smallest possible next step. Not the whole thing — just the next 25 minutes. Everything else can wait.
+
+If it is a school problem, tell me the subject and I will build a plan. If it is a time problem, tell me what needs to happen and I will help you fit it in.
+
+What specifically is going on?`;
   }
 
   // Save to memory
   aiConversation.push({role:'ai',text:response});
   if(aiConversation.length > AI_MEM) aiConversation=aiConversation.slice(-AI_MEM);
 
-  setTimeout(()=>{
-    const t=document.getElementById('ai-typing'); if(t) t.remove();
-    addAIMsg('ai', response);
-    if(suggestion) showAISuggestion(suggestion);
-    msgs.scrollTop=msgs.scrollHeight;
-  }, 800);
+  const t=document.getElementById('ai-typing'); if(t) t.remove();
+  addAIMsg('ai', response);
+  if(suggestion) showAISuggestion(suggestion);
+  msgs.scrollTop=msgs.scrollHeight;
 }
 
 
@@ -1417,7 +1454,10 @@ function buildGeneralResponse(text, ctx){
 async function fetchWeatherResponse(text, location, date, ctx){
   try {
     // Use Open-Meteo geocoding + weather (free, no API key needed)
-    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`, { signal: controller.signal });
+    clearTimeout(timeout);
     const geoData = await geoRes.json();
     if(!geoData.results || !geoData.results.length){
       return `I couldn't find "${location}" — try being more specific (e.g. "St. Catharines, Ontario"). I can check weather for any city!`;
@@ -2556,13 +2596,16 @@ function resendResetCode(){
 }
 
 
-document.addEventListener('DOMContentLoaded', async ()=>{
+document.addEventListener('DOMContentLoaded', ()=>{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
-  initFirebase();
-  await fbLoadShared();
+
+  // Init Firebase silently — never blocks login
+  try { initFirebase(); fbLoadShared().catch(()=>{}); } catch(e){}
+
   seedDemo();
+
   // Auto-login if session exists
   const session = S.get('session');
   if(session){
