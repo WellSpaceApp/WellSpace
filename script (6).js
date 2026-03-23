@@ -1162,40 +1162,19 @@ async function respondAI(text){
     }
   }
 
-  // ── Just a city name as reply ──────────────────────────────
-  else if(text.trim().split(/\s+/).length <= 5 && !lc.includes('?') && mem.activity && (extractLocation(text)||text.match(/st\.?\s*cath/i))){
-    const loc     = extractLocation(text) || text.trim();
-    const dayName = mem.day || new Date().toLocaleDateString('en-CA',{weekday:'long'});
-    const dateStr = extractDateFromText(dayName);
-    const weatherPart = await fetchWeatherResponse(`${mem.activity} in ${loc} on ${dayName}`, loc, dateStr, ctx);
-    const slotResult  = suggestActivitySlot(mem.activity, ctx, mem.activity);
-    response  = weatherPart+(slotResult.message?`\n\n---\n${slotResult.message}`:'');
-    suggestion = slotResult.suggestion;
-  }
+
 
   // ── WEATHER ───────────────────────────────────────────────
   else if(lc.includes('weather')||lc.includes('temperature')||lc.includes('rain')||lc.includes('snow')||lc.includes('forecast')){
-    const loc  = extractLocation(text)||mem.location||'Ontario';
-    const date = extractDateFromText(text)||(mem.day?extractDateFromText(mem.day):null);
-    response = await fetchWeatherResponse(text, loc, date, ctx);
+    response = `For weather, check weather.gc.ca for Canadian forecasts or weather.com for any city. Want me to help you plan your schedule instead?`;
   }
 
   // ── RUN / OUTDOOR ─────────────────────────────────────────
   else if(lc.includes('run')||lc.includes('5k')||lc.includes('jog')||lc.includes('walk')||lc.includes('bike')||lc.includes('outdoor')){
     const actLabel = lc.includes('run')||lc.includes('5k')||lc.includes('jog')?'🏃 Run':lc.includes('walk')?'🚶 Walk':'🚴 Bike ride';
-    const loc = extractLocation(text)||mem.location;
-    const dayTarget = extractDayFromText(text)||mem.day;
-    if(loc && loc.length>2){
-      const dateStr = dayTarget?extractDateFromText(dayTarget):null;
-      const wp = await fetchWeatherResponse(text, loc, dateStr, ctx);
-      const sr = suggestActivitySlot(text, ctx, actLabel);
-      response = wp+(sr.message?`\n\n---\n${sr.message}`:'');
-      suggestion = sr.suggestion;
-    } else {
-      const result = suggestActivitySlot(text, ctx, actLabel);
-      response = result.message+`\n\nAlso — want me to check the weather? Just tell me your city!`;
-      suggestion = result.suggestion;
-    }
+    const result = suggestActivitySlot(text, ctx, actLabel);
+    response = result.message;
+    suggestion = result.suggestion;
   }
 
   // ── GYM ───────────────────────────────────────────────────
