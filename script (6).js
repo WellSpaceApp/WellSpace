@@ -1,4 +1,4 @@
-   /* ═══════════════════════════════════════════════
+/* ═══════════════════════════════════════════════
    WellSpace v2 — script.js
    Full application logic
 ═══════════════════════════════════════════════ */
@@ -1265,12 +1265,10 @@ async function respondAI(text){
   aiConversation.push({role:'ai',text:response});
   if(aiConversation.length > AI_MEM) aiConversation=aiConversation.slice(-AI_MEM);
 
-  setTimeout(()=>{
-    const t=document.getElementById('ai-typing'); if(t) t.remove();
-    addAIMsg('ai', response);
-    if(suggestion) showAISuggestion(suggestion);
-    msgs.scrollTop=msgs.scrollHeight;
-  }, 800);
+  const t=document.getElementById('ai-typing'); if(t) t.remove();
+  addAIMsg('ai', response);
+  if(suggestion) showAISuggestion(suggestion);
+  msgs.scrollTop=msgs.scrollHeight;
 }
 
 
@@ -2562,13 +2560,16 @@ function resendResetCode(){
 }
 
 
-document.addEventListener('DOMContentLoaded', async ()=>{
+document.addEventListener('DOMContentLoaded', ()=>{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
-  initFirebase();
-  await fbLoadShared();
+
+  // Init Firebase silently — never blocks login
+  try { initFirebase(); fbLoadShared().catch(()=>{}); } catch(e){}
+
   seedDemo();
+
   // Auto-login if session exists
   const session = S.get('session');
   if(session){
