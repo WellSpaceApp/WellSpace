@@ -473,9 +473,15 @@ function showSWPopup(mood){
   }
   const contactEl = document.getElementById('sw-contact-display');
   if(swInfo){
-    contactEl.innerHTML = '<div class="sw-contact-box"><strong>Your School Social Worker</strong><div style="margin-top:8px;font-size:.95rem;font-weight:600">' + swInfo.name + '</div><div style="margin-top:4px"><a href="mailto:' + swInfo.email + '" style="color:var(--blue)">' + swInfo.email + '</a></div><p style="font-size:.78rem;color:var(--muted);margin-top:8px">They will not be notified automatically. Reach out whenever you are ready.</p></div>';
+    contactEl.innerHTML = `
+      <div class="sw-contact-box">
+        <strong>Your School Social Worker</strong>
+        <div>${swInfo.name}</div>
+        <div><a href="mailto:${swInfo.email}">${swInfo.email}</a></div>
+        <p style="font-size:.78rem;color:var(--muted);margin-top:6px">They won't be notified automatically — this is just their contact info.</p>
+      </div>`;
   } else {
-    contactEl.innerHTML = '<div class="sw-contact-box"><strong>Help is available</strong><p style="font-size:.88rem;margin-top:4px">Head to Help and Crisis for 24/7 support lines. Ask your teacher if they have a social worker contact set up.</p></div>';
+    contactEl.innerHTML = `<div class="sw-contact-box"><strong>💙 Help is available</strong><p style="font-size:.88rem;margin-top:4px">Head to Help & Crisis for 24/7 support lines.</p></div>`;
   }
   document.getElementById('sw-popup').classList.remove('hidden');
   sessionStorage.setItem('sw_popup_shown', '1');
@@ -1225,16 +1231,9 @@ Motivation follows action, not the other way around. Start tiny.`;
     goals.forEach(g=>{ if(!byDay[g.day]) byDay[g.day]=[]; byDay[g.day].push(g); });
     const days = DAYS.filter(d=>byDay[d]);
     if(days.length){
-      response = `Here is your week at a glance:
-
-${days.map(d=>`**${d}:** ${byDay[d].map(g=>g.task).join(', ')}`).join('
-')}
-
-Tip: Do your hardest task first each day when your energy is highest. Want me to suggest a specific task to start with today?`;
-      const todayFree = !byDay[todayDay] || byDay[todayDay].length === 0;
-      if(todayFree) response += `
-
-${todayDay} looks free - good day to get ahead.`;
+      const _dayLines = days.map(function(d){ return '**' + d + ':** ' + byDay[d].map(function(g){return g.task;}).join(', '); }).join('\n');
+      const _todayNote = (!byDay[todayDay] || byDay[todayDay].length === 0) ? '\n\n' + todayDay + ' looks free - good day to get ahead.' : '';
+      response = 'Here is your week at a glance:\n\n' + _dayLines + '\n\nTip: Do your hardest task first each day when your energy is highest. Want me to suggest a specific task to start with today?' + _todayNote;
     } else {
       response = `You have no tasks planned yet. Here is a simple weekly framework:
 
@@ -1768,6 +1767,7 @@ function renderTeacherClasses(){
           ${c.bannerMsg ? `<div class="cls-banner-msg">${c.bannerMsg}</div>` : ''}
           <div class="t-class-actions">
             <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
+            <button class="btn-green" onclick="openMsgModal('${c.id}')">💬 Message</button>
             <button class="btn-outline small" onclick="deleteClass('${c.id}')" style="padding:7px 10px">🗑</button>
           </div>
         </div>
