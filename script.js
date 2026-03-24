@@ -1389,34 +1389,103 @@ function buildOverwhelmedResponse(ctx){
 }
 
 // ── General response with context ──
-function buildGeneralResponse(text, ctx){
+function buildGeneralResponse(text, ctx, mem){
   const name = CU.name.split(' ')[0];
   const lc = text.toLowerCase();
 
-  // Specific activity at specific time
-  const activity = extractActivity(text);
-  const time = extractTimeFromText(text);
-  if(activity && time){
-    const result = suggestSpecificSlot(activity, time, ctx);
-    if(result.suggestion){
-      pendingSuggestion = result.suggestion;
-      return result.message;
-    }
+  const pending = ggo()
+    .filter(g => g.studentId===CU.id && !g.done)
+    .sort((a,b) => {
+      if(a.day !== b.day) return DAYS.indexOf(a.day) - DAYS.indexOf(b.day);
+      return timeToMins(a.time) - timeToMins(b.time);
+    });
+
+  const nextTask = pending[0];
+  const free = ctx.freeSlots?.slice(0,3) || [];
+  const sleep = ctx.recentSleep ? parseFloat(ctx.recentSleep.hours) : null;
+
+  let reply = `Got you, ${name}.\n\n`;
+
+  if(mem?.activity && mem?.day){
+    reply += `I remember you mentioned **${mem.activity}** on **${mem.day}**`;
+    if(mem.location) reply += ` in **${mem.location}**`;
+    reply += `.\n\n`;
   }
 
-  // Day-specific question
-  const day = extractDayFromText(text);
-  if(day){
-    const dayDate = getDayDate(day);
-    const classes = ctx.myClasses.filter(c => c.days?.includes(day));
-    const tasks   = ggo().filter(g => g.studentId===CU.id && g.day===day);
-    const free    = ctx.freeSlots.filter(s => s.day===day);
-    return `Here's your **${day} (${dayDate})**:\n\n${classes.length ? `🏫 Classes: ${classes.map(c=>`${c.subject} ${c.startTime}–${c.endTime}`).join(', ')}\n` : '📭 No classes\n'}${tasks.length ? `📌 Tasks: ${tasks.map(t=>t.task).join(', ')}\n` : ''}${free.length ? `\n✅ Free slots: ${free.slice(0,3).map(s=>formatTime(s.time)).join(', ')}` : '\n⚠️ Looks like a busy day!'}\n\nWhat do you want to do on ${day}?`;
+  if(
+    lc.includes('plan') || lc.includes('organize') || lc.includes('schedule') ||
+    lc.includes('fix my day') || lc.includes('what should i do')
+  ){
+    reply += `Here’s the best move:\n\n`;
+    if(nextTask) reply += `• Start with **${nextTask.task}**\n`;
+    if(free[0]) reply += `• Best open slot: **${free[0].day} at ${formatTime(free[0].time)}**\n`;
+    reply += `• Focus on only 1–3 important things, not everything at once\n`;
+    reply += `• Use 25 min focus blocks with 5 min breaks\n\n`;
+    reply += `👉 I can turn this into a full day plan if you want.`;
+    return reply;
   }
 
-  return `I'm here to help, ${name}! I can:\n\n• 📅 **Find you a free slot** — tell me what activity and when\n• 🌤️ **Check weather** — say "weather in [city] on [day]"\n• 📝 **Build a study plan** — tell me what test or subject\n• 🏃 **Schedule a run/gym** — I'll find your free time\n• 📊 **Review your week** — say "plan my week"\n\nWhat specifically do you need?`;
+  if(
+    lc.includes('study') || lc.includes('homework') || lc.includes('assignment') ||
+    lc.includes('school') || lc.includes('exam') || lc.includes('quiz') || lc.includes('test')
+  ){
+    reply += `Best study move right now:\n\n`;
+    if(nextTask) reply += `• Start with **${nextTask.task}**\n`;
+    reply += `• Do the hardest thing first\n`;
+    reply += `• Use practice questions before re-reading notes\n`;
+    reply += `• Stop switching between too many subjects\n\n`;
+    if(free[0]) reply += `Best time to do it: **${free[0].day} at ${formatTime(free[0].time)}**\n\n`;
+    reply += `👉 I can build you a study plan from your real schedule.`;
+    return reply;
+  }
+
+  if(
+    lc.includes('tired') || lc.includes('sleep') || lc.includes('exhausted') ||
+    lc.includes('low energy') || lc.includes('burnt out')
+  ){
+    reply += `Your best move is to protect your energy.\n\n`;
+    if(sleep && sleep < 7) reply += `• Your recent sleep looks low, so keep today lighter\n`;
+    reply += `• Do one important task only\n`;
+    reply += `• Drink water and take a short walk/reset\n`;
+    reply += `• Avoid trying to multitask\n\n`;
+    reply += `👉 I can plan a low-energy version of your day.`;
+    return reply;
+  }
+
+  if(
+    lc.includes('stress') || lc.includes('overwhelmed') || lc.includes('anxious') ||
+    lc.includes('too much') || lc.includes('i cant do this')
+  ){
+    reply += `Let’s make it simple.\n\n`;
+    reply += `• Write everything down\n`;
+    reply += `• Pick only one next step\n`;
+    if(nextTask) reply += `• Best next step: **${nextTask.task}**\n`;
+    reply += `• Ignore the rest until that is done\n\n`;
+    reply += `👉 I can turn everything into a short action list for you.`;
+    return reply;
+  }
+
+  if(
+    lc.includes('gym') || lc.includes('workout') || lc.includes('run') ||
+    lc.includes('exercise') || lc.includes('walk')
+  ){
+    reply += `Best way to handle that:\n\n`;
+    if(free[0]) reply += `• Good slot: **${free[0].day} at ${formatTime(free[0].time)}**\n`;
+    reply += `• After exercise: water, food, then easier work first\n`;
+    reply += `• Save the hardest focus work for later\n\n`;
+    reply += `👉 I can pick the best workout slot from your schedule.`;
+    return reply;
+  }
+
+  reply += `Here’s the smartest next move:\n\n`;
+  if(nextTask) reply += `• Your next useful task is **${nextTask.task}**\n`;
+  if(free[0]) reply += `• You have a free slot at **${free[0].day} ${formatTime(free[0].time)}**\n`;
+  reply += `• Break the problem into the smallest next step\n`;
+  reply += `• Start now instead of trying to make it perfect\n\n`;
+  reply += `👉 I can help with planning, studying, workouts, sleep, or organizing your week.`;
+
+  return reply;
 }
-
 // ── Weather fetcher ──
 async function fetchWeatherResponse(text, location, date, ctx){
   try {
@@ -1741,7 +1810,6 @@ function renderTeacherClasses(){
           ${c.bannerMsg ? `<div class="cls-banner-msg">${c.bannerMsg}</div>` : ''}
           <div class="t-class-actions">
             <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
-            <button class="btn-green" onclick="openMsgModal('${c.id}')">💬 Message</button>
             <button class="btn-outline small" onclick="deleteClass('${c.id}')" style="padding:7px 10px">🗑</button>
           </div>
         </div>
@@ -2045,23 +2113,10 @@ function copyCode(code){
   toast(`Code "${code}" copied to clipboard!`);
 }
 
-function openMsgModal(classId){
-  const classes=getMyClasses();
-  document.getElementById('mm-class').innerHTML=classes.map(c=>`<option value="${c.id}" ${c.id===classId?'selected':''}>${c.subject}</option>`).join('');
-  openModal('msg-modal');
+
 }
 
-function sendMsg(){
-  const classId=document.getElementById('mm-class').value;
-  const content=document.getElementById('mm-msg').value.trim();
-  if(!content)return toast('Please type a message.');
-  const messages=gmsg();
-  messages.push({id:'m'+uid(),teacherId:CU.id,classId,content,date:today()});
-  S.set('messages',messages);
-  document.getElementById('mm-msg').value='';
-  closeModal('msg-modal');
-  toast('Message sent to class! 📨');
-}
+
 
 // ─────────────────────────────────────────────
 // UTILITIES
