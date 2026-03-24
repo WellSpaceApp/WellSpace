@@ -1061,49 +1061,6 @@ function buildPersonalisedGreeting(ctx){
   return msg;
 }
 
-function buildUserContext(){
-  const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
-  const goals = ggo().filter(g => g.studentId === CU.id);
-  const studyGoals = goals.filter(g => g.type === 'study' && !g.done);
-  const recentSleep = gw().filter(w => w.studentId === CU.id && w.type === 'sleep').slice(-1)[0] || null;
-  const recentMoods = gm().filter(m => m.studentId === CU.id).slice(-7);
-  const burnout = recentMoods.filter(m => ['Sad','Frustrated','Tired','Confused'].includes(m.mood)).length >= 3;
-
-  // Build busy map and free slots
-  const busyMap = {};
-  const freeSlots = [];
-  const workHours = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
-
-  DAYS.forEach(day => {
-    busyMap[day] = [];
-    myClasses.filter(c => c.days?.includes(day)).forEach(c => {
-      busyMap[day].push({ time: c.startTime, label: c.subject });
-    });
-    goals.filter(g => g.day === day).forEach(g => {
-      busyMap[day].push({ time: g.time, label: g.task });
-    });
-  });
-
-  DAYS.forEach(day => {
-    const busy = busyMap[day] || [];
-    workHours.forEach(time => {
-      const conflict = busy.find(b => Math.abs(timeToMins(b.time) - timeToMins(time)) < 60);
-      if(!conflict) freeSlots.push({ day, time });
-    });
-  });
-
-  const todayName = new Date().toLocaleDateString('en-CA', {weekday:'long'});
-  const goalCount = goals.length;
-  const doneCount = goals.filter(g => g.done).length;
-
-  let summary = '';
-  if(goalCount > 0) summary += `You have ${goalCount} tasks (${doneCount} done). `;
-  if(myClasses.length > 0) summary += `${myClasses.length} class${myClasses.length > 1 ? 'es' : ''} today. `;
-  if(recentSleep) summary += `Last sleep: ${recentSleep.hours}h. `;
-
-  return { myClasses, goals, studyGoals, recentSleep, recentMoods, burnout, busyMap, freeSlots, summary };
-}
-
 function initAI(){
   if(aiHistory.length>0) return;
   aiHistory=['init'];
@@ -1784,7 +1741,7 @@ function renderTeacherClasses(){
           ${c.bannerMsg ? `<div class="cls-banner-msg">${c.bannerMsg}</div>` : ''}
           <div class="t-class-actions">
             <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
-
+            <button class="btn-green" onclick="openMsgModal('${c.id}')">💬 Message</button>
             <button class="btn-outline small" onclick="deleteClass('${c.id}')" style="padding:7px 10px">🗑</button>
           </div>
         </div>
@@ -2088,9 +2045,23 @@ function copyCode(code){
   toast(`Code "${code}" copied to clipboard!`);
 }
 
+function openMsgModal(classId){
+  const classes=getMyClasses();
+  document.getElementById('mm-class').innerHTML=classes.map(c=>`<option value="${c.id}" ${c.id===classId?'selected':''}>${c.subject}</option>`).join('');
+  openModal('msg-modal');
+}
 
-
-
+function sendMsg(){
+  const classId=document.getElementById('mm-class').value;
+  const content=document.getElementById('mm-msg').value.trim();
+  if(!content)return toast('Please type a message.');
+  const messages=gmsg();
+  messages.push({id:'m'+uid(),teacherId:CU.id,classId,content,date:today()});
+  S.set('messages',messages);
+  document.getElementById('mm-msg').value='';
+  closeModal('msg-modal');
+  toast('Message sent to class! 📨');
+}
 
 // ─────────────────────────────────────────────
 // UTILITIES
