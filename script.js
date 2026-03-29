@@ -1113,7 +1113,6 @@ function sendAI(){
   inp.value='';
   respondAI(text); // no artificial delay
 }
-
 function aiChip(text){
   document.getElementById('ai-input').value=text;
   sendAI();
@@ -1222,9 +1221,7 @@ function buildWeekPlan(ctx){
   if(sleepHours < 7) plan += `⚠️ You've been sleeping ${sleepHours}h — try to hit 8h tonight.\n\n`;
   plan += `💡 Tip: Your best focus window is usually 2–3h after waking. Protect that time for your hardest work.`;
   return plan;
-}
-
-// ── Suggest a free activity slot ──
+} // ✅ THIS LINE WAS MISSING
 function suggestActivitySlot(text, ctx, activityLabel){
   const requestedTime = extractTimeFromText(text);
   const requestedDay  = extractDayFromText(text);
@@ -1313,7 +1310,6 @@ function buildOverwhelmedResponse(ctx){
 }
 
 // ── Smart AI — answers anything ──
-async function callClaudeAI(text, ctx, mem){
   const name = CU.name.split(' ')[0];
   const lc = text.toLowerCase();
   const pendingTasks = ctx.goals.filter(g=>!g.done).slice(0,5);
@@ -2641,3 +2637,26 @@ S.set = function(k, v){
   _origSet(k, v);
   if(SHARED_KEYS.includes(k)) fbSaveShared(k, v);
 };
+// ✅ REAL AI CALL (ONLY ONE COPY)
+async function callClaudeAI(text, ctx, mem){
+  try {
+    const res = await fetch("http://localhost:3000/ai", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: text,
+        context: ctx,
+        memory: mem
+      })
+    });
+
+    const data = await res.json();
+    return data.reply;
+
+  } catch (err) {
+    console.error("AI error:", err);
+    return "⚠️ AI not responding. Make sure server is running.";
+  }
+}
