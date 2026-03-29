@@ -1177,19 +1177,16 @@ async function respondAI(text){
   const lc  = text.toLowerCase();
   let response='', suggestion=null;
 
-  // ── WEATHER — only if explicitly asking for weather ───────
-  const isWeatherQ = lc.includes('weather') || lc.includes('forecast') ||
-    (lc.includes('rain') && lc.includes('today')) ||
-    (lc.includes('temperature') && (lc.includes('today')||lc.includes('tomorrow')));
-  if(isWeatherQ){
+  // ── WEATHER ───────────────────────────────────────────────
+  if(lc.includes('weather')||lc.includes('temperature')||lc.includes('rain')||lc.includes('snow')||lc.includes('forecast')){
     const loc  = extractLocation(text)||mem.location||'Ontario';
     const date = extractDateFromText(text)||(mem.day?extractDateFromText(mem.day):null);
     response = await fetchWeatherResponse(text, loc, date, ctx);
   }
 
-  // ── SCHEDULE REQUEST — only if asking to add/schedule something ──
-  else if((lc.includes('add') || lc.includes('schedule') || lc.includes('put') || lc.includes('when can i') || lc.includes('find me a slot') || lc.includes('book')) && (extractActivity(text)||mem.activity)){
-    const actLabel = extractActivity(text)||mem.activity||'Activity';
+  // ── SCHEDULE / ADD SOMETHING ──────────────────────────────
+  else if((lc.includes('add') || lc.includes('schedule') || lc.includes('find me') || lc.includes('book') || lc.includes('when can i') || lc.includes('find a slot')) && extractActivity(text)){
+    const actLabel = extractActivity(text);
     if(extractTimeFromText(text)){
       const result = suggestSpecificSlot(actLabel, extractTimeFromText(text), ctx);
       response = result.message; suggestion = result.suggestion;
@@ -1199,11 +1196,10 @@ async function respondAI(text){
     }
   }
 
-  // ── EVERYTHING ELSE — send to Claude API ──────────────────
+  // ── EVERYTHING ELSE → smart built-in AI ──────────────────
   else {
-    response = await callClaudeAI(text, ctx, mem);
+    response = await smartAIResponse(text, ctx, mem);
   }
-
 
   // Save to memory
   aiConversation.push({role:'ai',text:response});
@@ -1332,134 +1328,234 @@ function buildOverwhelmedResponse(ctx){
   return `🌬️ Let's slow this down.\n\n**Step 1 — Brain dump:** Write every worry on paper. Not in your head — on paper. This alone reduces anxiety significantly.\n\n**Step 2 — Sort ruthlessly:** What MUST happen today? Circle only those. Everything else can wait.\n\n**Step 3 — One thing:** ${topTask ? `Your next task right now: **${topTask.task}** (${topTask.day} ${formatTime(topTask.time)})` : 'Pick the smallest thing on your list and do ONLY that for 25 minutes.'}\n\n**Step 4 — Breathe:** Inhale 4s → hold 4s → exhale 4s. Repeat 3 times right now.\n\nYou don't need to do everything today. You just need to do the next right thing. 💙`;
 }
 
-// ── General response with context ──
-async function buildGeneralResponse(text, ctx, mem){
-  // Always try Claude first for a real intelligent answer
-  return await callClaudeAI(text, ctx, mem||getMemory());
-}
-
-// ── Smart built-in AI — answers anything, personalised ──
-async function callClaudeAI(text, ctx, mem){
+// ── Smart AI — responds to anything ──
+async function smartAIResponse(text, ctx, mem){
   const name = CU.name.split(' ')[0];
   const lc = text.toLowerCase();
-
-  // Build personalised context string
   const pendingTasks = ctx.goals.filter(g=>!g.done).slice(0,5);
   const gymDays = [...new Set(ctx.goals.filter(g=>g.type==='gym').map(g=>g.day))];
   const todayName = new Date().toLocaleDateString('en-CA',{weekday:'long'});
   const freeToday = ctx.freeSlots.filter(s=>s.day===todayName).slice(0,3);
   const sleepH = ctx.recentSleep ? parseFloat(ctx.recentSleep.hours) : null;
 
-  // ── Mental health / feelings ──────────────────────────────
-  if(lc.match(/mental health|anxiety|anxious|depress|lonely|sad|worthless|hopeless|overwhelm|stress|panic|burnout|burnt out|crying|can't cope|struggling|not okay|not ok/)){
-    let r = `💙 I hear you, ${name}. What you're feeling is valid and it takes courage to name it.\n\n`;
-    if(ctx.burnout) r += `I noticed from your mood logs that you've been having a tough time lately — this isn't random, your body and mind are telling you something.\n\n`;
-    r += `**Right now:**\n• Take 3 slow breaths — in 4 counts, hold 4, out 4\n• You don't have to fix everything today\n• One small thing: drink some water or step outside for 2 minutes\n\n`;
-    r += `**Talk to someone:**\nKids Help Phone — 📞 1-800-668-6868 (24/7, free, confidential)\nText CONNECT to 686868\n\n`;
-    if(pendingTasks.length) r += `**Your tasks can wait.** You have ${pendingTasks.length} pending, but none of them matter more than how you feel right now. Want me to help you sort out just ONE thing for today?`;
-    return r;
-  }
-
-  // ── Study help ────────────────────────────────────────────
-  if(lc.match(/study|homework|assignment|test|exam|quiz|essay|project|class|subject|math|science|english|history|biology|chemistry|physics|french|chem/)){
-    const subject = lc.match(/math|science|english|history|biology|chemistry|physics|french|chem|geo|civics/) ?
-      text.match(/math|science|english|history|biology|chemistry|physics|french|chem|geo|civics/i)?.[0] : null;
-    const hasTest = lc.includes('test') || lc.includes('exam') || lc.includes('quiz');
-    const tomorrow = lc.includes('tomorrow');
-
-    let r = subject ? `📚 **${subject.charAt(0).toUpperCase()+subject.slice(1)} study plan for ${name}:**\n\n` : `📚 **Study plan for ${name}:**\n\n`;
-
-    if(tomorrow && hasTest){
-      r += `**Tonight (emergency mode):**\n• 25 min — brain dump everything you know, no notes yet\n• 5 min break\n• 25 min — read notes, don't rewrite\n• 5 min break\n• 25 min — practice questions only\n• Stop 1 hour before bed — sleep matters more than cramming\n\n**Tomorrow morning:** 10-min review only, no new material.\n\n`;
-    } else {
-      r += `**Best approach:**\n• Break it into 25-min focused blocks with 5-min breaks (Pomodoro)\n• Active recall: close your notes and write what you remember\n• Practice past questions — not just re-reading\n\n`;
-    }
-
-    if(freeToday.length){
-      r += `**Your free slots today:** ${freeToday.map(s=>formatTime(s.time)).join(', ')}\n`;
-      r += `Want me to add a study block to your schedule? Just say "add study ${subject||'session'} today at ${formatTime(freeToday[0].time)}"`;
-    } else if(ctx.freeSlots.length){
-      const nextFree = ctx.freeSlots[0];
-      r += `**Next free slot:** ${nextFree.day} at ${formatTime(nextFree.time)}\nWant me to add a study block there?`;
-    }
-    if(sleepH && sleepH < 6) r += `\n\n⚠️ You're low on sleep (${sleepH}h) — focus on the most important topics only, don't try to cover everything.`;
-    return r;
-  }
-
-  // ── Sleep / tired ─────────────────────────────────────────
-  if(lc.match(/sleep|tired|exhausted|fatigue|rest|nap|insomnia|can't sleep|no sleep/)){
-    const hours = text.match(/(\d+\.?\d*)\s*h/i);
-    const h = hours ? parseFloat(hours[1]) : sleepH;
-    if(!h || h >= 7){
-      return `😴 **Sleep tips for ${name}:**\n\n• **Ideal for teens:** 8–10 hours per night\n• **Wind down routine:** No screens 1 hour before bed — blue light delays sleep by up to 2 hours\n• **Consistent schedule:** Same wake time on weekends (yes, really — it matters)\n• **Quick nap trick:** 10–20 min at lunch restores focus. Over 20 min causes grogginess\n• **Temperature:** Cool room (18–20°C) = deeper sleep\n\nYour body does memory consolidation during sleep — studying then sleeping beats staying up late every time. 💤`;
-    }
-    return `😴 ${h}h is rough, ${name}. Here's how to get through today:\n\n• **Morning:** Sit near the front in class, natural light helps alertness\n• **Lunch:** 10–20 min nap (set an alarm!)\n• **Avoid:** Sugary drinks and energy drinks — they crash hard 1–2 hours later\n• **Tonight:** Hard stop at 9:30pm, in bed by 10pm\n• **One task at a time** — sleep deprivation kills multitasking\n\n${freeToday.length ? `Free slots today: ${freeToday.map(s=>formatTime(s.time)).join(', ')} — use the first one for your most important task.` : ''}`;
-  }
-
-  // ── Motivation / procrastination ──────────────────────────
-  if(lc.match(/motivat|procrastinat|can't start|don't want|lazy|bored|distract|focus|concentrate|productive/)){
-    return `🔥 **Getting started, ${name}:**\n\n**The 2-minute rule:** Open your notebook. Read one sentence. That's it — momentum takes over once you start.\n\n**Shrink it:** Instead of "study chemistry" → "read page 47 only." Small = doable.\n\n**Remove friction:** Phone in another room (not face down — another room). Having it visible cuts focus by 20%.\n\n**Environment:** Change where you're sitting. New location = fresh mental state.\n\n**Reward:** After 25 min of real work → something you actually enjoy.\n\n${pendingTasks.length ? `Your most urgent task: **${pendingTasks[0].task}** (${pendingTasks[0].day} ${formatTime(pendingTasks[0].time)}). Just start with that one.` : 'What subject do you want to tackle first?'}`;
-  }
-
-  // ── Gym / workout advice ──────────────────────────────────
-  if(lc.match(/gym|workout|exercise|lift|training|just did|finished gym|after gym/)){
-    const justDid = lc.match(/just did|just finished|done with|finished|after/);
+  // ── GYM / WORKOUT ─────────────────────────────────────────
+  if(lc.match(/gym|workout|exercise|lift|training|weights|just did gym|just finished gym|after gym|finished gym/)){
+    const justDid = lc.match(/just did|just finished|done with|finished|after|already did/);
     if(justDid){
-      return `💪 **Nice work, ${name}!** Here's what to do now:\n\n• **Next 30 min:** Protein + water first. Your muscles need fuel.\n• **30–60 min:** Light work only — re-read notes, easy review\n• **2–3 hours later:** This is your **peak focus window** after exercise. Schedule your hardest studying here.\n• **Tonight:** Wind down by 9:30pm\n\n${sleepH && sleepH < 7 ? `⚠️ You're only on ${sleepH}h sleep — be extra gentle today, your recovery is slower.` : gymDays.length ? `Gym days this week: ${gymDays.join(', ')} — great consistency!` : ''}`;
+      return `💪 Nice work, ${name}! Here's what to do now:
+
+• **Next 30 min:** Protein + water — your muscles need fuel
+• **30–60 min:** Light work only — re-read notes, easy review
+• **2–3 hours later:** This is your **peak focus window** after exercise. Schedule your hardest study here.
+• **Tonight:** Wind down by 9:30pm
+
+${sleepH && sleepH < 7 ? `⚠️ You're running on ${sleepH}h sleep — your recovery is slower today, don't push it.` : gymDays.length ? `Gym days this week: ${gymDays.join(', ')} — great consistency!` : 'Great job getting it done!'}`;
+    }
+    // Scheduling gym
+    const dayT = extractDayFromText(text);
+    const timeT = extractTimeFromText(text);
+    if(timeT){
+      const result = suggestSpecificSlot('🏋️ Gym session', timeT, ctx);
+      return result.message + (result.suggestion ? '' : '');
     }
     const result = suggestActivitySlot(text, ctx, '🏋️ Gym session');
-    return result.message + (result.suggestion ? '' : '');
+    if(result.suggestion) suggestion = result.suggestion;
+    return result.message;
   }
 
-  // ── Run / outdoor activity ────────────────────────────────
-  if(lc.match(/run|jog|5k|walk|hike|outside|outdoor/)){
+  // ── RUN / OUTDOOR ─────────────────────────────────────────
+  if(lc.match(/run|jog|5k|running/)){
+    const dayT = extractDayFromText(text);
     if(mem.location){
-      const date = extractDateFromText(text) || new Date().toISOString().split('T')[0];
+      const date = dayT ? extractDateFromText(dayT) : new Date().toISOString().split('T')[0];
       const weatherR = await fetchWeatherResponse(text, mem.location, date, ctx);
       const slotR = suggestActivitySlot(text, ctx, '🏃 Run');
-      return weatherR + (slotR.message ? '\n\n---\n' + slotR.message : '');
+      if(slotR.suggestion) suggestion = slotR.suggestion;
+      return weatherR + '
+
+---
+' + slotR.message;
     }
     const result = suggestActivitySlot(text, ctx, '🏃 Run');
-    return result.message + `\n\nAlso — want me to check the weather? Just tell me your city!`;
+    if(result.suggestion) suggestion = result.suggestion;
+    return result.message + `
+
+Also — want me to check the weather? Just tell me your city!`;
   }
 
-  // ── Plan my week ──────────────────────────────────────────
-  if(lc.match(/plan.*week|week.*plan|my schedule|this week|weekly/)){
+  // ── SLEEP / TIRED ─────────────────────────────────────────
+  if(lc.match(/sleep|tired|exhausted|fatigue|nap|hours? sleep|slept|insomnia|can't sleep|no sleep|low on sleep|only.*hours?/)){
+    const hMatch = text.match(/(\d+\.?\d*)\s*h(our)?/i) || text.match(/(\d+)\s*(hours?)?/i);
+    const h = hMatch ? parseFloat(hMatch[1]) : sleepH;
+    if(!h || h >= 7){
+      return `😴 **Sleep tips for ${name}:**
+
+• **Ideal for teens:** 8–10 hours per night
+• **Wind down:** No screens 1 hour before bed — blue light delays sleep
+• **Consistent schedule:** Same wake time on weekends matters more than you think
+• **Nap trick:** 10–20 min at lunch restores focus; over 20 min causes grogginess
+• **Cool room:** 18–20°C = deeper sleep
+
+Sleep is when your brain consolidates memory — studying then sleeping beats staying up late every time. 💤`;
+    }
+    return `😴 ${h}h is rough, ${name}. Here's how to survive today:
+
+• **Morning:** Sit near the front in class — natural light helps alertness
+• **Lunch:** 10–20 min nap (set an alarm!)
+• **Avoid:** Sugar + energy drinks — they crash hard 1–2 hours later when you need focus most
+• **Tonight:** Stop work by 9:30pm, in bed by 10pm
+• **One task at a time** — sleep deprivation kills multitasking
+
+${freeToday.length ? `Your free slots today: ${freeToday.map(s=>formatTime(s.time)).join(', ')} — use the first one for your most important task.` : ''}`;
+  }
+
+  // ── PLAN MY WEEK ──────────────────────────────────────────
+  if(lc.match(/plan.*week|week.*plan|my schedule|this week|weekly|plan my|organize my/)){
     return buildWeekPlan(ctx);
   }
 
-  // ── Day query ─────────────────────────────────────────────
+  // ── TEST / EXAM / QUIZ ────────────────────────────────────
+  if(lc.match(/test|exam|quiz|assignment.*due|due.*assignment/)){
+    return buildTestPrepPlan(text, ctx);
+  }
+
+  // ── STUDY / HOMEWORK ──────────────────────────────────────
+  if(lc.match(/study|homework|assignment|essay|project|subject|math|science|english|history|biology|chemistry|physics|french|chem/)){
+    const subject = text.match(/math|science|english|history|biology|chemistry|physics|french|chem|geo|civics/i)?.[0];
+    const hasTest = lc.includes('test') || lc.includes('exam');
+    const tomorrow = lc.includes('tomorrow');
+    let r = subject ? `📚 **${subject[0].toUpperCase()+subject.slice(1)} — study plan for ${name}:**
+
+` : `📚 **Study plan for ${name}:**
+
+`;
+    if(tomorrow && hasTest){
+      r += `**Tonight (emergency mode):**
+• 25 min — brain dump everything you know, no notes yet
+• 5 min break
+• 25 min — read notes, don't rewrite
+• 5 min break
+• 25 min — practice questions only
+• Stop 1 hour before bed — sleep consolidates memory
+
+**Tomorrow morning:** 10-min review only, no new material.
+
+`;
+    } else {
+      r += `**Best approach:**
+• 25-min focused blocks, 5-min breaks (Pomodoro)
+• Active recall: close your notes and write what you remember
+• Practice past questions — not just re-reading
+
+`;
+    }
+    if(freeToday.length) r += `**Your free slots today:** ${freeToday.map(s=>formatTime(s.time)).join(', ')}
+Want me to add a study block? Just say "add study session today at ${formatTime(freeToday[0].time)}"`;
+    if(sleepH && sleepH < 6) r += `
+
+⚠️ You're low on sleep (${sleepH}h) — focus on the most important topics only, don't try to cover everything.`;
+    return r;
+  }
+
+  // ── MOTIVATION / PROCRASTINATION ──────────────────────────
+  if(lc.match(/motivat|procrastinat|can't start|don't want|lazy|distract|can't focus|not doing/)){
+    return `🔥 **Getting started, ${name}:**
+
+**The 2-minute rule:** Open your notebook. Read one sentence. That's it — momentum takes over once you begin.
+
+**Shrink it:** Instead of "study chemistry" → "read page 47 only." Small = doable.
+
+**Remove friction:** Phone in another room (not face down — another room). Visible phone = 20% less focus.
+
+**Environment change:** New location = fresh mental state.
+
+**Reward:** After 25 min of real work → something you actually enjoy.
+
+${pendingTasks.length ? `Your next task: **${pendingTasks[0].task}** on ${pendingTasks[0].day} at ${formatTime(pendingTasks[0].time)}. Just start with that one.` : 'What do you want to tackle first?'}`;
+  }
+
+  // ── OVERWHELMED / STRESS / ANXIETY ────────────────────────
+  if(lc.match(/overwhelm|stress|anxious|anxiety|too much|can't cope|struggling|panic|not okay|burnout/)){
+    let r = buildOverwhelmedResponse(ctx);
+    if(ctx.burnout) r = `💙 I've noticed from your mood logs that you've been having a rough stretch — this makes sense.
+
+` + r;
+    return r;
+  }
+
+  // ── MENTAL HEALTH ─────────────────────────────────────────
+  if(lc.match(/mental health|depress|lonely|sad.*feel|worthless|hopeless|crying|not okay|not ok|struggling/)){
+    return `💙 I hear you, ${name}. What you're feeling is valid and it takes courage to name it.
+
+${ctx.burnout ? 'I can see from your mood logs that you've been having a tough time lately — your mind and body are telling you something important.
+
+' : ''}**Right now:**
+• Take 3 slow breaths — in 4 counts, hold 4, out 4
+• You don't have to fix everything today
+• One small thing: drink some water or step outside for 2 minutes
+
+**Talk to someone:**
+Kids Help Phone — 📞 1-800-668-6868 (24/7, free, confidential)
+Text CONNECT to 686868
+
+${pendingTasks.length ? `**Your tasks can wait.** You have ${pendingTasks.length} pending — none of them matter more than how you feel right now.` : ''}`;
+  }
+
+  // ── DAY QUERY ─────────────────────────────────────────────
   const day = extractDayFromText(text);
-  if(day && (lc.includes('what') || lc.includes('do i have') || lc.includes('free') || lc.includes('schedule') || lc.includes('busy') || text.trim().split(' ').length <= 3)){
+  if(day){
     const classes = ctx.myClasses.filter(c=>c.days?.includes(day));
     const tasks = ctx.goals.filter(g=>g.day===day);
     const free = ctx.freeSlots.filter(s=>s.day===day);
-    return `📅 **Your ${day} (${getDayDate(day)}):**\n\n${classes.length ? `🏫 ${classes.map(c=>`${c.subject} ${c.startTime}–${c.endTime}`).join(', ')}\n` : '📭 No classes\n'}${tasks.length ? `📌 Tasks: ${tasks.map(t=>t.task).join(', ')}\n` : ''}${free.length ? `\n✅ Free: ${free.slice(0,4).map(s=>formatTime(s.time)).join(', ')}` : '\n⚠️ Looks busy!'}\n\nWhat do you want to do on ${day}?`;
+    return `📅 **Your ${day} (${getDayDate(day)}):**
+
+${classes.length ? `🏫 ${classes.map(c=>`${c.subject} ${c.startTime}–${c.endTime}`).join(', ')}
+` : '📭 No classes
+'}${tasks.length ? `📌 Tasks: ${tasks.map(t=>t.task).join(', ')}
+` : ''}${free.length ? `
+✅ Free: ${free.slice(0,4).map(s=>formatTime(s.time)).join(', ')}` : '
+⚠️ Looks busy!'}
+
+What do you want to do on ${day}?`;
   }
 
-  // ── Schedule something ────────────────────────────────────
-  if(extractTimeFromText(text) && extractActivity(text)){
-    const result = suggestSpecificSlot(extractActivity(text), extractTimeFromText(text), ctx);
-    if(result.suggestion){
-      pendingSuggestion = result.suggestion;
-      return result.message;
-    }
+  // ── SPECIFIC TIME ─────────────────────────────────────────
+  if(extractTimeFromText(text)){
+    const act = extractActivity(text) || mem.activity || 'that';
+    const result = suggestSpecificSlot(act, extractTimeFromText(text), ctx);
+    if(result.suggestion) suggestion = result.suggestion;
+    return result.message;
   }
 
-  // ── General friendly response ─────────────────────────────
-  const recentConvo = aiConversation.slice(-4).filter(m=>m.role==='user').map(m=>m.text).join(', ');
-  const contextHint = pendingTasks.length ? `You have ${pendingTasks.length} pending tasks.` : '';
-  const sleepHint = sleepH && sleepH < 6 ? ` You're running low on sleep (${sleepH}h).` : '';
-  const burnoutHint = ctx.burnout ? ' Your mood logs show you\'ve been struggling lately.' : '';
+  // ── CATCH-ALL: conversational, context-aware ──────────────
+  const contextBits = [];
+  if(pendingTasks.length) contextBits.push(`${pendingTasks.length} pending tasks`);
+  if(sleepH && sleepH < 7) contextBits.push(`${sleepH}h sleep`);
+  if(ctx.burnout) contextBits.push('some tough moods lately');
+  if(gymDays.length) contextBits.push(`gym on ${gymDays.join(', ')}`);
 
-  // Pick a smart response based on recent conversation + context
-  const responses = [
-    `Got it, ${name}! ${contextHint}${sleepHint} What specifically do you need help with — studying, scheduling, running, or something else?`,
-    `Hey ${name}! ${burnoutHint || contextHint} I can help you plan your week, study smarter, find time for gym or runs, or just talk through what's going on. What's on your mind?`,
-    `I'm here, ${name}. ${contextHint}${sleepHint} Tell me more — what subject, what time, or what's stressing you out?`
-  ];
-  return responses[Math.floor(Math.random() * responses.length)];
+  const ctxString = contextBits.length ? ` I can see you have ${contextBits.join(', ')}.` : '';
+
+  // Give a genuinely helpful response based on what they said
+  const msgLower = lc.trim();
+  if(msgLower.length < 10){
+    return `Hey ${name}! What's going on? I can help with your schedule, studying, gym, sleep, stress — anything on your mind. 👂`;
+  }
+
+  return `Hey ${name}!${ctxString}
+
+I'm here to help — tell me more about what you're dealing with and I'll give you a real plan. Whether it's:
+
+• 📅 **Scheduling** something (gym, run, study, anything)
+• 📚 **Studying** — test prep, homework, focus tips
+• 😴 **Sleep + energy** — making the most of a tired day
+• 🌤️ **Weather** — tell me your city
+• 🌬️ **Stress or feeling overwhelmed**
+• 📊 **Planning your week**
+
+Just tell me what's going on and I'll dig in! 💪`;
 }
+
 
 // ── Weather fetcher ──
 async function fetchWeatherResponse(text, location, date, ctx){
