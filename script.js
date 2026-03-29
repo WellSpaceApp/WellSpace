@@ -1200,10 +1200,9 @@ async function respondAI(text){
   }
 
   // ── EVERYTHING ELSE — send to Claude API ──────────────────
-else {
-  response = localSmartAI(text, ctx);
-}
-
+  else {
+    response = await callClaudeAI(text, ctx, mem);
+  }
 
 
   // Save to memory
@@ -1211,54 +1210,10 @@ else {
   if(aiConversation.length > AI_MEM) aiConversation=aiConversation.slice(-AI_MEM);
 
   const t=document.getElementById('ai-typing'); if(t) t.remove();
-addAIMsg('ai', response);
+  addAIMsg('ai', response);
+  if(suggestion) showAISuggestion(suggestion);
+  msgs.scrollTop=msgs.scrollHeight;
 }
-
-
-
-// ⬇️ ⬇️ ⬇️ PASTE YOUR NEW AI HERE ⬇️ ⬇️ ⬇️
-
-let aiCoach = {
-  tasks: [],
-  startTime: null,
-  energy: null
-};
-
-function localSmartAI(text, ctx){
-  const lc = text.toLowerCase();
-
-  if(lc.includes("sleep") || lc.includes("tired")){
-    aiCoach.energy = "low";
-    return "Got it — you're running low on energy 😴\n\nWhat do you need to get done today?";
-  }
-
-  if(lc.includes("overwhelmed") || lc.includes("stress")){
-    return "Alright — list your tasks separated by commas (example: homework, gym, study).";
-  }
-
-  if(lc.includes(",") && aiCoach.tasks.length === 0){
-    aiCoach.tasks = text.split(",").map(t => t.trim());
-
-    return `Here’s your tasks:\n\n${aiCoach.tasks.map((t,i)=>`${i+1}. ${t}`).join("\n")}\n\nWhat time do you want to start?`;
-  }
-
-  if((lc.includes("am") || lc.includes("pm")) && !aiCoach.startTime){
-    aiCoach.startTime = text;
-
-    let hour = 9;
-    let schedule = "";
-
-    aiCoach.tasks.forEach(task => {
-      schedule += `🕒 ${hour}:00 - ${task}\n`;
-      hour += 2;
-    });
-
-    return `Here’s your plan:\n\n${schedule}`;
-  }
-
-  return "Tell me your situation (sleep, stress, tasks), and I’ll help you plan.";
-}
-
 
 
 // ── Build a real week plan based on actual data ──
