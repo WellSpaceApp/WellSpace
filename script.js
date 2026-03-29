@@ -1427,66 +1427,62 @@ function buildOverwhelmedResponse(ctx){
 }
 
 // ── General response with context ──
-function buildGeneralResponse(text, ctx){
-  const name = CU.name.split(' ')[0];
-  const lc = text.toLowerCase();
-
-  // Specific activity at specific time
-  const activity = extractActivity(text);
-  const time = extractTimeFromText(text);
-  if(activity && time){
-    const result = suggestSpecificSlot(activity, time, ctx);
-    if(result.suggestion){
-      pendingSuggestion = result.suggestion;
-      return result.message;
-    }
-  }
-
-  // Day-specific question
-  const day = extractDayFromText(text);
-  if(day){
-    const dayDate = getDayDate(day);
-    const classes = ctx.myClasses.filter(c => c.days?.includes(day));
-    const tasks   = ggo().filter(g => g.studentId===CU.id && g.day===day);
-    const free    = ctx.freeSlots.filter(s => s.day===day);
-    return `Here's your **${day} (${dayDate})**:\n\n${classes.length ? `🏫 Classes: ${classes.map(c=>`${c.subject} ${c.startTime}–${c.endTime}`).join(', ')}\n` : '📭 No classes\n'}${tasks.length ? `📌 Tasks: ${tasks.map(t=>t.task).join(', ')}\n` : ''}${free.length ? `\n✅ Free slots: ${free.slice(0,3).map(s=>formatTime(s.time)).join(', ')}` : '\n⚠️ Looks like a busy day!'}\n\nWhat do you want to do on ${day}?`;
-  }
-
-  return `I'm here to help, ${name}! I can:\n\n• 📅 **Find you a free slot** — tell me what activity and when\n• 🌤️ **Check weather** — say "weather in [city] on [day]"\n• 📝 **Build a study plan** — tell me what test or subject\n• 🏃 **Schedule a run/gym** — I'll find your free time\n• 📊 **Review your week** — say "plan my week"\n\nWhat specifically do you need?`;
+async function buildGeneralResponse(text, ctx, mem){
+  // Always try Claude first for a real intelligent answer
+  return await callClaudeAI(text, ctx, mem||getMemory());
 }
 
-// ── Claude API — smart fallback for any message ──
+// ── Claude API — smart response for any message ──
 async function callClaudeAI(text, ctx, mem){
   try {
     const name = CU.name.split(' ')[0];
-    const systemPrompt = `You are a personal AI wellness and productivity coach inside WellSpace, a student app. You are talking to ${name}, a high school student.
+    const pendingTasks = ctx.goals.filter(g=>!g.done).slice(0,8).map(g=>`${g.task} (${g.day} ${g.time})`).join(', ');
+    const gymDays = ctx.goals.filter(g=>g.type==='gym').map(g=>g.day);
+    const freeToday = ctx.freeSlots.filter(s=>s.day===new Date().toLocaleDateString('en-CA',{weekday:'long'})).slice(0,3).map(s=>formatTime(s.time)).join(', ');
 
-Their schedule context:
-- Classes: ${ctx.myClasses.map(c=>`${c.subject} (${c.startTime}-${c.endTime})`).join(', ') || 'None joined yet'}
-- Pending tasks: ${ctx.goals.filter(g=>!g.done).map(g=>`${g.task} on ${g.day}`).slice(0,5).join(', ') || 'None'}
-- Recent sleep: ${ctx.recentSleep ? ctx.recentSleep.hours+'h ('+ctx.recentSleep.quality+')' : 'Not logged'}
-- City: ${mem.location || 'Unknown'}
-${mem.busArrival ? '- Gets home at: '+formatTime(mem.busArrival) : ''}
+    const systemPrompt = `You are an AI coach inside WellSpace, a student wellness app. You are talking to ${name}, a high school student. Be warm, smart, and helpful like ChatGPT. Answer ANY question they have — school, life, mental health, scheduling, study tips, anything.
 
-You help with: scheduling, studying, gym/run planning, mental health, motivation, stress, sleep, and general questions. Keep responses warm, concise, and helpful. Use **bold** for key points. Max 150 words.`;
+Their live data:
+- Classes: ${ctx.myClasses.map(c=>`${c.subject} ${c.startTime}-${c.endTime}`).join(' | ') || 'None yet'}
+- Pending tasks: ${pendingTasks || 'None'}
+- Gym days: ${gymDays.length ? [...new Set(gymDays)].join(', ') : 'None logged'}
+- Free slots today: ${freeToday || 'None found'}
+- Recent sleep: ${ctx.recentSleep ? ctx.recentSleep.hours+'h, '+ctx.recentSleep.quality : 'Not logged'}
+- City: ${mem.location || 'Not specified'}
+${mem.busArrival ? '- Gets home from school at: '+formatTime(mem.busArrival) : ''}
+- Burnout risk: ${ctx.burnout ? 'YES — several negative moods recently' : 'No'}
+
+Rules:
+- Answer naturally like a smart friend/coach
+- Use **bold** for key points
+- Keep it under 120 words unless they need a detailed plan
+- If they mention running/gym with a city, suggest checking weather + a free time slot
+- If they want to study a subject, give a real study plan
+- Never say "I can only help with..." — help with everything
+- Remember conversation context`;
+
+    const history = aiConversation.slice(-8).map(m=>({
+      role: m.role==='ai' ? 'assistant' : 'user',
+      content: m.text
+    }));
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 300,
+        max_tokens: 400,
         system: systemPrompt,
-        messages: [
-          ...aiConversation.slice(-6).map(m=>({ role: m.role==='ai'?'assistant':'user', content: m.text })),
-          { role: 'user', content: text }
-        ]
+        messages: [...history, { role: 'user', content: text }]
       })
     });
     const data = await response.json();
-    return data.content?.[0]?.text || buildGeneralResponse(text, ctx, mem);
+    if(data.content?.[0]?.text) return data.content[0].text;
+    // Only use static fallback if API completely fails
+    return `Hey ${name}! I'm here to help with anything — studying, scheduling, running, mental health, or just chatting. What do you need?`;
   } catch(e) {
-    return buildGeneralResponse(text, ctx, mem);
+    const name = CU.name.split(' ')[0];
+    return `Hey ${name}! I'm here to help with anything — studying, scheduling, running, mental health, or just chatting. What do you need?`;
   }
 }
 
