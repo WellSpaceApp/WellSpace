@@ -1294,14 +1294,9 @@ async function respondAI(text){
     response=`Here's your **${day} (${getDayDate(day)})**:\n\n${classes.length?`🏫 ${classes.map(c=>`${c.subject} ${c.startTime}–${c.endTime}`).join(', ')}\n`:'📭 No classes\n'}${tasks.length?`📌 ${tasks.map(t=>t.task).join(', ')}\n`:''}${free.length?`\n✅ Free: ${free.slice(0,3).map(s=>formatTime(s.time)).join(', ')}`:'\n⚠️ Busy day!'}\n\nWhat do you want to do on ${day}?`;
   }
 
-  // ── DEFAULT ───────────────────────────────────────────────
+  // ── DEFAULT — Call Claude API for any other message ──────
   else {
-    // If we have context from memory, use it
-    if(mem.activity && mem.day){
-      response=`I remember you wanted to do **${mem.activity}** on **${mem.day}**. ${mem.location?`And you mentioned ${mem.location} for the weather check.`:''}\n\nJust to confirm — do you still want me to find you a time for that? Or has something changed?`;
-    } else {
-      response=buildGeneralResponse(text, ctx, mem);
-    }
+    response = await callClaudeAI(text, ctx, mem);
   }
 
   // Save to memory
@@ -1458,6 +1453,41 @@ function buildGeneralResponse(text, ctx){
   }
 
   return `I'm here to help, ${name}! I can:\n\n• 📅 **Find you a free slot** — tell me what activity and when\n• 🌤️ **Check weather** — say "weather in [city] on [day]"\n• 📝 **Build a study plan** — tell me what test or subject\n• 🏃 **Schedule a run/gym** — I'll find your free time\n• 📊 **Review your week** — say "plan my week"\n\nWhat specifically do you need?`;
+}
+
+// ── Claude API — smart fallback for any message ──
+async function callClaudeAI(text, ctx, mem){
+  try {
+    const name = CU.name.split(' ')[0];
+    const systemPrompt = `You are a personal AI wellness and productivity coach inside WellSpace, a student app. You are talking to ${name}, a high school student.
+
+Their schedule context:
+- Classes: ${ctx.myClasses.map(c=>`${c.subject} (${c.startTime}-${c.endTime})`).join(', ') || 'None joined yet'}
+- Pending tasks: ${ctx.goals.filter(g=>!g.done).map(g=>`${g.task} on ${g.day}`).slice(0,5).join(', ') || 'None'}
+- Recent sleep: ${ctx.recentSleep ? ctx.recentSleep.hours+'h ('+ctx.recentSleep.quality+')' : 'Not logged'}
+- City: ${mem.location || 'Unknown'}
+${mem.busArrival ? '- Gets home at: '+formatTime(mem.busArrival) : ''}
+
+You help with: scheduling, studying, gym/run planning, mental health, motivation, stress, sleep, and general questions. Keep responses warm, concise, and helpful. Use **bold** for key points. Max 150 words.`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [
+          ...aiConversation.slice(-6).map(m=>({ role: m.role==='ai'?'assistant':'user', content: m.text })),
+          { role: 'user', content: text }
+        ]
+      })
+    });
+    const data = await response.json();
+    return data.content?.[0]?.text || buildGeneralResponse(text, ctx, mem);
+  } catch(e) {
+    return buildGeneralResponse(text, ctx, mem);
+  }
 }
 
 // ── Weather fetcher ──
