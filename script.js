@@ -71,7 +71,8 @@ const HELPLINES = {
 };
 
 // OpenAI Configuration
-const OPENAI_API_KEY = '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';
+// OpenAI Configuration
+const OPENAI_API_KEY = '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';
 
 // STATE
 // ─────────────────────────────────────────────
