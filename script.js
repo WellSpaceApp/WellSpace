@@ -71,8 +71,10 @@ const HELPLINES = {
 };
 
 // OpenAI Configuration
-// OpenAI Configuration
-const OPENAI_API_KEY = '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';
+// Hugging Face Configuration (Free AI)
+const HF_TOKEN = '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';
+const HF_MODEL = 'moonshotai/Kimi-K2-Instruct-0905';
+const HF_BASE_URL = 'https://router.huggingface.co/v1';
 
 // STATE
 // ─────────────────────────────────────────────
@@ -1176,14 +1178,14 @@ Be conversational, empathetic, and practical. Respond like ChatGPT or Manus woul
   ];
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`${HF_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
+        'Authorization': `Bearer ${HF_TOKEN}`
       },
       body: JSON.stringify({
-        model: "gpt-3.5-turbo", // or gpt-4
+        model: HF_MODEL,
         messages: apiMessages,
         temperature: 0.7
       })
