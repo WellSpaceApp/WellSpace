@@ -73,7 +73,7 @@ const HELPLINES = {
 // OpenAI Configuration
 // Hugging Face Configuration (Free AI)
 const HF_TOKEN = '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';
-const HF_MODEL = 'moonshotai/Kimi-K2-Instruct-0905';
+const HF_MODEL = 'meta-llama/Llama-3.1-8B-Instruct';
 const HF_BASE_URL = 'https://router.huggingface.co/v1';
 
 // STATE
@@ -1192,6 +1192,11 @@ Be conversational, empathetic, and practical. Respond like ChatGPT or Manus woul
     });
 
     const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error.message || JSON.stringify(data.error));
+    }
+
     let aiResponse = data.choices[0].message.content;
 
     // Check for suggestion in the response
@@ -1222,7 +1227,17 @@ Be conversational, empathetic, and practical. Respond like ChatGPT or Manus woul
     console.error("AI Response Error:", error);
     const t = document.getElementById('ai-typing');
     if (t) t.remove();
-    addAIMsg('ai', "I'm having trouble connecting to my brain right now. Please check your internet or API key! 🧠🔌");
+    
+    let errorMsg = "I'm having trouble connecting to my brain right now. 🧠🔌";
+    if (error.message.includes("Model is overloaded")) {
+      errorMsg = "The AI is currently very busy! Please try again in a few seconds. ⏳";
+    } else if (error.message.includes("Authorization")) {
+      errorMsg = "There's an issue with the API token. Please double-check it! 🔑";
+    } else {
+      errorMsg += `\n\n*(Debug Info: ${error.message})*`;
+    }
+    
+    addAIMsg('ai', errorMsg);
   }
 }
 function buildWeekPlan(ctx){
