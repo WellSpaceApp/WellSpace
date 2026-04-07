@@ -1178,8 +1178,11 @@ Be conversational, empathetic, and practical. Respond like ChatGPT or Manus woul
   ];
 
   try {
-    // Using the Inference API directly (not the OpenAI-compatible router)
-    const response = await fetch(`${HF_BASE_URL}/${HF_MODEL}`, {
+    // Using a CORS proxy to bypass browser security blocks
+    const proxyUrl = 'https://corsproxy.io/?';
+    const targetUrl = `${HF_BASE_URL}/${HF_MODEL}`;
+    
+    const response = await fetch(proxyUrl + encodeURIComponent(targetUrl), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
