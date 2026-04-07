@@ -74,7 +74,7 @@ const HELPLINES = {
 // Hugging Face Configuration (Free AI)
 const HF_TOKEN = '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';
 const HF_MODEL = 'meta-llama/Llama-3.1-8B-Instruct';
-const HF_BASE_URL = 'https://router.huggingface.co/v1';
+const HF_BASE_URL = 'https://api-inference.huggingface.co/models';
 
 // STATE
 // ─────────────────────────────────────────────
@@ -1178,26 +1178,34 @@ Be conversational, empathetic, and practical. Respond like ChatGPT or Manus woul
   ];
 
   try {
-    const response = await fetch(`${HF_BASE_URL}/chat/completions`, {
+    // Using the Inference API directly (not the OpenAI-compatible router)
+    const response = await fetch(`${HF_BASE_URL}/${HF_MODEL}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${HF_TOKEN}`
       },
       body: JSON.stringify({
-        model: HF_MODEL,
-        messages: apiMessages,
-        temperature: 0.7
+        inputs: systemPrompt + "\n\nUser: " + text,
+        parameters: {
+          max_new_tokens: 500,
+          temperature: 0.7,
+          return_full_text: false
+        }
       })
     });
 
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error.message || JSON.stringify(data.error));
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
     }
 
-    let aiResponse = data.choices[0].message.content;
+    const data = await response.json();
+    let aiResponse = Array.isArray(data) ? data[0].generated_text : data.generated_text;
+    
+    if (!aiResponse) {
+      throw new Error("Empty response from AI");
+    }
 
     // Check for suggestion in the response
     let suggestion = null;
