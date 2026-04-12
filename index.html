@@ -20,9 +20,7 @@
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════
-     ENTRY SCREEN
-═══════════════════════════════════════════════ -->
+<!-- ENTRY SCREEN -->
 <div id="screen-entry" class="screen active">
   <div class="entry-bg">
     <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
@@ -52,9 +50,7 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     QUICK HELPLINES (no login needed)
-═══════════════════════════════════════════════ -->
+<!-- QUICK HELPLINES -->
 <div id="quick-helplines" class="screen">
   <div class="helpline-full">
     <button class="back-link" onclick="showScreen('screen-entry')">← Back</button>
@@ -62,9 +58,7 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     AUTH SCREEN
-═══════════════════════════════════════════════ -->
+<!-- AUTH SCREEN -->
 <div id="screen-auth" class="screen">
   <div class="auth-bg"></div>
   <div class="auth-container">
@@ -75,8 +69,6 @@
         <button class="atab active" id="atab-login" onclick="authTab('login')">Log In</button>
         <button class="atab" id="atab-signup" onclick="authTab('signup')">Sign Up</button>
       </div>
-
-      <!-- LOGIN FORM -->
       <div id="form-login">
         <div class="fgroup">
           <label>Email Address</label>
@@ -91,9 +83,10 @@
         </div>
         <div id="login-err" class="ferr hidden"></div>
         <button class="btn-main" onclick="doLogin()">Log In</button>
+        <p style="text-align:center;margin-top:12px;font-size:.85rem">
+          <a href="#" onclick="openModal('forgot-modal')" style="color:var(--blue)">Forgot your password? 🔑 Reset Password</a>
+        </p>
       </div>
-
-      <!-- SIGNUP FORM (shared, fields toggled by role) -->
       <div id="form-signup" class="hidden">
         <div class="fgroup">
           <label>Full Name</label>
@@ -102,7 +95,7 @@
         <div class="fgroup">
           <label>Email Address</label>
           <input type="email" id="su-email" placeholder="you@school.ca"/>
-          <span class="field-hint">Must be a valid email (e.g. <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="aec0cfc3cbeecac1c3cfc7c080cdc1c3">[email&#160;protected]</a>)</span>
+          <span class="field-hint">Must be a valid email (e.g. name@school.ca)</span>
         </div>
         <div class="fgroup">
           <label>Password</label>
@@ -118,8 +111,6 @@
             <li id="r-special">One special character (!@#$...)</li>
           </ul>
         </div>
-
-        <!-- STUDENT-ONLY FIELDS -->
         <div id="su-student-fields">
           <div class="fgroup">
             <label>Grade</label>
@@ -137,8 +128,6 @@
             <span class="field-hint">You can join a class later too</span>
           </div>
         </div>
-
-        <!-- TEACHER-ONLY FIELDS -->
         <div id="su-teacher-fields" class="hidden">
           <div class="fgroup">
             <label>Province / Territory</label>
@@ -157,7 +146,6 @@
             <input type="text" id="su-school" placeholder="e.g. Westview Secondary School"/>
           </div>
         </div>
-
         <div class="privacy-check">
           <input type="checkbox" id="su-privacy"/>
           <label for="su-privacy">I agree to the <a href="#" onclick="showPrivacy()">Privacy Policy</a> — my data is private and never shared without consent</label>
@@ -169,9 +157,7 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     STUDENT DASHBOARD
-═══════════════════════════════════════════════ -->
+<!-- STUDENT DASHBOARD -->
 <div id="screen-student" class="screen">
   <div class="app-layout">
     <aside class="sidebar" id="s-sidebar">
@@ -181,7 +167,6 @@
         <a class="sn"        onclick="sSection('mood')"    ><i>😊</i> Mood Check</a>
         <a class="sn"        onclick="sSection('goals')"   ><i>🎯</i> Goals</a>
         <a class="sn"        onclick="sSection('calendar')"><i>📅</i> Calendar</a>
-        
         <a class="sn"        onclick="sSection('stats')"   ><i>📊</i> My Stats</a>
         <a class="sn"        onclick="sSection('wellness')"><i>🌱</i> Wellness</a>
         <a class="sn"        onclick="sSection('help')"    ><i>💙</i> Help & Crisis</a>
@@ -205,8 +190,11 @@
         <div class="home-grid">
           <div class="home-quick-card" onclick="sSection('mood')"><span>😊</span><strong>Check Mood</strong><p>Log today's feelings</p></div>
           <div class="home-quick-card" onclick="sSection('goals')"><span>🎯</span><strong>Goals</strong><p>View & add tasks</p></div>
-          
           <div class="home-quick-card" onclick="sSection('wellness')"><span>🌱</span><strong>Wellness</strong><p>Sleep, habits & more</p></div>
+        </div>
+        <div class="join-class-row" style="margin-top:20px">
+          <input type="text" id="home-join-code" placeholder="Have a class code? Enter it here…" style="text-transform:uppercase"/>
+          <button class="btn-main small" onclick="homeJoinClass()">Join Class</button>
         </div>
         <div id="s-home-goals-preview"></div>
       </section>
@@ -225,7 +213,7 @@
           <button class="btn-main small" onclick="openGoalModal()">+ Add Task</button>
         </div>
         <div id="goals-container"></div>
-        
+        <div id="goals-ai-nudge" class="ai-nudge" style="margin-top:20px"></div>
       </section>
 
       <!-- CALENDAR -->
@@ -246,7 +234,6 @@
       <section class="dsec" id="s-sec-wellness">
         <div class="sec-hdr"><h3>🌱 Wellness Tracker</h3><p>Private — only visible to you (unless you choose to share)</p></div>
         <div class="wellness-grid">
-          <!-- Sleep -->
           <div class="wcard">
             <h4>😴 Hours Slept Last Night</h4>
             <div class="sleep-input-row">
@@ -264,7 +251,6 @@
             <button class="btn-main small" onclick="logWellness('sleep')">Log Sleep</button>
             <div id="sleep-log-display" class="wlog-display"></div>
           </div>
-          <!-- Responsibilities -->
           <div class="wcard">
             <h4>📋 Today's Responsibilities</h4>
             <div class="resp-input-row">
@@ -278,7 +264,6 @@
             <button class="btn-main small" onclick="logWellness('resp')">Add</button>
             <div id="resp-log-display" class="wlog-display"></div>
           </div>
-          <!-- Energy & Water -->
           <div class="wcard">
             <h4>⚡ Energy & Hydration</h4>
             <div class="fgroup">
@@ -297,7 +282,6 @@
             </div>
             <button class="btn-main small" onclick="logWellness('energy')">Log</button>
           </div>
-          <!-- Mood note -->
           <div class="wcard">
             <h4>📝 Private Journal Note</h4>
             <textarea id="w-journal" rows="4" placeholder="Write anything — thoughts, worries, wins…"></textarea>
@@ -330,12 +314,10 @@
         </div>
       </section>
 
-      <!-- MY PROFILE (student) -->
+      <!-- MY PROFILE -->
       <section class="dsec" id="s-sec-profile">
         <div class="sec-hdr"><h3>👤 My Profile</h3><p>Manage your account and responsibilities</p></div>
         <div class="profile-grid">
-
-          <!-- Account card -->
           <div class="profile-card">
             <div class="profile-avatar-row">
               <div class="profile-big-av" id="s-profile-av">A</div>
@@ -346,40 +328,20 @@
               </div>
             </div>
             <div class="profile-section-title">Edit Name</div>
-            <div class="fgroup">
-              <label>Full Name</label>
-              <input type="text" id="s-edit-name" placeholder="Your name"/>
-            </div>
+            <div class="fgroup"><label>Full Name</label><input type="text" id="s-edit-name" placeholder="Your name"/></div>
             <div class="profile-section-title">Change Password</div>
-            <div class="fgroup">
-              <label>Current Password</label>
-              <input type="password" id="s-old-pass" placeholder="••••••••"/>
-            </div>
-            <div class="fgroup">
-              <label>New Password</label>
-              <input type="password" id="s-new-pass" placeholder="8+ chars, uppercase, number, symbol"/>
-            </div>
+            <div class="fgroup"><label>Current Password</label><input type="password" id="s-old-pass" placeholder="••••••••"/></div>
+            <div class="fgroup"><label>New Password</label><input type="password" id="s-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
             <div id="s-profile-err" class="ferr hidden"></div>
             <div id="s-profile-ok" class="success-note hidden">✓ Profile updated!</div>
             <button class="btn-main small" onclick="saveStudentProfile()">Save Changes</button>
           </div>
-
-          <!-- Responsibilities card -->
           <div class="profile-card">
             <h4 style="color:var(--navy);margin-bottom:4px">📋 My Responsibilities</h4>
-            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Add things outside of school — work, family, sports, etc. You choose what to share with your teacher.</p>
-            <div class="fgroup">
-              <label>Responsibility</label>
-              <input type="text" id="resp-text" placeholder="e.g. Part-time job at Tim Hortons, babysit siblings…"/>
-            </div>
-            <div class="fgroup">
-              <label>Days / When</label>
-              <input type="text" id="resp-when" placeholder="e.g. Mon–Wed 4–8pm, every weekend"/>
-            </div>
-            <div class="fgroup">
-              <label>Hours per week (approx)</label>
-              <input type="number" id="resp-hours" min="0" max="80" placeholder="e.g. 15"/>
-            </div>
+            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Add things outside of school — work, family, sports, etc.</p>
+            <div class="fgroup"><label>Responsibility</label><input type="text" id="resp-text" placeholder="e.g. Part-time job, babysit siblings…"/></div>
+            <div class="fgroup"><label>Days / When</label><input type="text" id="resp-when" placeholder="e.g. Mon–Wed 4–8pm"/></div>
+            <div class="fgroup"><label>Hours per week (approx)</label><input type="number" id="resp-hours" min="0" max="80" placeholder="e.g. 15"/></div>
             <div class="share-toggle" style="margin-bottom:14px">
               <input type="checkbox" id="resp-share"/>
               <label for="resp-share">Share this with my teacher so they understand my workload</label>
@@ -387,8 +349,6 @@
             <button class="btn-main small" onclick="addResponsibility()">Add Responsibility</button>
             <div id="resp-list" style="margin-top:16px;display:flex;flex-direction:column;gap:8px"></div>
           </div>
-
-          <!-- Danger zone -->
           <div class="profile-card danger-card">
             <h4>⚠️ Account Actions</h4>
             <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">These actions are permanent and cannot be undone.</p>
@@ -400,9 +360,7 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     TEACHER DASHBOARD
-═══════════════════════════════════════════════ -->
+<!-- TEACHER DASHBOARD -->
 <div id="screen-teacher" class="screen">
   <div class="app-layout">
     <aside class="sidebar teacher-sb" id="t-sidebar">
@@ -419,9 +377,7 @@
         <a class="sn"        onclick="tSection('settings')"><i>⚙️</i> Settings</a>
         <a class="sn"        onclick="tSection('profile')" ><i>👤</i> My Profile</a>
       </nav>
-      <div class="sb-foot">
-        <button class="sb-logout" onclick="logout()">Log Out</button>
-      </div>
+      <div class="sb-foot"><button class="sb-logout" onclick="logout()">Log Out</button></div>
     </aside>
     <main class="app-main" id="t-main">
       <header class="app-header teacher-hdr">
@@ -429,75 +385,51 @@
         <div class="hdr-info"><h2 id="t-greet"></h2><p id="t-date"></p></div>
         <div class="hdr-av teacher-av" id="t-av">T</div>
       </header>
-
-      <!-- OVERVIEW -->
       <section class="dsec active" id="t-sec-overview">
         <div id="t-stats-row" class="t-stats-row"></div>
         <div id="t-alerts-preview"></div>
       </section>
-
-      <!-- CLASSES -->
       <section class="dsec" id="t-sec-classes">
         <div class="sec-hdr"><h3>📚 My Classes</h3><p>Create classes and share codes with students</p></div>
         <button class="btn-main" onclick="openClassModal()">+ Create Class</button>
         <div id="t-classes-grid" class="t-classes-grid"></div>
       </section>
-
-      <!-- STUDENTS -->
       <section class="dsec" id="t-sec-students">
         <div class="sec-hdr"><h3>👥 My Students</h3></div>
         <div class="t-filter-row">
           <input type="text" id="t-search" class="search-inp" placeholder="Search students…" oninput="renderStudentTable()"/>
-          <select id="t-cls-filter" class="sel" onchange="renderStudentTable()">
-            <option value="">All Classes</option>
-          </select>
+          <select id="t-cls-filter" class="sel" onchange="renderStudentTable()"><option value="">All Classes</option></select>
         </div>
         <div id="t-student-table"></div>
       </section>
-
-      <!-- MOOD REPORTS -->
       <section class="dsec" id="t-sec-moods">
         <div class="sec-hdr"><h3>😊 Mood Reports</h3><p>Shared moods from your students</p></div>
         <div id="t-mood-grid" class="t-mood-grid"></div>
       </section>
-
-      <!-- WELLNESS DATA -->
       <section class="dsec" id="t-sec-wellness">
-        <div class="sec-hdr"><h3>🌱 Student Wellness Data</h3><p>Only data students chose to share is shown here</p></div>
+        <div class="sec-hdr"><h3>🌱 Student Wellness Data</h3><p>Only data students chose to share</p></div>
         <div id="t-wellness-table"></div>
       </section>
-
-      <!-- GOALS -->
       <section class="dsec" id="t-sec-goals">
         <div class="sec-hdr"><h3>🎯 Student Goals</h3></div>
         <div id="t-goals-list"></div>
       </section>
-
-      <!-- ALERTS -->
       <section class="dsec" id="t-sec-alerts">
         <div class="sec-hdr"><h3>⚠️ Students Needing Support</h3><p>Based on shared mood check-ins</p></div>
         <div id="t-alerts-list"></div>
       </section>
-
-      <!-- HELP RESOURCES (teacher sees province-specific) -->
       <section class="dsec" id="t-sec-help">
-        <div class="sec-hdr"><h3>💙 Wellness Resources for Your Students</h3><p>Province-specific helplines and supports</p></div>
+        <div class="sec-hdr"><h3>💙 Wellness Resources</h3></div>
         <div id="t-help-content"></div>
       </section>
-
-      <!-- SETTINGS -->
       <section class="dsec" id="t-sec-settings">
         <div class="sec-hdr"><h3>⚙️ Account Settings</h3></div>
         <div class="settings-grid">
           <div class="settings-card">
             <h4>School Social Worker</h4>
-            <p class="field-hint">Students who need help will see this contact info (no auto-messages sent)</p>
-            <div class="fgroup"><label>Social Worker Name</label>
-              <input type="text" id="sw-name" placeholder="e.g. Ms. Thompson"/>
-            </div>
-            <div class="fgroup"><label>Social Worker Email</label>
-              <input type="email" id="sw-email" placeholder="mthompson@school.ca"/>
-            </div>
+            <p class="field-hint">Students who need help will see this contact info</p>
+            <div class="fgroup"><label>Social Worker Name</label><input type="text" id="sw-name" placeholder="e.g. Ms. Thompson"/></div>
+            <div class="fgroup"><label>Social Worker Email</label><input type="email" id="sw-email" placeholder="mthompson@school.ca"/></div>
             <button class="btn-main small" onclick="saveSocialWorker()">Save Contact</button>
             <div id="sw-saved" class="hidden success-note">✓ Saved</div>
           </div>
@@ -512,10 +444,8 @@
           </div>
         </div>
       </section>
-
-      <!-- TEACHER PROFILE -->
       <section class="dsec" id="t-sec-profile">
-        <div class="sec-hdr"><h3>👤 My Profile</h3><p>Manage your teacher account</p></div>
+        <div class="sec-hdr"><h3>👤 My Profile</h3></div>
         <div class="profile-grid">
           <div class="profile-card">
             <div class="profile-avatar-row">
@@ -527,34 +457,23 @@
               </div>
             </div>
             <div class="profile-section-title">Edit Details</div>
-            <div class="fgroup"><label>Full Name</label>
-              <input type="text" id="t-edit-name" placeholder="Your name"/>
-            </div>
-            <div class="fgroup"><label>School Name</label>
-              <input type="text" id="t-edit-school" placeholder="Your school"/>
-            </div>
+            <div class="fgroup"><label>Full Name</label><input type="text" id="t-edit-name" placeholder="Your name"/></div>
+            <div class="fgroup"><label>School Name</label><input type="text" id="t-edit-school" placeholder="Your school"/></div>
             <div class="profile-section-title">Change Password</div>
-            <div class="fgroup"><label>Current Password</label>
-              <input type="password" id="t-old-pass" placeholder="••••••••"/>
-            </div>
-            <div class="fgroup"><label>New Password</label>
-              <input type="password" id="t-new-pass" placeholder="8+ chars, uppercase, number, symbol"/>
-            </div>
+            <div class="fgroup"><label>Current Password</label><input type="password" id="t-old-pass" placeholder="••••••••"/></div>
+            <div class="fgroup"><label>New Password</label><input type="password" id="t-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
             <div id="t-profile-err" class="ferr hidden"></div>
             <div id="t-profile-ok" class="success-note hidden">✓ Profile updated!</div>
             <button class="btn-main small" onclick="saveTeacherProfile()">Save Changes</button>
           </div>
-
-          <!-- Student responsibilities view -->
           <div class="profile-card">
             <h4 style="color:var(--navy);margin-bottom:4px">📋 Student Responsibilities (Shared)</h4>
             <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Responsibilities students chose to share with you</p>
             <div id="t-resp-view"></div>
           </div>
-
           <div class="profile-card danger-card">
             <h4>⚠️ Account Actions</h4>
-            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">These actions are permanent. Deleting your account will remove all your classes and student associations.</p>
+            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">Deleting your account will remove all your classes and student associations.</p>
             <button class="btn-danger" onclick="confirmDeleteAccount('teacher')">🗑 Delete My Account</button>
           </div>
         </div>
@@ -563,16 +482,13 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     MODALS
-═══════════════════════════════════════════════ -->
+<!-- MODALS -->
 
 <!-- GOAL MODAL -->
 <div id="goal-modal" class="modal-bg hidden">
   <div class="modal">
     <div class="modal-hdr"><h3>➕ Add Task</h3><button class="modal-close" onclick="closeModal('goal-modal')">✕</button></div>
-    <div class="fgroup"><label>Task Name</label>
-      <input type="text" id="gm-task" placeholder="e.g. Study Chapter 5"/></div>
+    <div class="fgroup"><label>Task Name</label><input type="text" id="gm-task" placeholder="e.g. Study Chapter 5"/></div>
     <div class="fgroup"><label>Day</label>
       <select id="gm-day">
         <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
@@ -584,8 +500,7 @@
         <select id="gm-dur">
           <option>30 min</option><option>45 min</option><option>1 hour</option>
           <option>1.5 hours</option><option>2 hours</option><option>2.5 hours</option><option>3 hours</option>
-        </select>
-      </div>
+        </select></div>
     </div>
     <div class="fgroup"><label>Type</label>
       <select id="gm-type">
@@ -605,12 +520,11 @@
   </div>
 </div>
 
-<!-- CLASS MODAL (teacher) -->
+<!-- CLASS MODAL -->
 <div id="class-modal" class="modal-bg hidden">
   <div class="modal">
     <div class="modal-hdr"><h3>➕ Create Class</h3><button class="modal-close" onclick="closeModal('class-modal')">✕</button></div>
-    <div class="fgroup"><label>Subject Name</label>
-      <input type="text" id="cm-subject" placeholder="e.g. English — Grade 10 (ENG2D)"/></div>
+    <div class="fgroup"><label>Subject Name</label><input type="text" id="cm-subject" placeholder="e.g. English — Grade 10 (ENG2D)"/></div>
     <div class="fgroup two-col">
       <div><label>Start Time</label><input type="time" id="cm-start" value="09:00"/></div>
       <div><label>End Time</label><input type="time" id="cm-end" value="09:45"/></div>
@@ -625,15 +539,14 @@
       </div>
     </div>
     <div class="fgroup">
-      <label>Class Banner Color <span class="opt-label">(shown on student's class card)</span></label>
-      <div class="banner-color-row" id="banner-color-row">
+      <label>Class Banner Color</label>
+      <div class="banner-color-row">
         <label class="color-opt"><input type="radio" name="cm-color" value="#1d5fa6" checked/><span style="background:#1d5fa6"></span></label>
         <label class="color-opt"><input type="radio" name="cm-color" value="#2e9e6b"/><span style="background:#2e9e6b"></span></label>
         <label class="color-opt"><input type="radio" name="cm-color" value="#7c3aed"/><span style="background:#7c3aed"></span></label>
         <label class="color-opt"><input type="radio" name="cm-color" value="#d97706"/><span style="background:#d97706"></span></label>
         <label class="color-opt"><input type="radio" name="cm-color" value="#dc2626"/><span style="background:#dc2626"></span></label>
         <label class="color-opt"><input type="radio" name="cm-color" value="#0f766e"/><span style="background:#0f766e"></span></label>
-        <label class="color-opt"><input type="radio" name="cm-color" value="#7c3aed"/><span style="background:#7c3aed"></span></label>
       </div>
     </div>
     <div class="fgroup">
@@ -641,10 +554,7 @@
       <div class="logo-row">
         <input type="text" id="cm-emoji" placeholder="Paste emoji e.g. 📐 🧬 📖" style="max-width:180px"/>
         <span style="color:var(--muted);font-size:.85rem;align-self:center">or</span>
-        <label class="upload-label">
-          Upload Image
-          <input type="file" id="cm-logo-file" accept="image/*" onchange="previewLogo(this)" style="display:none"/>
-        </label>
+        <label class="upload-label">Upload Image<input type="file" id="cm-logo-file" accept="image/*" onchange="previewLogo(this)" style="display:none"/></label>
       </div>
       <div id="logo-preview-wrap" class="hidden" style="margin-top:8px">
         <img id="logo-preview-img" style="width:56px;height:56px;border-radius:var(--r-sm);object-fit:cover;border:1px solid var(--border)"/>
@@ -652,8 +562,8 @@
       </div>
     </div>
     <div class="fgroup">
-      <label>Banner Message <span class="opt-label">(optional — shown to students)</span></label>
-      <input type="text" id="cm-banner-msg" placeholder="e.g. Welcome to ENG2D! 📖 This week: Macbeth Act 2"/>
+      <label>Banner Message <span class="opt-label">(optional)</span></label>
+      <input type="text" id="cm-banner-msg" placeholder="e.g. This week: Macbeth Act 2"/>
     </div>
     <div class="fgroup">
       <label>Class Code <span class="opt-label">(students use this to join)</span></label>
@@ -661,7 +571,7 @@
         <input type="text" id="cm-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
         <button class="btn-outline small" onclick="genCode()">Generate</button>
       </div>
-      <span class="field-hint">Share this code with your students — no one else can join</span>
+      <span class="field-hint">Share this code with your students</span>
     </div>
     <div class="modal-foot">
       <button class="btn-main" onclick="createClass()">Create Class</button>
@@ -670,22 +580,7 @@
   </div>
 </div>
 
-<!-- MESSAGE MODAL (teacher) -->
-<div id="msg-modal" class="modal-bg hidden">
-  <div class="modal">
-    <div class="modal-hdr"><h3>💬 Send Message to Class</h3><button class="modal-close" onclick="closeModal('msg-modal')">✕</button></div>
-    <div class="fgroup"><label>Class</label>
-      <select id="mm-class" class="sel"></select></div>
-    <div class="fgroup"><label>Message</label>
-      <textarea id="mm-msg" rows="4" placeholder="Type your message…"></textarea></div>
-    <div class="modal-foot">
-      <button class="btn-main" onclick="sendMsg()">Send</button>
-      <button class="btn-outline" onclick="closeModal('msg-modal')">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- SOCIAL WORKER POPUP (student sees when they pick negative mood) -->
+<!-- SOCIAL WORKER POPUP -->
 <div id="sw-popup" class="modal-bg hidden">
   <div class="modal support-modal">
     <div class="modal-hdr"><h3>💙 We're Here For You</h3><button class="modal-close" onclick="dismissSWPopup(false)">✕</button></div>
@@ -701,17 +596,16 @@
   </div>
 </div>
 
-<!-- PRIVACY POLICY MODAL -->
+<!-- PRIVACY MODAL -->
 <div id="privacy-modal" class="modal-bg hidden">
   <div class="modal">
     <div class="modal-hdr"><h3>🔒 Privacy Policy</h3><button class="modal-close" onclick="closeModal('privacy-modal')">✕</button></div>
     <div class="privacy-text">
       <p><strong>What we collect:</strong> Your name, email, mood check-ins, goals, and wellness data.</p>
-      <p><strong>What teachers can see:</strong> Only data you explicitly choose to share. Your private journal, private moods, and private wellness data are <em>never</em> visible to anyone else.</p>
-      <p><strong>What teachers cannot see:</strong> Your password, private journal entries, private mood logs, or any wellness data marked private.</p>
-      <p><strong>Class codes:</strong> Only your teacher can create class codes. You cannot add yourself to a class without a valid teacher-issued code.</p>
-      <p><strong>Data storage:</strong> All data is stored locally on this device (localStorage). Nothing is sent to any server.</p>
-      <p><strong>Your rights:</strong> You can delete your data at any time by clearing your browser's local storage.</p>
+      <p><strong>What teachers can see:</strong> Only data you explicitly choose to share.</p>
+      <p><strong>What teachers cannot see:</strong> Your password, private journal entries, or any data marked private.</p>
+      <p><strong>Data storage:</strong> All data is stored locally on this device. Nothing is sent to any server without your action.</p>
+      <p><strong>Your rights:</strong> You can delete your account and all data at any time from your Profile page.</p>
     </div>
     <button class="btn-main small" onclick="closeModal('privacy-modal')">Got It</button>
   </div>
@@ -723,19 +617,69 @@
     <div class="modal-hdr"><h3>🗑 Delete Account</h3><button class="modal-close" onclick="closeModal('delete-modal')">✕</button></div>
     <div style="background:var(--red-lt);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:18px">
       <p style="color:var(--red);font-weight:700;margin-bottom:4px">⚠️ This cannot be undone</p>
-      <p style="color:var(--red);font-size:.88rem">All your data — moods, goals, wellness logs, and class associations — will be permanently deleted.</p>
+      <p style="color:var(--red);font-size:.88rem">All your data will be permanently deleted.</p>
     </div>
-    <div class="fgroup">
-      <label>Type DELETE to confirm</label>
-      <input type="text" id="delete-confirm-input" placeholder="Type DELETE here…"/>
-    </div>
-    <div class="fgroup">
-      <label>Enter your password</label>
-      <input type="password" id="delete-pass-input" placeholder="••••••••"/>
-    </div>
+    <div class="fgroup"><label>Type DELETE to confirm</label><input type="text" id="delete-confirm-input" placeholder="Type DELETE here…"/></div>
+    <div class="fgroup"><label>Enter your password</label><input type="password" id="delete-pass-input" placeholder="••••••••"/></div>
     <div id="delete-err" class="ferr hidden"></div>
     <div class="modal-foot">
       <button class="btn-danger" onclick="executeDeleteAccount()">Permanently Delete</button>
       <button class="btn-outline" onclick="closeModal('delete-modal')">Cancel</button>
     </div>
   </div>
+</div>
+
+<!-- FORGOT PASSWORD MODAL -->
+<div id="forgot-modal" class="modal-bg hidden">
+  <div class="modal">
+    <div class="modal-hdr"><h3>🔑 Reset Password</h3><button class="modal-close" onclick="closeModal('forgot-modal')">✕</button></div>
+    <div id="forgot-step-1">
+      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Enter your email address and we'll send you a reset code.</p>
+      <div class="fgroup"><label>Email Address</label><input type="email" id="forgot-email" placeholder="you@email.com"/></div>
+      <div id="forgot-err" class="ferr hidden"></div>
+      <button class="btn-main" onclick="sendResetCode()">Send Reset Code</button>
+    </div>
+    <div id="forgot-step-2" class="hidden">
+      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="forgot-email-display"></strong>. Enter it below.</p>
+      <div class="fgroup"><label>6-digit Code</label><input type="text" id="forgot-code-input" placeholder="123456" maxlength="6"/></div>
+      <div class="fgroup"><label>New Password</label><input type="password" id="forgot-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+      <div id="forgot-reset-err" class="ferr hidden"></div>
+      <div id="forgot-reset-ok" class="success-note hidden">✓ Password reset! Redirecting…</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn-main" onclick="confirmResetPassword()">Reset Password</button>
+        <button class="btn-outline small" onclick="resendResetCode()">Resend Code</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EMAIL VERIFY MODAL -->
+<div id="verify-modal" class="modal-bg hidden">
+  <div class="modal">
+    <div class="modal-hdr"><h3>📧 Verify Your Email</h3><button class="modal-close" onclick="closeModal('verify-modal')">✕</button></div>
+    <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="verify-email-display"></strong>. Enter it below to activate your account.</p>
+    <div class="fgroup"><label>6-digit Code</label><input type="text" id="verify-code-input" placeholder="123456" maxlength="6"/></div>
+    <div id="verify-err" class="ferr hidden"></div>
+    <div id="verify-ok" class="success-note hidden">✓ Verified! Creating your account…</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn-main" onclick="confirmVerifyCode()">Verify</button>
+      <button class="btn-outline small" onclick="resendVerifyCode()">Resend Code</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- FIREBASE — must load BEFORE script.js -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- EMAILJS -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+  if(typeof emailjs !== 'undefined') emailjs.init('hgQbp6YnQ4Y8QabYh');
+</script>
+<!-- APP -->
+<script src="script.js"></script>
+</body>
+</html>
