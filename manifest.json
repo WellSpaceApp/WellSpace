@@ -1,8 +1,7 @@
 {
   "name": "WellSpace – Student Wellness",
   "short_name": "WellSpace",
-  "description": "Student wellness, productivity & AI coaching app",
-  "start_url": "./index.html",
+"description": "Student wellness and productivity app for mood tracking and goal setting"  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f4f7fb",
   "theme_color": "#0f2942",
