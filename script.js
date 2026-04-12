@@ -69,10 +69,6 @@ const HELPLINES = {
     ]
   }
 };
-
-// OpenAI Configuration
-const OPENAI_API_KEY = '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';
-
 // STATE
 // ─────────────────────────────────────────────
 let CU = null;          // current user object
@@ -284,7 +280,7 @@ function updateStudentNav(){
 
 function sSection(name){
   document.querySelectorAll('#s-sidebar .sn').forEach(n=>n.classList.remove('active'));
-  const navMap=['home','mood','goals','calendar','ai','stats','wellness','help','classes','profile'];
+  const navMap=['home','mood','goals','calendar','stats','wellness','help','classes','profile'];
   const idx=navMap.indexOf(name);
   const navItems=document.querySelectorAll('#s-sidebar .sn');
   if(navItems[idx]) navItems[idx].classList.add('active');
@@ -301,7 +297,6 @@ function sSection(name){
   if(name==='wellness') renderWellnessSection();
   if(name==='help')     renderHelpSection();
   if(name==='classes')  renderClassesSection();
-  if(name==='ai')       initAI();
   if(name==='profile')  renderStudentProfile();
 }
 
@@ -337,7 +332,7 @@ function renderHome(){
       `).join('')}
     `;
   } else {
-    prevEl.innerHTML=`<div class="ai-nudge" style="margin-top:16px"><div class="ai-nudge-icon">🎯</div><div><strong>No tasks for today yet</strong><p>Head to Goals to plan your day, or ask the AI Coach for schedule help!</p></div></div>`;
+    prevEl.innerHTML=`<div class="ai-nudge" style="margin-top:16px"><div class="ai-nudge-icon">🎯</div><div><strong>No tasks for today yet</strong><p>Head to Goals to plan your day!</p></div></div>`;
   }
 }
 
