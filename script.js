@@ -69,28 +69,193 @@ const HELPLINES = {
     ]
   }
 };
-// STATE
-// ─────────────────────────────────────────────
-let CU = null;          // current user object
-let authRole = null;    // 'student' | 'teacher'
-let pendingMoodSel = null; // { classId, classLabel, mood }
-let periodOrder = [];    // student's class order
 
 // ─────────────────────────────────────────────
-// STORAGE HELPERS
+// STATE
+// ─────────────────────────────────────────────
+let CU = null;
+let authRole = null;
+let pendingMoodSel = null;
+let periodOrder = [];
+
+// ─────────────────────────────────────────────
+// FIREBASE CONFIG
+// ─────────────────────────────────────────────
+const FB_CFG = {
+  apiKey: "AIzaSyCpUsu0Y2zbd7PH6a8b-NP6B7yEB7UL9Go",
+  authDomain: "wellspace-71c0c.firebaseapp.com",
+  projectId: "wellspace-71c0c",
+};
+
+let fbDb   = null;
+let fbAuth = null;
+
+function initFirebase(){
+  try {
+    if(!firebase.apps.length) firebase.initializeApp(FB_CFG);
+    fbDb   = firebase.firestore();
+    fbAuth = firebase.auth();
+  } catch(e){ fbDb = null; fbAuth = null; }
+}
+
+// ─────────────────────────────────────────────
+// FIRESTORE HELPERS — per-user + shared
+// ─────────────────────────────────────────────
+
+// Save a key to the current user's private Firestore doc
+async function fsSet(key, value){
+  if(!fbDb || !fbAuth?.currentUser) return;
+  try {
+    await fbDb.collection('users').doc(fbAuth.currentUser.uid)
+      .set({ [key]: JSON.stringify(value) }, { merge: true });
+  } catch(e){}
+}
+
+// Read a key from the current user's private Firestore doc
+async function fsGet(key, def=null){
+  if(!fbDb || !fbAuth?.currentUser) return def;
+  try {
+    const doc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    if(!doc.exists) return def;
+    const val = doc.data()[key];
+    return val ? JSON.parse(val) : def;
+  } catch(e){ return def; }
+}
+
+// Save to shared collection (class codes, classes list — readable by all authenticated users)
+async function fsSetShared(key, value){
+  if(!fbDb) return;
+  try {
+    await fbDb.collection('shared').doc('data')
+      .set({ [key]: JSON.stringify(value) }, { merge: true });
+  } catch(e){}
+}
+
+// Read from shared collection
+async function fsGetShared(key, def=null){
+  if(!fbDb) return def;
+  try {
+    const doc = await fbDb.collection('shared').doc('data').get();
+    if(!doc.exists) return def;
+    const val = doc.data()?.[key];
+    return val ? JSON.parse(val) : def;
+  } catch(e){ return def; }
+}
+
+// ─────────────────────────────────────────────
+// LOCAL CACHE — fast reads, Firestore is source of truth
+// ─────────────────────────────────────────────
+const cache = {};
+
+function cSet(k, v){ cache[k] = v; }
+function cGet(k, def=null){ return k in cache ? cache[k] : def; }
+
+// Keys that are shared across all users (classes, class codes)
+const SHARED_KEYS = ['classes'];
+// Keys that belong to all users but need to be read by teachers (moods, wellness, goals, responsibilities)
+// These are stored per-user but teachers read their students' docs
+const CROSS_KEYS  = ['moods','goals','wellness','responsibilities','journals','messages'];
+// Keys private to one user
+const PRIVATE_KEYS= ['students','teachers'];
+
+// ─────────────────────────────────────────────
+// UNIFIED S — same API as before, now Firestore-backed
 // ─────────────────────────────────────────────
 const S = {
-  get:(k,d=null)=>{ try{ const v=localStorage.getItem('ws_'+k); return v?JSON.parse(v):d; }catch{return d;} },
-  set:(k,v)=>{ try{ localStorage.setItem('ws_'+k,JSON.stringify(v)); }catch{} },
+  get(k, def=null){
+    // Return from cache first for speed
+    return cGet(k, def);
+  },
+  set(k, v){
+    cSet(k, v);
+    // Persist to correct Firestore location
+    if(SHARED_KEYS.includes(k)){
+      fsSetShared(k, v);
+    } else {
+      fsSet(k, v);
+    }
+  },
 };
-const gs = ()=>S.get('students',[]);
-const gt = ()=>S.get('teachers',[]);
-const gc = ()=>S.get('classes',[]);
-const gm = ()=>S.get('moods',[]);
-const ggo= ()=>S.get('goals',[]);
-const gw = ()=>S.get('wellness',[]);
-const gmsg=()=>S.get('messages',[]);
-const gj = ()=>S.get('journals',[]);
+
+// Shortcuts — same as original
+const gs  = ()=> S.get('students',[]);
+const gt  = ()=> S.get('teachers',[]);
+const gc  = ()=> S.get('classes',[]);
+const gm  = ()=> S.get('moods',[]);
+const ggo = ()=> S.get('goals',[]);
+const gw  = ()=> S.get('wellness',[]);
+const gmsg= ()=> S.get('messages',[]);
+const gj  = ()=> S.get('journals',[]);
+
+// ─────────────────────────────────────────────
+// LOAD USER DATA FROM FIRESTORE INTO CACHE
+// ─────────────────────────────────────────────
+async function loadUserData(){
+  if(!fbDb || !fbAuth?.currentUser) return;
+  try {
+    // Load user's private data
+    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    if(userDoc.exists){
+      const data = userDoc.data();
+      Object.entries(data).forEach(([k,v])=>{
+        try{ cSet(k, JSON.parse(v)); }catch{}
+      });
+    }
+    // Load shared data (classes)
+    const sharedDoc = await fbDb.collection('shared').doc('data').get();
+    if(sharedDoc.exists){
+      const data = sharedDoc.data();
+      ['classes'].forEach(k=>{
+        if(data[k]){ try{ cSet(k, JSON.parse(data[k])); }catch{} }
+      });
+    }
+  } catch(e){}
+}
+
+// Load another user's data (for teachers reading student data)
+async function loadStudentData(uid){
+  if(!fbDb) return {};
+  try {
+    const doc = await fbDb.collection('users').doc(uid).get();
+    if(!doc.exists) return {};
+    const data = doc.data();
+    const result = {};
+    Object.entries(data).forEach(([k,v])=>{ try{ result[k]=JSON.parse(v); }catch{} });
+    return result;
+  } catch(e){ return {}; }
+}
+
+// ─────────────────────────────────────────────
+// STUDENT-TEACHER LINK — store uid mapping
+// ─────────────────────────────────────────────
+// When a user signs up we store their profile in shared/profiles/{uid}
+// So teachers can look up student uids to read their data
+async function saveProfile(uid, profile){
+  if(!fbDb) return;
+  try {
+    await fbDb.collection('profiles').doc(uid).set(profile, { merge: true });
+  } catch(e){}
+}
+
+async function getProfile(uid){
+  if(!fbDb) return null;
+  try {
+    const doc = await fbDb.collection('profiles').doc(uid).get();
+    return doc.exists ? doc.data() : null;
+  } catch(e){ return null; }
+}
+
+// Get all student uids in a teacher's classes
+async function getStudentUids(classIds){
+  if(!fbDb || !classIds?.length) return [];
+  try {
+    const snap = await fbDb.collection('profiles')
+      .where('role','==','student')
+      .where('classIds','array-contains-any', classIds)
+      .get();
+    return snap.docs.map(d=>({ uid: d.id, ...d.data() }));
+  } catch(e){ return []; }
+}
 
 // ─────────────────────────────────────────────
 // VALIDATION
@@ -136,7 +301,6 @@ function showScreen(id){
   const el=document.getElementById(id);
   if(!el)return;
   el.style.display='flex';
-  // Dashboard screens stack vertically (sidebar + main are inside)
   if(id==='screen-student'||id==='screen-teacher') el.style.flexDirection='column';
   el.classList.add('active','fade');
 }
@@ -145,7 +309,6 @@ function gotoAuth(role){
   authRole=role;
   const brand=document.getElementById('auth-brand-label');
   brand.textContent = role==='student' ? '🎒 Student Login' : '📋 Teacher Login';
-  // Show/hide signup fields
   document.getElementById('su-student-fields').classList.toggle('hidden', role!=='student');
   document.getElementById('su-teacher-fields').classList.toggle('hidden', role!=='teacher');
   authTab('login');
@@ -160,90 +323,178 @@ function authTab(tab){
 }
 
 // ─────────────────────────────────────────────
-// AUTH — LOGIN
+// AUTH — LOGIN (Firebase Auth)
 // ─────────────────────────────────────────────
-function doLogin(){
-  const email=document.getElementById('login-email').value.trim().toLowerCase();
-  const pass =document.getElementById('login-pass').value;
-  const errEl=document.getElementById('login-err');
+async function doLogin(){
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-err');
 
-  if(!email||!pass){ return showErr(errEl,'Please enter your email and password.'); }
-  if(!validEmail(email)){ return showErr(errEl,'Please enter a valid email address.'); }
+  if(!email||!pass) return showErr(errEl,'Please enter your email and password.');
+  if(!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
 
-  if(authRole==='student'){
-    const u=gs().find(s=>s.email===email&&s.password===pass);
-    if(!u)return showErr(errEl,'Email or password incorrect. Check your details.');
-    CU={role:'student',...u};
-    // Save session so they don't need to log in again
-    S.set('session',{role:'student',id:u.id});
-    toast(`Welcome back, ${u.name}! 👋`);
-    loadStudentDash();
-  } else {
-    const u=gt().find(t=>t.email===email&&t.password===pass);
-    if(!u)return showErr(errEl,'Email or password incorrect.');
-    CU={role:'teacher',...u};
-    S.set('session',{role:'teacher',id:u.id});
-    toast(`Welcome back, ${u.name}! 📋`);
-    loadTeacherDash();
+  try {
+    showErr(errEl,''); // clear error
+    const cred = await fbAuth.signInWithEmailAndPassword(email, pass);
+    const uid  = cred.user.uid;
+
+    // Load profile
+    const profile = await getProfile(uid);
+    if(!profile) return showErr(errEl,'Account not found. Please sign up.');
+
+    // Check role matches
+    if(profile.role !== authRole) return showErr(errEl, `This is a ${profile.role} account. Please use the ${profile.role} login.`);
+
+    await loadUserData();
+    CU = { ...profile, id: profile.localId || uid, uid };
+
+    toast(`Welcome back, ${CU.name}! 👋`);
+    if(authRole==='student') loadStudentDash();
+    else loadTeacherDash();
+
+  } catch(e){
+    if(e.code==='auth/wrong-password'||e.code==='auth/user-not-found'||e.code==='auth/invalid-credential'){
+      showErr(errEl,'Email or password incorrect. Check your details.');
+    } else {
+      showErr(errEl,'Login failed. Please try again.');
+    }
   }
 }
 
 // ─────────────────────────────────────────────
-// AUTH — SIGNUP
+// AUTH — SIGNUP (Firebase Auth)
 // ─────────────────────────────────────────────
 async function doSignup(){
-  const name =document.getElementById('su-name').value.trim();
-  const email=document.getElementById('su-email').value.trim().toLowerCase();
-  const pass =document.getElementById('su-pass').value;
-  const privacyOk=document.getElementById('su-privacy').checked;
-  const errEl=document.getElementById('signup-err');
+  const name  = document.getElementById('su-name').value.trim();
+  const email = document.getElementById('su-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('su-pass').value;
+  const privacyOk = document.getElementById('su-privacy').checked;
+  const errEl = document.getElementById('signup-err');
 
   if(!name||!email||!pass) return showErr(errEl,'Please fill in all required fields.');
-  if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address (e.g. name@domain.com).');
-  if(!validPw(pass))       return showErr(errEl,'Password must be 8+ chars with an uppercase letter, number, and special character.');
+  if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address.');
+  if(!validPw(pass))       return showErr(errEl,'Password must be 8+ chars with uppercase, number & special character.');
   if(!privacyOk)           return showErr(errEl,'Please accept the privacy policy to continue.');
 
-  // Sync from Firebase before checking class codes so cross-device codes work
-  await fbLoadShared();
+  try {
+    if(authRole==='student'){
+      const grade = document.getElementById('su-grade').value;
+      const code  = document.getElementById('su-code').value.trim().toUpperCase();
+      if(!grade) return showErr(errEl,'Please select your grade.');
 
-  if(authRole==='student'){
-    const grade=document.getElementById('su-grade').value;
-    const code =document.getElementById('su-code').value.trim().toUpperCase();
-    if(!grade) return showErr(errEl,'Please select your grade.');
-    if(gs().find(s=>s.email===email)) return showErr(errEl,'An account with this email already exists.');
+      // Load shared classes to check code
+      const classes = await fsGetShared('classes',[]);
+      cSet('classes', classes);
 
-    let classIds=[];
-    if(code){
-      const cls=gc().find(c=>c.code===code);
-      if(!cls) return showErr(errEl,`Class code "${code}" not found. Ask your teacher for the correct code.`);
-      classIds=[cls.id];
+      let classIds = [];
+      if(code){
+        const cls = classes.find(c=>c.code===code);
+        if(!cls) return showErr(errEl,`Class code "${code}" not found. Ask your teacher for the correct code.`);
+        classIds = [cls.id];
+      }
+
+      // Create Firebase Auth account
+      const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+      const uid  = cred.user.uid;
+      const localId = 's'+uid8();
+
+      const profile = { role:'student', name, email, grade, classIds, periodOrder:[], joined:today(), localId, uid };
+
+      // Save profile to shared profiles collection
+      await saveProfile(uid, profile);
+
+      // Save student list entry to user's own doc
+      const studentEntry = { id:localId, name, email, grade, classIds, periodOrder:[], joined:today() };
+      cSet('students', [studentEntry]);
+      await fsSet('students', [studentEntry]);
+
+      CU = { ...profile, id: localId };
+      await loadUserData();
+      toast(`Account created! Welcome, ${name} 🎉`);
+      loadStudentDash();
+
+    } else {
+      const province = document.getElementById('su-province').value;
+      const school   = document.getElementById('su-school').value.trim();
+      if(!province) return showErr(errEl,'Please select your province.');
+
+      const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+      const uid  = cred.user.uid;
+      const localId = 't'+uid8();
+
+      const profile = { role:'teacher', name, email, province, school, socialWorker:null, joined:today(), localId, uid };
+      await saveProfile(uid, profile);
+
+      const teacherEntry = { id:localId, name, email, province, school, socialWorker:null, joined:today() };
+      cSet('teachers', [teacherEntry]);
+      await fsSet('teachers', [teacherEntry]);
+
+      CU = { ...profile, id: localId };
+      await loadUserData();
+      toast(`Account created! Welcome, ${name} 📋`);
+      loadTeacherDash();
     }
-    const u={id:'s'+uid(),name,email,password:pass,grade,classIds,periodOrder:[],joined:today()};
-    const students=gs(); students.push(u); S.set('students',students);
-    CU={role:'student',...u};
-    S.set('session',{role:'student',id:u.id});
-    toast(`Account created! Welcome, ${name} 🎉`);
-    loadStudentDash();
-
-  } else {
-    const province=document.getElementById('su-province').value;
-    const school  =document.getElementById('su-school').value.trim();
-    if(!province) return showErr(errEl,'Please select your province.');
-    if(gt().find(t=>t.email===email)) return showErr(errEl,'An account with this email already exists.');
-    const u={id:'t'+uid(),name,email,password:pass,province,school,socialWorker:null,joined:today()};
-    const teachers=gt(); teachers.push(u); S.set('teachers',teachers);
-    CU={role:'teacher',...u};
-    S.set('session',{role:'teacher',id:u.id});
-    toast(`Account created! Welcome, ${name} 📋`);
-    loadTeacherDash();
+  } catch(e){
+    if(e.code==='auth/email-already-in-use'){
+      showErr(errEl,'An account with this email already exists.');
+    } else {
+      showErr(errEl,'Could not create account. Please try again.');
+      console.error(e);
+    }
   }
 }
 
 function logout(){
   CU=null; authRole=null;
-  aiHistory=[]; aiConversation=[]; pendingSuggestion=null;
-  S.set('session', null);
+  pendingMoodSel=null;
+  Object.keys(cache).forEach(k=>delete cache[k]);
+  if(fbAuth) fbAuth.signOut().catch(()=>{});
   showScreen('screen-entry');
+}
+
+// ─────────────────────────────────────────────
+// TEACHER — load students across Firestore docs
+// ─────────────────────────────────────────────
+async function loadTeacherStudents(){
+  const myClasses = gc().filter(c=>c.teacherId===CU.id);
+  const myClassIds = myClasses.map(c=>c.id);
+  if(!myClassIds.length) return;
+
+  try {
+    // Get all student profiles in my classes
+    const studentProfiles = await getStudentUids(myClassIds);
+
+    // Load each student's data and merge into cache
+    const allStudents = [];
+    const allMoods    = cGet('moods',[]);
+    const allGoals    = cGet('goals',[]);
+    const allWellness = cGet('wellness',[]);
+    const allResps    = cGet('responsibilities',[]);
+
+    for(const sp of studentProfiles){
+      const data = await loadStudentData(sp.uid);
+      // Merge student entry
+      if(data.students) allStudents.push(...(data.students||[]));
+      // Merge shared data (moods, goals, wellness that this student shared)
+      if(data.moods)          mergeInto(allMoods,    data.moods,    'studentId');
+      if(data.goals)          mergeInto(allGoals,    data.goals,    'studentId');
+      if(data.wellness)       mergeInto(allWellness, data.wellness, 'studentId');
+      if(data.responsibilities) mergeInto(allResps,  data.responsibilities, 'studentId');
+    }
+
+    cSet('students',        allStudents);
+    cSet('moods',           allMoods);
+    cSet('goals',           allGoals);
+    cSet('wellness',        allWellness);
+    cSet('responsibilities',allResps);
+  } catch(e){}
+}
+
+function mergeInto(target, incoming, idKey){
+  incoming.forEach(item=>{
+    const idx = target.findIndex(x=>x.id===item.id || (x[idKey]===item[idKey] && x.date===item.date && x.classId===item.classId));
+    if(idx>=0) target[idx]=item; else target.push(item);
+  });
 }
 
 // ─────────────────────────────────────────────
@@ -260,7 +511,6 @@ function loadStudentDash(){
   document.getElementById('s-date').textContent=new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric'});
   document.getElementById('s-av').textContent=CU.name[0].toUpperCase();
 
-  // Show/hide class-related sidebar items depending on whether student has any classes
   updateStudentNav();
   sSection('home');
 }
@@ -269,13 +519,9 @@ function hasClasses(){
   return CU.classIds && CU.classIds.length > 0;
 }
 
-// Show or hide the "My Classes" nav item dynamically
 function updateStudentNav(){
   const navItems = document.querySelectorAll('#s-sidebar .sn');
-  // navMap index 8 = classes
-  if(navItems[8]){
-    navItems[8].style.display = ''; // always show My Classes
-  }
+  if(navItems[8]) navItems[8].style.display = '';
 }
 
 function sSection(name){
@@ -315,7 +561,6 @@ function renderHome(){
   const [, , msg] = msgs.find(([s,e])=>hour>=s&&hour<e)||msgs[0];
   bannerEl.innerHTML=`<strong>${msg.replace('{n}',CU.name)}</strong><p>${new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</p>`;
 
-  // Goals preview
   const goals=ggo().filter(g=>g.studentId===CU.id&&!g.done).slice(0,4);
   const todayDay=new Date().toLocaleDateString('en-CA',{weekday:'long'});
   const todayGoals=goals.filter(g=>g.day===todayDay);
@@ -343,19 +588,16 @@ function renderMoodCheck(){
   const container = document.getElementById('s-mood-list');
   const hasTeacher = hasClasses();
 
-  // Build items: class items only if they have classes, always include personal
   const items = [
     ...(hasTeacher ? myClasses.map(c => ({id:c.id, label:c.subject, time:`${c.startTime} – ${c.endTime}`, isClass:true})) : []),
     {id:'general', label:'How are you feeling today?', time:'', isClass:false},
   ];
 
-  // Update section subtitle
   const sub = document.querySelector('#s-sec-mood .sec-hdr p');
   if(sub) sub.textContent = hasTeacher ? 'How are you feeling in each period today?' : 'Check in with yourself — just for you 🌱';
 
   container.innerHTML = items.map(item => {
     const existing = todayMoods.find(m => m.classId === item.id);
-    // Only show share/private buttons if student has a teacher
     const shareButtons = hasTeacher
       ? `<button class="btn-green" onclick="saveMood(true)">Share with Teacher</button>
          <button class="btn-outline" onclick="saveMood(false)">Keep Private</button>`
@@ -388,16 +630,12 @@ function renderMoodCheck(){
   }).join('');
 }
 
-// escape single quotes for inline onclick
 function escQ(s){ return s.replace(/'/g,"\\'"); }
 
 function selectMood(classId, classLabel, mood){
-  // Close any open popups first
   document.querySelectorAll('.support-popup').forEach(p => p.classList.add('hidden'));
-
   pendingMoodSel = {classId, classLabel, mood};
   const cfg = MOOD_CFG[mood];
-
   const popup  = document.getElementById(`mood-support-popup-${classId}`);
   const iconEl = document.getElementById(`sp-icon-${classId}`);
   const msgEl  = document.getElementById(`sp-msg-${classId}`);
@@ -407,7 +645,6 @@ function selectMood(classId, classLabel, mood){
     popup.classList.remove('hidden');
   }
   if(NEGATIVE_MOODS.includes(mood)){
-    // Don't show if user permanently dismissed it
     if(!S.get('sw_dismissed_' + CU.id)){
       setTimeout(() => showSWPopup(mood), 1500);
     }
@@ -420,16 +657,13 @@ function saveMood(shared){
   moods.push({studentId:CU.id, classId:pendingMoodSel.classId, classLabel:pendingMoodSel.classLabel, mood:pendingMoodSel.mood, date:today(), shared});
   S.set('moods', moods);
   pendingMoodSel = null;
-  // Close all popups
   document.querySelectorAll('.support-popup').forEach(p => p.classList.add('hidden'));
   toast('Mood saved! ' + (shared && hasClasses() ? 'Shared with teacher.' : 'Saved privately.'));
   renderMoodCheck();
 }
 
 function showSWPopup(mood){
-  // Only show once per session
   if(sessionStorage.getItem('sw_popup_shown')) return;
-
   let swInfo = null;
   if(hasClasses()){
     const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
@@ -457,7 +691,6 @@ function showSWPopup(mood){
 function dismissSWPopup(dontShowAgain){
   closeModal('sw-popup');
   if(dontShowAgain){
-    // Store in localStorage so it never shows again for this user
     S.set('sw_dismissed_' + CU.id, true);
     toast("Got it — we won't show this again 👍");
   }
@@ -548,7 +781,7 @@ function addGoal(){
   const cls =document.getElementById('gm-class').value;
   if(!task)return toast('Please enter a task name.');
   const goals=ggo();
-  goals.push({id:'g'+uid(),studentId:CU.id,classId:cls,task,day,time,duration:dur,type,done:false,created:today()});
+  goals.push({id:'g'+uid8(),studentId:CU.id,classId:cls,task,day,time,duration:dur,type,done:false,created:today()});
   S.set('goals',goals);
   closeModal('goal-modal');
   document.getElementById('gm-task').value='';
@@ -581,14 +814,12 @@ function renderCalendar(){
     const isToday=day===todayDay;
     col.innerHTML=`<div class="cal-day-hdr ${isToday?'today':''}">${day.slice(0,3)}${isToday?' · Today':''}</div>`;
 
-    // Show class times
     myClasses.filter(c=>c.days?.includes(day)).forEach(c=>{
       const ev=document.createElement('div'); ev.className='cal-event';
       ev.textContent=`${c.startTime} ${c.subject}`;
       col.appendChild(ev);
     });
 
-    // Show goals
     goals.filter(g=>g.day===day).sort((a,b)=>a.time.localeCompare(b.time)).forEach(g=>{
       const ev=document.createElement('div'); ev.className=`cal-event ${g.type||'study'}`;
       ev.textContent=`${g.time} ${g.task}`;
@@ -642,7 +873,6 @@ function renderWellnessSection(){
   document.getElementById('resp-log-display').innerHTML = respLogs.map(l=>`
     <div class="wlog-entry"><span>${l.text}</span><span>${l.date}</span></div>`).join('');
 
-  // Show/hide share rows and populate teacher dropdowns
   const myClasses = gc().filter(c => CU.classIds?.includes(c.id));
   const shareRows = ['sleep-share-row','resp-share-row','energy-share-row'];
   shareRows.forEach(id => {
@@ -651,19 +881,15 @@ function renderWellnessSection(){
   });
 
   if(hasClasses()){
-    // Build teacher options — one option per class (period label)
     const teacherOpts = myClasses.map(c => {
       const teacher = gt().find(t => t.id === c.teacherId);
       return `<option value="${c.teacherId}|${c.id}">${c.subject} (${teacher?.name || 'Teacher'})</option>`;
     }).join('');
     const optHtml = `<option value="">Pick a period…</option>` + teacherOpts;
-
     ['sleep-teacher-sel','resp-teacher-sel','energy-teacher-sel'].forEach(id => {
       const sel = document.getElementById(id);
       if(sel) sel.innerHTML = optHtml;
     });
-
-    // Wire checkboxes to show/hide the dropdown
     ['sleep','resp','energy'].forEach(type => {
       const cb  = document.getElementById(`share-${type}`);
       const sel = document.getElementById(`${type}-teacher-sel`);
@@ -692,24 +918,22 @@ function logWellness(type){
     if(!hours || !quality) return toast('Please fill in sleep hours and quality.');
     const { shared, sharedWith } = getShareTarget('share-sleep','sleep-teacher-sel');
     if(shared && !sharedWith?.teacherId) return toast('Please pick which teacher to send this to.');
-    logs.push({ id:'w'+uid(), studentId:CU.id, type:'sleep', hours, quality, shared, sharedWith, date:today() });
+    logs.push({ id:'w'+uid8(), studentId:CU.id, type:'sleep', hours, quality, shared, sharedWith, date:today() });
     toast(shared ? `Sleep sent to ${getTeacherName(sharedWith.teacherId)} 📤` : 'Sleep logged privately 😴');
-
   } else if(type === 'resp'){
     const text = document.getElementById('w-resp').value.trim();
     if(!text) return toast('Please describe your responsibility.');
     const { shared, sharedWith } = getShareTarget('share-resp','resp-teacher-sel');
     if(shared && !sharedWith?.teacherId) return toast('Please pick which teacher to send this to.');
-    logs.push({ id:'w'+uid(), studentId:CU.id, type:'resp', text, shared, sharedWith, date:today() });
+    logs.push({ id:'w'+uid8(), studentId:CU.id, type:'resp', text, shared, sharedWith, date:today() });
     document.getElementById('w-resp').value = '';
     toast(shared ? `Responsibility sent to ${getTeacherName(sharedWith.teacherId)} 📤` : 'Responsibility logged.');
-
   } else if(type === 'energy'){
     const energy = document.getElementById('w-energy').value;
     const water  = document.getElementById('w-water').value;
     const { shared, sharedWith } = getShareTarget('share-energy','energy-teacher-sel');
     if(shared && !sharedWith?.teacherId) return toast('Please pick which teacher to send this to.');
-    logs.push({ id:'w'+uid(), studentId:CU.id, type:'energy', energy, water, shared, sharedWith, date:today() });
+    logs.push({ id:'w'+uid8(), studentId:CU.id, type:'energy', energy, water, shared, sharedWith, date:today() });
     toast(shared ? `Energy data sent to ${getTeacherName(sharedWith.teacherId)} 📤` : 'Logged! ⚡');
   }
   S.set('wellness', logs);
@@ -733,7 +957,7 @@ function saveJournal(){
 
 // HELP
 function renderHelpSection(){
-  let province = 'Ontario'; // sensible default
+  let province = 'Ontario';
   if(hasClasses()){
     const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
     if(myClasses.length > 0){
@@ -784,7 +1008,6 @@ function showHelplines(){
 function buildClassBannerHTML(c, isTeacher=false){
   const color    = c.color || '#1d5fa6';
   const textColor = getContrastColor(color);
-
   if(c.logo || c.emoji){
     return `<div class="cls-banner-header" style="background:${color};color:${textColor}">
       ${c.logo
@@ -793,33 +1016,28 @@ function buildClassBannerHTML(c, isTeacher=false){
       <div class="cls-banner-text"><h4 style="color:${textColor}">${c.subject}</h4></div>
     </div>`;
   }
-  // No logo/emoji — coloured strip only, subject shown in card body
   return `<div class="cls-banner" style="background:${color}"></div>`;
 }
 
-// Returns '#fff' for dark backgrounds, '#1e293b' for light ones
 function getContrastColor(hex){
   const c = hex.replace('#','');
   const r = parseInt(c.substring(0,2),16);
   const g = parseInt(c.substring(2,4),16);
   const b = parseInt(c.substring(4,6),16);
-  // Perceived luminance formula
   const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
   return luminance > 0.55 ? '#1e293b' : '#ffffff';
 }
 
-// CLASSES (teacher)
+// CLASSES (student)
 function renderClassesSection(){
   const myClasses=gc().filter(c=>CU.classIds&&CU.classIds.includes(c.id));
   const list=document.getElementById('s-classes-list');
   if(myClasses.length===0){
     list.innerHTML=`<p style="color:var(--muted);padding:20px 0">No classes joined yet. Enter a class code above from your teacher.</p>`;
   } else {
-    // Use period order if set
     const order = CU.periodOrder?.length ? CU.periodOrder : myClasses.map(c=>c.id);
     const ordered = order.map(id=>myClasses.find(c=>c.id===id)).filter(Boolean);
     myClasses.forEach(c=>{ if(!ordered.find(x=>x.id===c.id)) ordered.push(c); });
-
     list.innerHTML=ordered.map((c,i)=>{
       const bannerHtml = buildClassBannerHTML(c, false);
       return `
@@ -833,12 +1051,10 @@ function renderClassesSection(){
         </div>`;
     }).join('');
   }
-  // Period order
   if(myClasses.length>1){
     document.getElementById('period-order-wrap').classList.remove('hidden');
     const order=CU.periodOrder?.length?CU.periodOrder:myClasses.map(c=>c.id);
     const orderedClasses=order.map(id=>myClasses.find(c=>c.id===id)).filter(Boolean);
-    // Add any classes not yet in order
     myClasses.forEach(c=>{ if(!orderedClasses.find(x=>x.id===c.id)) orderedClasses.push(c); });
     periodOrder=[...orderedClasses.map(c=>c.id)];
     document.getElementById('period-order-list').innerHTML=orderedClasses.map((c,i)=>`
@@ -862,7 +1078,6 @@ function movePeriod(id,dir){
   const newIdx=idx+dir;
   if(newIdx<0||newIdx>=periodOrder.length)return;
   [periodOrder[idx],periodOrder[newIdx]]=[periodOrder[newIdx],periodOrder[idx]];
-  // Update student
   const students=gs(); const s=students.find(x=>x.id===CU.id);
   if(s){ s.periodOrder=periodOrder; S.set('students',students); CU.periodOrder=periodOrder; }
   renderClassesSection();
@@ -878,14 +1093,19 @@ async function homeJoinClass(){
   const inp = document.getElementById('home-join-code');
   const code = inp ? inp.value.trim().toUpperCase() : '';
   if(!code) return toast('Please enter a class code.');
-  // Sync from Firebase first so codes from other devices work
-  await fbLoadShared();
-  const cls = gc().find(c => c.code === code);
+  const classes = await fsGetShared('classes',[]);
+  cSet('classes', classes);
+  const cls = classes.find(c => c.code === code);
   if(!cls) return toast('Class code not found. Double-check with your teacher.');
   if(CU.classIds && CU.classIds.includes(cls.id)) return toast("You are already in this class!");
   const students = gs();
   const s = students.find(x => x.id === CU.id);
   if(s){ s.classIds = [...(s.classIds||[]), cls.id]; S.set('students', students); CU.classIds = s.classIds; }
+  // Update profile so teacher can find this student
+  if(fbAuth?.currentUser){
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ classIds: CU.classIds }, { merge: true });
+  }
   if(inp) inp.value = '';
   toast('Joined ' + cls.subject + '! Check My Classes in the sidebar.');
   updateStudentNav();
@@ -895,12 +1115,17 @@ async function homeJoinClass(){
 async function joinClass(){
   const code=document.getElementById('join-code').value.trim().toUpperCase();
   if(!code)return toast('Please enter a class code.');
-  await fbLoadShared();
-  const cls=gc().find(c=>c.code===code);
+  const classes = await fsGetShared('classes',[]);
+  cSet('classes', classes);
+  const cls=classes.find(c=>c.code===code);
   if(!cls)return toast(`Class code "${code}" not found. Double-check with your teacher.`);
   if(CU.classIds?.includes(cls.id))return toast('You\'re already in this class!');
   const students=gs(); const s=students.find(x=>x.id===CU.id);
   if(s){ s.classIds=[...(s.classIds||[]),cls.id]; S.set('students',students); CU.classIds=s.classIds; }
+  if(fbAuth?.currentUser){
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ classIds: CU.classIds }, { merge: true });
+  }
   document.getElementById('join-code').value = '';
   toast(`Joined ${cls.subject}! 🎉`);
   updateStudentNav();
@@ -917,6 +1142,8 @@ function loadTeacherDash(){
   document.getElementById('t-greet').textContent=`Welcome, ${CU.name}! 📋`;
   document.getElementById('t-date').textContent=new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric'});
   document.getElementById('t-av').textContent=CU.name[0].toUpperCase();
+  // Load student data in background
+  loadTeacherStudents().then(()=>{ if(document.getElementById('t-sec-students')?.classList.contains('active')) renderStudentTable(); });
   tSection('overview');
 }
 
@@ -932,11 +1159,11 @@ function tSection(name){
 
   if(name==='overview')  renderTeacherOverview();
   if(name==='classes')   renderTeacherClasses();
-  if(name==='students')  renderStudentTable();
-  if(name==='moods')     renderMoodReports();
-  if(name==='wellness')  renderWellnessTable();
-  if(name==='goals')     renderTeacherGoals();
-  if(name==='alerts')    renderAlerts();
+  if(name==='students')  { loadTeacherStudents().then(renderStudentTable); }
+  if(name==='moods')     { loadTeacherStudents().then(renderMoodReports); }
+  if(name==='wellness')  { loadTeacherStudents().then(renderWellnessTable); }
+  if(name==='goals')     { loadTeacherStudents().then(renderTeacherGoals); }
+  if(name==='alerts')    { loadTeacherStudents().then(renderAlerts); }
   if(name==='help')      renderTeacherHelp();
   if(name==='settings')  renderSettings();
   if(name==='profile')   renderTeacherProfile();
@@ -992,7 +1219,6 @@ function renderTeacherClasses(){
           ${c.bannerMsg ? `<div class="cls-banner-msg">${c.bannerMsg}</div>` : ''}
           <div class="t-class-actions">
             <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
-
             <button class="btn-outline small" onclick="deleteClass('${c.id}')" style="padding:7px 10px">🗑</button>
           </div>
         </div>
@@ -1075,29 +1301,23 @@ function renderMoodReports(){
   }).join('');
 }
 
-// WELLNESS TABLE (teacher)
+// WELLNESS TABLE
 function renderWellnessTable(){
   const students = getMyStudents();
   const myClassIds = getMyClasses().map(c => c.id);
-
-  // Only show wellness logs sent specifically to this teacher or their classes
   const allW = gw().filter(w =>
     w.shared &&
     students.some(s => s.id === w.studentId) &&
     (w.sharedWith?.teacherId === CU.id || myClassIds.includes(w.sharedWith?.classId))
   );
-
-  // Responsibilities shared with this teacher's classes
   const allR = S.get('responsibilities',[]).filter(r =>
     r.shared &&
     students.some(s => s.id === r.studentId) &&
     (r.sharedWith?.teacherId === CU.id || myClassIds.includes(r.sharedWith?.classId) || !r.sharedWith)
   );
-
   const wrap = document.getElementById('t-wellness-table');
   const classes = getMyClasses();
   let html = '';
-
   if(allR.length > 0){
     const grouped = {};
     allR.forEach(r => { if(!grouped[r.studentId]) grouped[r.studentId]=[]; grouped[r.studentId].push(r); });
@@ -1115,7 +1335,6 @@ function renderWellnessTable(){
       </div>`;
     }).join('');
   }
-
   if(allW.length > 0){
     html += `<h4 style="color:var(--navy);margin:22px 0 14px">🌱 Wellness Logs Sent to You</h4>
     <div style="overflow-x:auto"><table>
@@ -1138,8 +1357,7 @@ function renderWellnessTable(){
       </tbody>
     </table></div>`;
   }
-
-  if(!html) html = '<p style="color:var(--muted);padding:20px 0">No shared wellness data yet. Students can send sleep, energy, and responsibility info from their Wellness section — they choose which period/teacher to send it to.</p>';
+  if(!html) html = '<p style="color:var(--muted);padding:20px 0">No shared wellness data yet.</p>';
   wrap.innerHTML = html;
 }
 
@@ -1188,10 +1406,8 @@ function renderTeacherHelp(){
 
 // SETTINGS
 function renderSettings(){
-  const provinces=PROVINCES;
   const sel=document.getElementById('t-province-setting');
-  sel.innerHTML=provinces.map(p=>`<option ${p===CU.province?'selected':''}>${p}</option>`).join('');
-  // Pre-fill social worker
+  sel.innerHTML=PROVINCES.map(p=>`<option ${p===CU.province?'selected':''}>${p}</option>`).join('');
   if(CU.socialWorker){
     document.getElementById('sw-name').value=CU.socialWorker.name||'';
     document.getElementById('sw-email').value=CU.socialWorker.email||'';
@@ -1253,24 +1469,29 @@ function clearLogo(){
   document.getElementById('cm-logo-file').value = '';
 }
 
-function createClass(){
-  const subject=document.getElementById('cm-subject').value.trim();
-  const start  =document.getElementById('cm-start').value;
-  const end    =document.getElementById('cm-end').value;
-  const code   =document.getElementById('cm-code').value.trim().toUpperCase();
-  const days=[...document.querySelectorAll('input[name="cm-day"]:checked')].map(x=>x.value);
-  const color  =document.querySelector('input[name="cm-color"]:checked')?.value||'#1d5fa6';
-  const emoji  =document.getElementById('cm-emoji').value.trim();
-  const bannerMsg=document.getElementById('cm-banner-msg').value.trim();
-  const logo   =pendingLogoDataUrl||null;
+async function createClass(){
+  const subject  = document.getElementById('cm-subject').value.trim();
+  const start    = document.getElementById('cm-start').value;
+  const end      = document.getElementById('cm-end').value;
+  const code     = document.getElementById('cm-code').value.trim().toUpperCase();
+  const days     = [...document.querySelectorAll('input[name="cm-day"]:checked')].map(x=>x.value);
+  const color    = document.querySelector('input[name="cm-color"]:checked')?.value||'#1d5fa6';
+  const emoji    = document.getElementById('cm-emoji').value.trim();
+  const bannerMsg= document.getElementById('cm-banner-msg').value.trim();
+  const logo     = pendingLogoDataUrl||null;
 
   if(!subject||!code)return toast('Please fill in subject and code.');
-  if(gc().find(c=>c.code===code))return toast('That code already exists — try generating a new one.');
-  const classes=gc();
-  classes.push({id:'c'+uid(),teacherId:CU.id,subject,startTime:start,endTime:end,days,code,color,emoji,logo,bannerMsg});
-  S.set('classes',classes);
+
+  // Check code uniqueness in shared classes
+  const existingClasses = await fsGetShared('classes',[]);
+  if(existingClasses.find(c=>c.code===code)) return toast('That code already exists — try generating a new one.');
+
+  const newClass = {id:'c'+uid8(),teacherId:CU.id,subject,startTime:start,endTime:end,days,code,color,emoji,logo,bannerMsg};
+  existingClasses.push(newClass);
+  cSet('classes', existingClasses);
+  await fsSetShared('classes', existingClasses);
+
   closeModal('class-modal');
-  // reset
   document.getElementById('cm-subject').value='';
   document.getElementById('cm-start').value='09:00';
   document.getElementById('cm-end').value='09:45';
@@ -1284,9 +1505,12 @@ function createClass(){
   renderTeacherClasses();
 }
 
-function deleteClass(id){
+async function deleteClass(id){
   if(!confirm('Delete this class? Students will lose access.'))return;
-  S.set('classes',gc().filter(c=>c.id!==id));
+  const classes = await fsGetShared('classes',[]);
+  const updated = classes.filter(c=>c.id!==id);
+  cSet('classes', updated);
+  await fsSetShared('classes', updated);
   toast('Class deleted.');
   renderTeacherClasses();
 }
@@ -1295,10 +1519,6 @@ function copyCode(code){
   navigator.clipboard?.writeText(code).catch(()=>{});
   toast(`Code "${code}" copied to clipboard!`);
 }
-
-
-
-
 
 // ─────────────────────────────────────────────
 // UTILITIES
@@ -1319,9 +1539,10 @@ function toggleSB(id){
 }
 
 function today(){ return new Date().toISOString().split('T')[0]; }
-function uid(){ return Math.random().toString(36).substr(2,8); }
+function uid8(){ return Math.random().toString(36).substr(2,8); }
+// keep old uid name working too
+function uid(){ return uid8(); }
 
-// Close sidebar on outside click
 document.addEventListener('click',e=>{
   ['s-sidebar','t-sidebar'].forEach(id=>{
     const sb=document.getElementById(id);
@@ -1329,46 +1550,6 @@ document.addEventListener('click',e=>{
       sb.classList.remove('open');
   });
 });
-
-// ─────────────────────────────────────────────
-// SEED DEMO DATA
-// ─────────────────────────────────────────────
-function seedDemo(){
-  if(gt().length>0)return;
-  // Teacher
-  S.set('teachers',[{id:'t1',name:'Ms. Rivera',email:'teacher@demo.com',password:'Demo@1234',province:'Ontario',school:'Westview Secondary',socialWorker:{name:'Mr. Thompson',email:'mthompson@westview.ca'},joined:today()}]);
-  // Classes
-  S.set('classes',[
-    {id:'c1',teacherId:'t1',subject:'English — Grade 10 (ENG2D)',startTime:'09:00',endTime:'09:45',days:['Monday','Tuesday','Wednesday','Thursday','Friday'],code:'ENG2D-2024',color:'#1d5fa6',emoji:'📖',bannerMsg:'This week: Macbeth Act 2 — read pages 45–60!'},
-    {id:'c2',teacherId:'t1',subject:'Mathematics (MPM2D)',startTime:'11:00',endTime:'11:45',days:['Monday','Wednesday','Friday'],code:'MATH2D-24',color:'#7c3aed',emoji:'📐',bannerMsg:''},
-    {id:'c3',teacherId:'t1',subject:'Biology (SBI3U)',startTime:'13:00',endTime:'13:45',days:['Tuesday','Thursday'],code:'BIO3U-2024',color:'#2e9e6b',emoji:'🧬',bannerMsg:'Lab report due Friday!'},
-  ]);
-  // Student
-  S.set('students',[{id:'s1',name:'Alex Johnson',email:'student@demo.com',password:'Demo@1234',grade:'Grade 10',classIds:['c1','c2','c3'],periodOrder:['c1','c2','c3'],joined:today()}]);
-  // Moods
-  S.set('moods',[
-    {studentId:'s1',classId:'c1',classLabel:'English',mood:'Happy',date:today(),shared:true},
-    {studentId:'s1',classId:'c2',classLabel:'Math',mood:'Confused',date:today(),shared:true},
-    {studentId:'s1',classId:'general',classLabel:'General',mood:'Tired',date:today(),shared:false},
-  ]);
-  // Goals
-  S.set('goals',[
-    {id:'g1',studentId:'s1',classId:'c1',task:'Read Chapter 4 — Macbeth',day:'Monday',time:'15:00',duration:'1 hour',type:'study',done:false,created:today()},
-    {id:'g2',studentId:'s1',classId:'c2',task:'Complete quadratic equations worksheet',day:'Tuesday',time:'16:30',duration:'1.5 hours',type:'study',done:false,created:today()},
-    {id:'g3',studentId:'s1',classId:'',task:'Gym session',day:'Monday',time:'17:00',duration:'1 hour',type:'gym',done:true,created:today()},
-    {id:'g4',studentId:'s1',classId:'c3',task:'Review cell division notes',day:'Wednesday',time:'14:00',duration:'45 min',type:'study',done:false,created:today()},
-    {id:'g5',studentId:'s1',classId:'',task:'Gym + cardio',day:'Thursday',time:'16:00',duration:'1 hour',type:'gym',done:false,created:today()},
-  ]);
-  // Wellness
-  S.set('wellness',[
-    {id:'w1',studentId:'s1',type:'sleep',hours:'6.5',quality:'Okay',shared:true,date:today()},
-  ]);
-  // Responsibilities (demo — shared with teacher)
-  S.set('responsibilities',[
-    {id:'r1',studentId:'s1',text:'Part-time job at Tim Hortons',when:'Fri & Sat 4pm–10pm',hours:'12',shared:true,date:today()},
-    {id:'r2',studentId:'s1',text:'Babysit younger siblings',when:'Every day 3–5pm',hours:'10',shared:true,date:today()},
-  ]);
-}
 
 // ─────────────────────────────────────────────
 // STUDENT PROFILE
@@ -1379,7 +1560,6 @@ function renderStudentProfile(){
   document.getElementById('s-profile-email').textContent = CU.email;
   document.getElementById('s-profile-grade').textContent = CU.grade || 'No grade set';
   document.getElementById('s-edit-name').value = CU.name;
-  // Hide "share with teacher" toggle in responsibilities if no classes
   const respShareRow = document.querySelector('label[for="resp-share"]')?.closest('.share-toggle');
   if(respShareRow) respShareRow.style.display = hasClasses() ? '' : 'none';
   renderRespList();
@@ -1400,17 +1580,19 @@ function saveStudentProfile(){
 
   if(oldPass || newPass){
     if(!oldPass) return showErr(errEl, 'Enter your current password to change it.');
-    if(s.password !== oldPass) return showErr(errEl, 'Current password is incorrect.');
     if(!validPw(newPass)) return showErr(errEl, 'New password needs 8+ chars, uppercase, number & special character.');
-    s.password = newPass;
-    CU.password = newPass;
+    // Update Firebase Auth password
+    fbAuth.currentUser?.updatePassword(newPass).catch(e=>{
+      showErr(errEl, 'Could not update password. Please log out and back in first.');
+    });
   }
 
   s.name = name;
   CU.name = name;
   S.set('students', students);
+  // Update profile
+  if(fbAuth?.currentUser) saveProfile(fbAuth.currentUser.uid, { name });
 
-  // Update header greeting
   document.getElementById('s-greet').textContent = `${getGreeting()}, ${CU.name}! 👋`;
   document.getElementById('s-av').textContent = CU.name[0].toUpperCase();
   document.getElementById('s-profile-av').textContent = CU.name[0].toUpperCase();
@@ -1441,7 +1623,7 @@ function addResponsibility(){
   if(!text) return toast('Please describe the responsibility.');
 
   const all = S.get('responsibilities', []);
-  all.push({ id: 'r'+uid(), studentId: CU.id, text, when, hours, shared, date: today() });
+  all.push({ id: 'r'+uid8(), studentId: CU.id, text, when, hours, shared, date: today() });
   S.set('responsibilities', all);
 
   document.getElementById('resp-text').value = '';
@@ -1489,7 +1671,6 @@ function renderTeacherProfile(){
   document.getElementById('t-edit-name').value = CU.name;
   document.getElementById('t-edit-school').value = CU.school || '';
 
-  // Show shared responsibilities from students
   const myStudents = getMyStudents();
   const allResp = S.get('responsibilities', []).filter(r =>
     r.shared && myStudents.some(s => s.id === r.studentId)
@@ -1499,7 +1680,6 @@ function renderTeacherProfile(){
     el.innerHTML = '<p style="color:var(--muted);font-size:.85rem">No students have shared responsibilities yet.</p>';
     return;
   }
-  // Group by student
   const grouped = {};
   allResp.forEach(r => {
     if(!grouped[r.studentId]) grouped[r.studentId] = [];
@@ -1537,10 +1717,10 @@ function saveTeacherProfile(){
 
   if(oldPass || newPass){
     if(!oldPass) return showErr(errEl, 'Enter your current password to change it.');
-    if(t.password !== oldPass) return showErr(errEl, 'Current password is incorrect.');
     if(!validPw(newPass)) return showErr(errEl, 'New password needs 8+ chars, uppercase, number & special character.');
-    t.password = newPass;
-    CU.password = newPass;
+    fbAuth.currentUser?.updatePassword(newPass).catch(()=>{
+      showErr(errEl, 'Could not update password. Please log out and back in first.');
+    });
   }
 
   t.name   = name;
@@ -1548,6 +1728,7 @@ function saveTeacherProfile(){
   CU.name  = name;
   CU.school= school;
   S.set('teachers', teachers);
+  if(fbAuth?.currentUser) saveProfile(fbAuth.currentUser.uid, { name, school });
 
   document.getElementById('t-greet').textContent  = `Welcome, ${CU.name}! 📋`;
   document.getElementById('t-av').textContent      = CU.name[0].toUpperCase();
@@ -1576,37 +1757,32 @@ function confirmDeleteAccount(role){
   openModal('delete-modal');
 }
 
-function executeDeleteAccount(){
+async function executeDeleteAccount(){
   const confirm = document.getElementById('delete-confirm-input').value.trim();
   const pass    = document.getElementById('delete-pass-input').value;
   const errEl   = document.getElementById('delete-err');
 
   if(confirm !== 'DELETE') return showErr(errEl, 'Please type DELETE exactly to confirm.');
-  if(pass !== CU.password) return showErr(errEl, 'Incorrect password.');
 
-  if(deleteRole === 'student'){
-    // Remove student + all their data
-    S.set('students',  gs().filter(s => s.id !== CU.id));
-    S.set('moods',     gm().filter(m => m.studentId !== CU.id));
-    S.set('goals',     ggo().filter(g => g.studentId !== CU.id));
-    S.set('wellness',  gw().filter(w => w.studentId !== CU.id));
-    S.set('responsibilities', S.get('responsibilities',[]).filter(r => r.studentId !== CU.id));
-    S.set('journals',  S.get('journals',[]).filter(j => j.studentId !== CU.id));
-  } else {
-    // Remove teacher + their classes (students keep their own data but lose class links)
-    const myClassIds = getMyClasses().map(c => c.id);
-    // Remove students from those classes
-    const students = gs();
-    students.forEach(s => { s.classIds = (s.classIds||[]).filter(id => !myClassIds.includes(id)); });
-    S.set('students', students);
-    S.set('classes',  gc().filter(c => c.teacherId !== CU.id));
-    S.set('teachers', gt().filter(t => t.id !== CU.id));
+  try {
+    // Re-authenticate then delete
+    const cred = firebase.auth.EmailAuthProvider.credential(CU.email, pass);
+    await fbAuth.currentUser.reauthenticateWithCredential(cred);
+
+    // Delete Firestore data
+    if(fbDb && fbAuth.currentUser){
+      await fbDb.collection('users').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
+      await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
+    }
+
+    await fbAuth.currentUser.delete();
+    closeModal('delete-modal');
+    CU = null;
+    toast('Account deleted. Goodbye 👋');
+    setTimeout(() => showScreen('screen-entry'), 1500);
+  } catch(e){
+    showErr(errEl, 'Incorrect password or session expired. Please log out and back in.');
   }
-
-  closeModal('delete-modal');
-  CU = null;
-  toast('Account deleted. Goodbye 👋');
-  setTimeout(() => showScreen('screen-entry'), 1500);
 }
 
 // ─────────────────────────────────────────────
@@ -1615,20 +1791,19 @@ function executeDeleteAccount(){
 const EMAILJS_SERVICE  = 'service_jm737lr';
 const EMAILJS_TEMPLATE = 'template_6w1574v';
 
-let pendingVerify = null; // stores signup data + code while waiting for verification
-let pendingReset  = null; // stores email + code for password reset
+let pendingVerify = null;
+let pendingReset  = null;
 
 function generateCode(){
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Called when user clicks "Create Account" — sends verification email first
 function startSignupVerification(){
-  const name     = document.getElementById('su-name').value.trim();
-  const email    = document.getElementById('su-email').value.trim().toLowerCase();
-  const pass     = document.getElementById('su-pass').value;
-  const privacyOk= document.getElementById('su-privacy').checked;
-  const errEl    = document.getElementById('signup-err');
+  const name      = document.getElementById('su-name').value.trim();
+  const email     = document.getElementById('su-email').value.trim().toLowerCase();
+  const pass      = document.getElementById('su-pass').value;
+  const privacyOk = document.getElementById('su-privacy').checked;
+  const errEl     = document.getElementById('signup-err');
 
   if(!name||!email||!pass) return showErr(errEl,'Please fill in all required fields.');
   if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address.');
@@ -1639,27 +1814,18 @@ function startSignupVerification(){
     const grade = document.getElementById('su-grade').value;
     const code  = document.getElementById('su-code').value.trim().toUpperCase();
     if(!grade) return showErr(errEl,'Please select your grade.');
-    if(gs().find(s=>s.email===email)) return showErr(errEl,'An account with this email already exists.');
-    let classIds=[];
-    if(code){
-      const cls=gc().find(c=>c.code===code);
-      if(!cls) return showErr(errEl,`Class code "${code}" not found.`);
-      classIds=[cls.id];
-    }
-    pendingVerify = { name, email, pass, grade, classIds, role:'student' };
+    pendingVerify = { name, email, pass, grade, code, role:'student' };
   } else {
     const province = document.getElementById('su-province').value;
     const school   = document.getElementById('su-school').value.trim();
     if(!province) return showErr(errEl,'Please select your province.');
-    if(gt().find(t=>t.email===email)) return showErr(errEl,'An account with this email already exists.');
     pendingVerify = { name, email, pass, province, school, role:'teacher' };
   }
 
   const verifyCode = generateCode();
   pendingVerify.code    = verifyCode;
-  pendingVerify.expires = Date.now() + 10*60*1000; // 10 min
+  pendingVerify.expires = Date.now() + 10*60*1000;
 
-  // Send verification email via EmailJS
   emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
     to_name:  name,
     to_email: email,
@@ -1677,10 +1843,10 @@ function startSignupVerification(){
   });
 }
 
-function confirmVerifyCode(){
-  const input  = document.getElementById('verify-code-input').value.trim();
-  const errEl  = document.getElementById('verify-err');
-  const okEl   = document.getElementById('verify-ok');
+async function confirmVerifyCode(){
+  const input = document.getElementById('verify-code-input').value.trim();
+  const errEl = document.getElementById('verify-err');
+  const okEl  = document.getElementById('verify-ok');
 
   if(!pendingVerify) return showErr(errEl,'Something went wrong. Please try signing up again.');
   if(Date.now() > pendingVerify.expires) return showErr(errEl,'Code expired. Please request a new one.');
@@ -1688,24 +1854,50 @@ function confirmVerifyCode(){
 
   okEl.classList.remove('hidden');
 
-  // Create the account
-  setTimeout(()=>{
+  setTimeout(async ()=>{
+    // Now create the Firebase Auth account
     const { name, email, pass, role } = pendingVerify;
-    if(role === 'student'){
-      const u = {id:'s'+uid(), name, email, password:pass, grade:pendingVerify.grade, classIds:pendingVerify.classIds, periodOrder:[], joined:today(), verified:true};
-      const students=gs(); students.push(u); S.set('students',students);
-      CU={role:'student',...u};
-      S.set('session',{role:'student',id:u.id});
-    } else {
-      const u = {id:'t'+uid(), name, email, password:pass, province:pendingVerify.province, school:pendingVerify.school, socialWorker:null, joined:today(), verified:true};
-      const teachers=gt(); teachers.push(u); S.set('teachers',teachers);
-      CU={role:'teacher',...u};
-      S.set('session',{role:'teacher',id:u.id});
+    try {
+      if(role === 'student'){
+        const grade = pendingVerify.grade;
+        const classCode = pendingVerify.code_class || '';
+        const classes = await fsGetShared('classes',[]);
+        cSet('classes', classes);
+        let classIds = [];
+        if(classCode){
+          const cls = classes.find(c=>c.code===classCode);
+          if(cls) classIds = [cls.id];
+        }
+        const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+        const uid  = cred.user.uid;
+        const localId = 's'+uid8();
+        const profile = { role:'student', name, email, grade, classIds, periodOrder:[], joined:today(), localId, uid };
+        await saveProfile(uid, profile);
+        const studentEntry = { id:localId, name, email, grade, classIds, periodOrder:[], joined:today() };
+        cSet('students', [studentEntry]);
+        await fsSet('students', [studentEntry]);
+        CU = { ...profile, id: localId };
+      } else {
+        const { province, school } = pendingVerify;
+        const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+        const uid  = cred.user.uid;
+        const localId = 't'+uid8();
+        const profile = { role:'teacher', name, email, province, school, socialWorker:null, joined:today(), localId, uid };
+        await saveProfile(uid, profile);
+        const teacherEntry = { id:localId, name, email, province, school, socialWorker:null, joined:today() };
+        cSet('teachers', [teacherEntry]);
+        await fsSet('teachers', [teacherEntry]);
+        CU = { ...profile, id: localId };
+      }
+      pendingVerify = null;
+      closeModal('verify-modal');
+      toast(`Account created! Welcome, ${name} 🎉`);
+      if(CU.role==='student') loadStudentDash(); else loadTeacherDash();
+    } catch(e){
+      showErr(errEl, e.code==='auth/email-already-in-use'
+        ? 'An account with this email already exists.'
+        : 'Could not create account. Please try again.');
     }
-    pendingVerify = null;
-    closeModal('verify-modal');
-    toast(`Account created! Welcome, ${name} 🎉`);
-    if(CU.role==='student') loadStudentDash(); else loadTeacherDash();
   }, 1200);
 }
 
@@ -1721,163 +1913,58 @@ function resendVerifyCode(){
   }).then(()=>toast('New code sent! 📧')).catch(()=>toast('Could not resend. Try again.'));
 }
 
-// FORGOT PASSWORD
+// FORGOT PASSWORD — uses Firebase Auth built-in reset email
 function sendResetCode(){
   const email = document.getElementById('forgot-email').value.trim().toLowerCase();
   const errEl = document.getElementById('forgot-err');
   if(!email||!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
 
-  const student = gs().find(s=>s.email===email);
-  const teacher = gt().find(t=>t.email===email);
-  const user    = student || teacher;
-
-  if(!user) return showErr(errEl,'No account found with that email address.');
-
-  const code = generateCode();
-  pendingReset = { email, code, role: student?'student':'teacher', expires: Date.now()+10*60*1000 };
-
-  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-    to_name:  user.name,
-    to_email: email,
-    code:     code,
-  }).then(()=>{
-    document.getElementById('forgot-email-display').textContent = email;
-    document.getElementById('forgot-step-1').classList.add('hidden');
-    document.getElementById('forgot-step-2').classList.remove('hidden');
-    toast('Reset code sent to your email! 📧');
-  }).catch(()=>showErr(errEl,'Could not send email. Please try again.'));
-}
-
-function confirmResetPassword(){
-  const code    = document.getElementById('forgot-code-input').value.trim();
-  const newPass = document.getElementById('forgot-new-pass').value;
-  const errEl   = document.getElementById('forgot-reset-err');
-  const okEl    = document.getElementById('forgot-reset-ok');
-
-  if(!pendingReset) return showErr(errEl,'Session expired. Please start again.');
-  if(Date.now() > pendingReset.expires) return showErr(errEl,'Code expired. Please request a new one.');
-  if(code !== pendingReset.code) return showErr(errEl,'Incorrect code. Please check your email.');
-  if(!validPw(newPass)) return showErr(errEl,'Password needs 8+ chars, uppercase, number & special character.');
-
-  if(pendingReset.role === 'student'){
-    const students = gs();
-    const s = students.find(x=>x.email===pendingReset.email);
-    if(s){ s.password=newPass; S.set('students',students); }
-  } else {
-    const teachers = gt();
-    const t = teachers.find(x=>x.email===pendingReset.email);
-    if(t){ t.password=newPass; S.set('teachers',teachers); }
-  }
-
-  pendingReset = null;
-  okEl.classList.remove('hidden');
-  setTimeout(()=>{
+  fbAuth.sendPasswordResetEmail(email).then(()=>{
+    toast('Password reset email sent! Check your inbox 📧');
     closeModal('forgot-modal');
-    // Reset modal state
-    document.getElementById('forgot-step-1').classList.remove('hidden');
-    document.getElementById('forgot-step-2').classList.add('hidden');
-    document.getElementById('forgot-email').value='';
-    document.getElementById('forgot-code-input').value='';
-    document.getElementById('forgot-new-pass').value='';
-    okEl.classList.add('hidden');
-    toast('Password reset! You can now log in. 🎉');
-  }, 2000);
+  }).catch(e=>{
+    if(e.code==='auth/user-not-found'){
+      showErr(errEl,'No account found with that email address.');
+    } else {
+      showErr(errEl,'Could not send reset email. Please try again.');
+    }
+  });
 }
 
-function resendResetCode(){
-  if(!pendingReset) return;
-  const newCode = generateCode();
-  pendingReset.code    = newCode;
-  pendingReset.expires = Date.now()+10*60*1000;
-  const user = pendingReset.role==='student'
-    ? gs().find(s=>s.email===pendingReset.email)
-    : gt().find(t=>t.email===pendingReset.email);
-  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-    to_name:  user?.name||'User',
-    to_email: pendingReset.email,
-    code:     newCode,
-  }).then(()=>toast('New code sent! 📧')).catch(()=>toast('Could not resend. Try again.'));
-}
+// Keep old forgot password UI working
+function confirmResetPassword(){ toast('Please check your email for the reset link.'); }
+function resendResetCode(){ sendResetCode(); }
 
-
-document.addEventListener('DOMContentLoaded', ()=>{
+// ─────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async ()=>{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
 
-  // Init Firebase silently — never blocks login
-  try { initFirebase(); fbLoadShared().catch(()=>{}); } catch(e){}
+  // Init Firebase
+  try { initFirebase(); } catch(e){}
 
-  seedDemo();
-
-  // Auto-login if session exists
-  const session = S.get('session');
-  if(session){
-    if(session.role==='student'){
-      const u=gs().find(s=>s.id===session.id);
-      if(u){ CU={role:'student',...u}; loadStudentDash(); return; }
-    } else if(session.role==='teacher'){
-      const u=gt().find(t=>t.id===session.id);
-      if(u){ CU={role:'teacher',...u}; loadTeacherDash(); return; }
-    }
-  }
-  showScreen('screen-entry');
-});
-
-// ─────────────────────────────────────────────
-// FIREBASE SYNC
-// ─────────────────────────────────────────────
-const FB_CFG = {
-  apiKey: "AIzaSyCpUsu0Y2zbd7PH6a8b-NP6B7yEB7UL9Go",
-  authDomain: "wellspace-71c0c.firebaseapp.com",
-  projectId: "wellspace-71c0c",
-};
-
-let fbDb = null;
-
-function initFirebase(){
-  try {
-    if(!firebase.apps.length) firebase.initializeApp(FB_CFG);
-    fbDb = firebase.firestore();
-  } catch(e){ fbDb = null; }
-}
-
-const SHARED_KEYS = ['students','teachers','classes','moods','goals','wellness','messages','journals','responsibilities'];
-
-async function fbSaveShared(key, value){
-  if(!fbDb) return;
-  try {
-    await fbDb.collection('shared').doc('data').set({ [key]: JSON.stringify(value) }, { merge: true });
-  } catch(e){}
-}
-
-async function fbLoadShared(){
-  if(!fbDb) return;
-  try {
-    const doc = await fbDb.collection('shared').doc('data').get();
-    if(!doc.exists) return;
-    const data = doc.data();
-    Object.entries(data).forEach(([key, val]) => {
-      try {
-        const existing = S.get(key, []);
-        const incoming = JSON.parse(val);
-        if(Array.isArray(incoming) && Array.isArray(existing)){
-          const merged = [...existing];
-          incoming.forEach(item => {
-            const idx = merged.findIndex(x => x.id === item.id);
-            if(idx >= 0) merged[idx] = item;
-            else merged.push(item);
-          });
-          localStorage.setItem('ws_'+key, JSON.stringify(merged));
+  // Wait for Firebase Auth to restore session
+  if(fbAuth){
+    fbAuth.onAuthStateChanged(async (user)=>{
+      if(user && !CU){
+        // User was logged in — restore session
+        const profile = await getProfile(user.uid);
+        if(profile){
+          await loadUserData();
+          CU = { ...profile, id: profile.localId || user.uid, uid: user.uid };
+          if(profile.role==='student') loadStudentDash();
+          else { await loadTeacherStudents(); loadTeacherDash(); }
+        } else {
+          showScreen('screen-entry');
         }
-      } catch(e){}
+      } else if(!user && !CU){
+        showScreen('screen-entry');
+      }
     });
-  } catch(e){}
-}
-
-// Override S.set to also push to Firebase
-const _origSet = S.set.bind(S);
-S.set = function(k, v){
-  _origSet(k, v);
-  if(SHARED_KEYS.includes(k)) fbSaveShared(k, v);
-};
+  } else {
+    showScreen('screen-entry');
+  }
+});
