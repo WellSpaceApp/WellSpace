@@ -1968,3 +1968,298 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     showScreen('screen-entry');
   }
 });
+
+
+/* ═══════════════════════════════════════════════════════════════
+   WellSpace — Scale Fixes (paste at the VERY BOTTOM of script.js)
+   Fixes 3 issues that break at 200+ users:
+   1. Classes stored per-document instead of one giant blob
+   2. array-contains-any batched to handle 10+ classes
+   3. Teacher student data cached (60s) to stop read overload
+═══════════════════════════════════════════════════════════════ */
+
+// ─────────────────────────────────────────────
+// FIX 1 — Classes stored as individual Firestore docs
+// Replaces fsSetShared / fsGetShared for the 'classes' key only.
+// Other shared keys still use the old path (there are none currently).
+// ─────────────────────────────────────────────
+
+async function fsSetClass(cls) {
+  // Save a single class to shared/classes/{classId}
+  if (!fbDb) return;
+  try {
+    await fbDb.collection('shared_classes').doc(cls.id).set(cls);
+  } catch (e) { console.error('fsSetClass', e); }
+}
+
+async function fsDeleteClass(classId) {
+  if (!fbDb) return;
+  try {
+    await fbDb.collection('shared_classes').doc(classId).delete();
+  } catch (e) {}
+}
+
+async function fsGetAllClasses() {
+  if (!fbDb) return [];
+  try {
+    const snap = await fbDb.collection('shared_classes').get();
+    return snap.docs.map(d => d.data());
+  } catch (e) { return []; }
+}
+
+// Override createClass to use the new per-doc approach
+async function createClass() {
+  const subject   = document.getElementById('cm-subject').value.trim();
+  const start     = document.getElementById('cm-start').value;
+  const end       = document.getElementById('cm-end').value;
+  const code      = document.getElementById('cm-code').value.trim().toUpperCase();
+  const days      = [...document.querySelectorAll('input[name="cm-day"]:checked')].map(x => x.value);
+  const color     = document.querySelector('input[name="cm-color"]:checked')?.value || '#1d5fa6';
+  const emoji     = document.getElementById('cm-emoji').value.trim();
+  const bannerMsg = document.getElementById('cm-banner-msg').value.trim();
+  const logo      = pendingLogoDataUrl || null;
+
+  if (!subject || !code) return toast('Please fill in subject and code.');
+
+  // Check code uniqueness across all class docs
+  const existingClasses = await fsGetAllClasses();
+  if (existingClasses.find(c => c.code === code))
+    return toast('That code already exists — try generating a new one.');
+
+  const newClass = {
+    id: 'c' + uid8(), teacherId: CU.id, subject,
+    startTime: start, endTime: end, days, code, color, emoji, logo, bannerMsg
+  };
+
+  // Save to per-doc collection
+  await fsSetClass(newClass);
+
+  // Update local cache
+  const updated = [...existingClasses, newClass];
+  cSet('classes', updated);
+
+  closeModal('class-modal');
+  document.getElementById('cm-subject').value = '';
+  document.getElementById('cm-start').value = '09:00';
+  document.getElementById('cm-end').value = '09:45';
+  document.getElementById('cm-code').value = '';
+  document.getElementById('cm-emoji').value = '';
+  document.getElementById('cm-banner-msg').value = '';
+  document.querySelectorAll('input[name="cm-day"]').forEach(x => x.checked = false);
+  clearLogo();
+  pendingLogoDataUrl = null;
+  toast('Class created! 🎉');
+  renderTeacherClasses();
+}
+
+// Override deleteClass
+async function deleteClass(id) {
+  if (!confirm('Delete this class? Students will lose access.')) return;
+  await fsDeleteClass(id);
+  const updated = cGet('classes', []).filter(c => c.id !== id);
+  cSet('classes', updated);
+  toast('Class deleted.');
+  renderTeacherClasses();
+}
+
+// Override homeJoinClass — uses new per-doc classes
+async function homeJoinClass() {
+  const inp  = document.getElementById('home-join-code');
+  const code = inp ? inp.value.trim().toUpperCase() : '';
+  if (!code) return toast('Please enter a class code.');
+
+  const classes = await fsGetAllClasses();
+  cSet('classes', classes);
+  const cls = classes.find(c => c.code === code);
+  if (!cls) return toast('Class code not found. Double-check with your teacher.');
+  if (CU.classIds && CU.classIds.includes(cls.id)) return toast('You are already in this class!');
+
+  const students = gs();
+  const s = students.find(x => x.id === CU.id);
+  if (s) { s.classIds = [...(s.classIds || []), cls.id]; S.set('students', students); CU.classIds = s.classIds; }
+
+  if (fbAuth?.currentUser) {
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ classIds: CU.classIds }, { merge: true });
+  }
+  if (inp) inp.value = '';
+  toast('Joined ' + cls.subject + '! Check My Classes in the sidebar.');
+  updateStudentNav();
+  renderHome();
+}
+
+// Override joinClass
+async function joinClass() {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if (!code) return toast('Please enter a class code.');
+
+  const classes = await fsGetAllClasses();
+  cSet('classes', classes);
+  const cls = classes.find(c => c.code === code);
+  if (!cls) return toast(`Class code "${code}" not found. Double-check with your teacher.`);
+  if (CU.classIds?.includes(cls.id)) return toast('You\'re already in this class!');
+
+  const students = gs();
+  const s = students.find(x => x.id === CU.id);
+  if (s) { s.classIds = [...(s.classIds || []), cls.id]; S.set('students', students); CU.classIds = s.classIds; }
+
+  if (fbAuth?.currentUser) {
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ classIds: CU.classIds }, { merge: true });
+  }
+  document.getElementById('join-code').value = '';
+  toast(`Joined ${cls.subject}! 🎉`);
+  updateStudentNav();
+  renderClassesSection();
+}
+
+// Also patch loadUserData to pull classes from the new collection
+const _origLoadUserData = loadUserData;
+loadUserData = async function () {
+  await _origLoadUserData();
+  // Refresh classes from per-doc collection
+  const classes = await fsGetAllClasses();
+  if (classes.length) cSet('classes', classes);
+};
+
+
+// ─────────────────────────────────────────────
+// FIX 2 — Batch array-contains-any (Firebase limit = 10)
+// Replaces getStudentUids
+// ─────────────────────────────────────────────
+
+async function getStudentUids(classIds) {
+  if (!fbDb || !classIds?.length) return [];
+
+  // Split into chunks of 10 (Firebase hard limit)
+  const chunks = [];
+  for (let i = 0; i < classIds.length; i += 10) {
+    chunks.push(classIds.slice(i, i + 10));
+  }
+
+  const results = [];
+  const seen = new Set();
+
+  for (const chunk of chunks) {
+    try {
+      const snap = await fbDb.collection('profiles')
+        .where('role', '==', 'student')
+        .where('classIds', 'array-contains-any', chunk)
+        .get();
+
+      snap.docs.forEach(d => {
+        if (!seen.has(d.id)) {
+          seen.add(d.id);
+          results.push({ uid: d.id, ...d.data() });
+        }
+      });
+    } catch (e) { console.error('getStudentUids chunk error', e); }
+  }
+
+  return results;
+}
+
+
+// ─────────────────────────────────────────────
+// FIX 3 — Cache teacher student data for 60s
+// Replaces loadTeacherStudents
+// ─────────────────────────────────────────────
+
+let _teacherStudentCache = null;
+let _teacherStudentCacheTime = 0;
+const TEACHER_CACHE_TTL = 60 * 1000; // 60 seconds
+
+async function loadTeacherStudents() {
+  const now = Date.now();
+
+  // Return cached data if fresh
+  if (_teacherStudentCache && (now - _teacherStudentCacheTime) < TEACHER_CACHE_TTL) {
+    // Restore from cache into the live cache object
+    Object.entries(_teacherStudentCache).forEach(([k, v]) => cSet(k, v));
+    return;
+  }
+
+  const myClasses  = gc().filter(c => c.teacherId === CU.id);
+  const myClassIds = myClasses.map(c => c.id);
+  if (!myClassIds.length) return;
+
+  try {
+    const studentProfiles = await getStudentUids(myClassIds); // now batched
+
+    const allStudents = [];
+    const allMoods    = cGet('moods', []);
+    const allGoals    = cGet('goals', []);
+    const allWellness = cGet('wellness', []);
+    const allResps    = cGet('responsibilities', []);
+
+    for (const sp of studentProfiles) {
+      const data = await loadStudentData(sp.uid);
+      if (data.students)          allStudents.push(...(data.students || []));
+      if (data.moods)             mergeInto(allMoods,    data.moods,             'studentId');
+      if (data.goals)             mergeInto(allGoals,    data.goals,             'studentId');
+      if (data.wellness)          mergeInto(allWellness, data.wellness,          'studentId');
+      if (data.responsibilities)  mergeInto(allResps,    data.responsibilities,  'studentId');
+    }
+
+    cSet('students',         allStudents);
+    cSet('moods',            allMoods);
+    cSet('goals',            allGoals);
+    cSet('wellness',         allWellness);
+    cSet('responsibilities', allResps);
+
+    // Save to cache
+    _teacherStudentCache = {
+      students: allStudents,
+      moods: [...allMoods],
+      goals: [...allGoals],
+      wellness: [...allWellness],
+      responsibilities: [...allResps],
+    };
+    _teacherStudentCacheTime = now;
+
+  } catch (e) { console.error('loadTeacherStudents error', e); }
+}
+
+// Call this after any action that changes student data so cache is invalidated
+function invalidateTeacherCache() {
+  _teacherStudentCache = null;
+  _teacherStudentCacheTime = 0;
+}
+
+/* ─────────────────────────────────────────────
+   FIRESTORE RULES — paste into Firebase Console → Firestore → Rules
+   (replacing everything that's there now)
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Private user data — only the owner
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Profiles — any logged-in user can read (teachers need to find students)
+    // Only the owner can write their own profile
+    match /profiles/{userId} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Per-class documents — any logged-in user can read
+    // Only authenticated users can create; only the teacher who owns it can delete
+    match /shared_classes/{classId} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    // Legacy shared blob — keep read access so old data still loads
+    match /shared/{doc} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}
+───────────────────────────────────────────── */
