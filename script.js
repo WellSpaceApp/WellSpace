@@ -1918,7 +1918,7 @@ function sendResetCode(){
   const email = document.getElementById('forgot-email').value.trim().toLowerCase();
   const errEl = document.getElementById('forgot-err');
   if(!email||!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
-
+  if(!fbAuth) initFirebase();
   fbAuth.sendPasswordResetEmail(email).then(()=>{
     toast('Password reset email sent! Check your inbox 📧');
     closeModal('forgot-modal');
@@ -1930,11 +1930,9 @@ function sendResetCode(){
     }
   });
 }
-
 // Keep old forgot password UI working
 function confirmResetPassword(){ toast('Please check your email for the reset link.'); }
 function resendResetCode(){ sendResetCode(); }
-
 // ─────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────
