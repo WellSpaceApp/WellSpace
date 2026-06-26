@@ -1129,8 +1129,20 @@ function tSection(name){
 
 function getMyClasses(){ return gc().filter(c=>c.teacherId===CU.id); }
 function getMyStudents(){
-  const myIds=getMyClasses().map(c=>c.id);
-  return gs().filter(s=>s.classIds?.some(id=>myIds.includes(id)));
+  const myIds = getMyClasses().map(c=>c.id);
+  if(!myIds.length) return [];
+  
+  // First try cache (populated by loadTeacherStudents)
+  const cached = gs().filter(s=>s.classIds?.some(id=>myIds.includes(id)));
+  
+  // If cache is empty but we have classes, wait for loadTeacherStudents to populate it
+  if(cached.length === 0 && myIds.length > 0){
+    // The teacher's students should already be loaded by loadTeacherStudents
+    // If they're not here, the load failed or data isn't syncing
+    console.warn('⚠️ getMyStudents: Cache is empty but teacher has classes. Data may not be loaded yet.');
+  }
+  
+  return cached;
 }
 
 // OVERVIEW
