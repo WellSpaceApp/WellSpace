@@ -1853,3 +1853,136 @@ service cloud.firestore {
   }
 }
 ───────────────────────────────────────────── */
+
+// ═══════════════════════════════════════════════════════════════
+// MISSING FUNCTIONS — restore what scale fixes accidentally removed
+// ═══════════════════════════════════════════════════════════════
+
+function openClassModal() {
+  var code = '';
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (var i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  var codeEl = document.getElementById('cm-code');
+  if (codeEl) codeEl.value = code;
+  openModal('class-modal');
+}
+
+var pendingLogoDataUrl = null;
+
+function handleLogoUpload(input) {
+  if (!input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    pendingLogoDataUrl = e.target.result;
+    var preview = document.getElementById('cm-logo-preview');
+    if (preview) {
+      preview.innerHTML = '<img src="' + pendingLogoDataUrl + '" style="max-height:60px;border-radius:6px">';
+    }
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function clearLogo() {
+  pendingLogoDataUrl = null;
+  var preview = document.getElementById('cm-logo-preview');
+  if (preview) preview.innerHTML = '';
+  var input = document.getElementById('cm-logo');
+  if (input) input.value = '';
+}
+
+function generateClassCode() {
+  var code = '';
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (var i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  var codeEl = document.getElementById('cm-code');
+  if (codeEl) codeEl.value = code;
+}
+
+function saveSocialWorker() {
+  var name = document.getElementById('set-sw-name').value.trim();
+  var email = document.getElementById('set-sw-email').value.trim();
+  var teachers = gt();
+  var t = teachers.find(function(x) { return x.id === CU.id; });
+  if (t) {
+    t.socialWorker = name ? { name: name, email: email } : null;
+    S.set('teachers', teachers);
+    CU.socialWorker = t.socialWorker;
+    if (fbAuth && fbAuth.currentUser) {
+      fbDb.collection('profiles').doc(fbAuth.currentUser.uid).set({ socialWorker: t.socialWorker }, { merge: true });
+    }
+    toast('Social worker info saved! ✓');
+  }
+}
+
+function updateProvince() {
+  var sel = document.getElementById('set-province');
+  if (!sel || !sel.value) return toast('Please select a province.');
+  var teachers = gt();
+  var t = teachers.find(function(x) { return x.id === CU.id; });
+  if (t) {
+    t.province = sel.value;
+    S.set('teachers', teachers);
+    CU.province = sel.value;
+    if (fbAuth && fbAuth.currentUser) {
+      fbDb.collection('profiles').doc(fbAuth.currentUser.uid).set({ province: sel.value }, { merge: true });
+    }
+    toast('Province updated! ✓');
+  }
+}
+
+function renderSettings() {
+  var el = document.getElementById('t-settings-content');
+  if (!el) return;
+  el.innerHTML =
+    '<div class="fgroup"><label>School Social Worker Name</label><input type="text" id="set-sw-name" value="' + (CU.socialWorker ? CU.socialWorker.name : '') + '" placeholder="e.g. Jane Smith"/></div>' +
+    '<div class="fgroup"><label>Social Worker Email</label><input type="email" id="set-sw-email" value="' + (CU.socialWorker ? CU.socialWorker.email : '') + '" placeholder="e.g. jane@school.ca"/></div>' +
+    '<button class="btn-main" onclick="saveSocialWorker()">Save Contact</button>' +
+    '<hr style="margin:24px 0;border:none;border-top:1px solid var(--border)">' +
+    '<div class="fgroup"><label>Province / Territory</label><select id="set-province" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">' +
+    '<option value="">Select province…</option>' +
+    PROVINCES.map(function(p) { return '<option value="' + p + '"' + (CU.province === p ? ' selected' : '') + '>' + p + '</option>'; }).join('') +
+    '</select></div>' +
+    '<button class="btn-main" onclick="updateProvince()">Update Province</button>' +
+    '<hr style="margin:24px 0;border:none;border-top:1px solid var(--border)">' +
+    '<h4 style="margin-bottom:12px">Account Info</h4>' +
+    '<p style="color:var(--muted);font-size:.88rem"><strong>Name:</strong> ' + CU.name + '</p>' +
+    '<p style="color:var(--muted);font-size:.88rem"><strong>Email:</strong> ' + CU.email + '</p>' +
+    '<p style="color:var(--muted);font-size:.88rem"><strong>School:</strong> ' + (CU.school || '—') + '</p>' +
+    '<p style="color:var(--muted);font-size:.88rem"><strong>Joined:</strong> ' + (CU.joined || '—') + '</p>';
+}
+
+function renderTeacherProfile() {
+  var el = document.getElementById('t-profile-content');
+  if (!el) return;
+  el.innerHTML =
+    '<div style="text-align:center;margin-bottom:24px">' +
+    '<div class="avatar-lg" style="margin:0 auto 12px">' + CU.name[0].toUpperCase() + '</div>' +
+    '<h3>' + CU.name + '</h3>' +
+    '<p style="color:var(--muted)">' + CU.email + '</p>' +
+    '<p style="color:var(--muted);font-size:.85rem">' + (CU.province || '') + ' · ' + (CU.school || '') + '</p>' +
+    '</div>' +
+    '<button class="btn-danger" onclick="showModal(\'delete-modal\')">🗑 Delete Account</button>';
+}
+
+function executeDeleteAccount() {
+  var inp = document.getElementById('delete-confirm-input');
+  var errEl = document.getElementById('delete-err');
+  hideErr(errEl);
+  if (!inp || inp.value !== 'DELETE') return showErr(errEl, 'Type DELETE to confirm.');
+  if (!fbAuth || !fbAuth.currentUser) return showErr(errEl, 'Not logged in.');
+  fbAuth.currentUser.delete().then(function() {
+    if (fbAuth.currentUser) {
+      fbDb.collection('users').doc(fbAuth.currentUser.uid).delete().catch(function() {});
+      fbDb.collection('profiles').doc(fbAuth.currentUser.uid).delete().catch(function() {});
+    }
+    toast('Account deleted.');
+    logout();
+  }).catch(function(e) {
+    if (e.code === 'auth/requires-recent-login') return showErr(errEl, 'Please log out and log back in before deleting.');
+    showErr(errEl, 'Could not delete account.');
+  });
+}
+
+function copyCode(code) {
+  navigator.clipboard.writeText(code).then(function() { toast('Code copied! 📋'); }).catch(function() { toast('Could not copy.'); });
+}
