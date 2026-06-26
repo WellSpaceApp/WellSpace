@@ -351,6 +351,7 @@
           <div class="profile-card danger-card">
             <h4>⚠️ Account Actions</h4>
             <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">These actions are permanent and cannot be undone.</p>
+            <button class="btn-outline" onclick="showPrivacy()" style="margin-bottom:12px">🔒 View Privacy Policy</button>
             <button class="btn-danger" onclick="confirmDeleteAccount('student')">🗑 Delete My Account</button>
           </div>
         </div>
@@ -473,6 +474,7 @@
           <div class="profile-card danger-card">
             <h4>⚠️ Account Actions</h4>
             <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">Deleting your account will remove all your classes and student associations.</p>
+         <button class="btn-outline" onclick="showPrivacy()" style="margin-bottom:12px">🔒 View Privacy Policy</button>
             <button class="btn-danger" onclick="confirmDeleteAccount('teacher')">🗑 Delete My Account</button>
           </div>
         </div>
@@ -597,16 +599,33 @@
 
 <!-- PRIVACY MODAL -->
 <div id="privacy-modal" class="modal-bg hidden">
-  <div class="modal">
+  <div class="modal" style="max-width:600px;max-height:80vh;overflow-y:auto">
     <div class="modal-hdr"><h3>🔒 Privacy Policy</h3><button class="modal-close" onclick="closeModal('privacy-modal')">✕</button></div>
-    <div class="privacy-text">
-      <p><strong>What we collect:</strong> Your name, email, mood check-ins, goals, and wellness data.</p>
-      <p><strong>What teachers can see:</strong> Only data you explicitly choose to share.</p>
-      <p><strong>What teachers cannot see:</strong> Your password, private journal entries, or any data marked private.</p>
-      <p><strong>Data storage:</strong> All data is stored locally on this device. Nothing is sent to any server without your action.</p>
-      <p><strong>Your rights:</strong> You can delete your account and all data at any time from your Profile page.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Last updated: June 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
+      <p><strong>What we collect</strong><br>Name, email, grade (students) or school/province (teachers), mood check-ins, sleep logs, energy logs, goals, journal entries, and class codes. Nothing else — no location, no device ID, no browsing history.</p>
+      <p><strong>Student data is private by default</strong><br>Every entry you make is private. Data is only visible to your teacher when YOU actively click "Share with Teacher." Teachers never see anything you haven't explicitly shared. Your journal is always 100% private — no one can ever see it.</p>
+      <p><strong>Who sees your data</strong><br>
+        • You — always see your own data<br>
+        • Your teacher — only data you've shared with them<br>
+        • Other teachers — nothing<br>
+        • Other students — nothing<br>
+        • WellSpace — nothing beyond what's needed to run the app
+      </p>
+      <p><strong>How we store it</strong><br>All data is stored on Google Firebase with encrypted HTTPS connections and strict per-user Firestore security rules. Each user's data is stored in their own private document — no shared blobs, no cross-user access. Passwords are never stored by us — Firebase Authentication handles them entirely with industry-standard encryption.</p>
+      <p><strong>We never</strong><br>
+        • Sell your data to anyone<br>
+        • Use your data for advertising<br>
+        • Share your data with third parties<br>
+        • Store passwords in plain text<br>
+        • Access your data without your action
+      </p>
+      <p><strong>PIPEDA Compliance</strong><br>We comply with Canada's Personal Information Protection and Electronic Documents Act (PIPEDA). We collect only the minimum data necessary to operate WellSpace.</p>
+      <p><strong>Deleting your account</strong><br>Delete your account anytime in Profile settings. Your Firebase Auth account, Firestore data, and profile are all permanently deleted immediately. No data is retained after deletion.</p>
+      <p><strong>Third-party services</strong><br>Google Firebase (database & auth), EmailJS (verification emails), GitHub Pages (hosting). No ad trackers, no Google Analytics, no Facebook Pixel.</p>
+      <p style="font-size:.78rem;color:var(--muted)">Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
     </div>
-    <button class="btn-main small" onclick="closeModal('privacy-modal')">Got It</button>
+    <button class="btn-main small" onclick="closeModal('privacy-modal')" style="margin-top:8px">Got It</button>
   </div>
 </div>
 
