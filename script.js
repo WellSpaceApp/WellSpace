@@ -1089,49 +1089,7 @@ function savePeriodOrder(){
   toast('Period order saved! ✓');
 }
 
-async function homeJoinClass(){
-  const inp = document.getElementById('home-join-code');
-  const code = inp ? inp.value.trim().toUpperCase() : '';
-  if(!code) return toast('Please enter a class code.');
-  const classes = await fsGetShared('classes',[]);
-  cSet('classes', classes);
-  const cls = classes.find(c => c.code === code);
-  if(!cls) return toast('Class code not found. Double-check with your teacher.');
-  if(CU.classIds && CU.classIds.includes(cls.id)) return toast("You are already in this class!");
-  const students = gs();
-  const s = students.find(x => x.id === CU.id);
-  if(s){ s.classIds = [...(s.classIds||[]), cls.id]; S.set('students', students); CU.classIds = s.classIds; }
-  // Update profile so teacher can find this student
-  if(fbAuth?.currentUser){
-    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
-      .set({ classIds: CU.classIds }, { merge: true });
-  }
-  if(inp) inp.value = '';
-  toast('Joined ' + cls.subject + '! Check My Classes in the sidebar.');
-  updateStudentNav();
-  renderHome();
-}
-
-async function joinClass(){
-  const code=document.getElementById('join-code').value.trim().toUpperCase();
-  if(!code)return toast('Please enter a class code.');
-  const classes = await fsGetShared('classes',[]);
-  cSet('classes', classes);
-  const cls=classes.find(c=>c.code===code);
-  if(!cls)return toast(`Class code "${code}" not found. Double-check with your teacher.`);
-  if(CU.classIds?.includes(cls.id))return toast('You\'re already in this class!');
-  const students=gs(); const s=students.find(x=>x.id===CU.id);
-  if(s){ s.classIds=[...(s.classIds||[]),cls.id]; S.set('students',students); CU.classIds=s.classIds; }
-  if(fbAuth?.currentUser){
-    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
-      .set({ classIds: CU.classIds }, { merge: true });
-  }
-  document.getElementById('join-code').value = '';
-  toast(`Joined ${cls.subject}! 🎉`);
-  updateStudentNav();
-  renderClassesSection();
-}
-
+homeJoinClass
 // ─────────────────────────────────────────────
 // TEACHER DASHBOARD
 // ─────────────────────────────────────────────
