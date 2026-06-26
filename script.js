@@ -1913,13 +1913,17 @@ function resendVerifyCode(){
   }).then(()=>toast('New code sent! 📧')).catch(()=>toast('Could not resend. Try again.'));
 }
 
-// FORGOT PASSWORD — uses Firebase Auth built-in reset email
+// FORGOT PASSWORD — sends reset email that opens on YOUR site
 function sendResetCode(){
   const email = document.getElementById('forgot-email').value.trim().toLowerCase();
   const errEl = document.getElementById('forgot-err');
   if(!email||!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
   if(!fbAuth) initFirebase();
-  fbAuth.sendPasswordResetEmail(email).then(()=>{
+
+  fbAuth.sendPasswordResetEmail(email, {
+    url: window.location.origin + window.location.pathname,
+    handleCodeInApp: true
+  }).then(()=>{
     toast('Password reset email sent! Check your inbox 📧');
     closeModal('forgot-modal');
   }).catch(e=>{
@@ -1930,10 +1934,8 @@ function sendResetCode(){
     }
   });
 }
-// Keep old forgot password UI working
 function confirmResetPassword(){ toast('Please check your email for the reset link.'); }
-function resendResetCode(){ sendResetCode(); }
-// ─────────────────────────────────────────────
+function resendResetCode(){ sendResetCode(); }// ─────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async ()=>{
