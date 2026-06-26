@@ -382,56 +382,74 @@ async function doSignup(){
       const code  = document.getElementById('su-code').value.trim().toUpperCase();
       if(!grade) return showErr(errEl,'Please select your grade.');
 
-      // Load shared classes to check code
-      const classes = await fsGetShared('classes',[]);
-      cSet('classes', classes);
+      // Check class code from BOTH Firestore (old classes) AND local cache (newly created classes)
+      var firestoreClasses = await fsGetShared('classes', []);
+      var cachedClasses = gc();
+      // Merge without duplicates
+      var allClasses = firestoreClasses.slice();
+      for (var i = 0; i < cachedClasses.length; i++) {
+        var exists = false;
+        for (var j = 0; j < allClasses.length; j++) {
+          if (allClasses[j].id === cachedClasses[i].id) { exists = true; break; }
+        }
+        if (!exists) allClasses.push(cachedClasses[i]);
+      }
+      // Also check shared_classes collection (new per-doc format)
+      if (fbDb) {
+        try {
+          var snap = await fbDb.collection('shared_classes').get();
+          snap.docs.forEach(function(doc) {
+            var cls = doc.data();
+            var already = false;
+            for (var k = 0; k < allClasses.length; k++) {
+              if (allClasses[k].id === cls.id) { already = true; break; }
+            }
+            if (!already) allClasses.push(cls);
+          });
+        } catch(e) {}
+      }
+      cSet('classes', allClasses);
 
       let classIds = [];
       if(code){
-        const cls = classes.find(c=>c.code===code);
-        if(!cls) return showErr(errEl,`Class code "${code}" not found. Ask your teacher for the correct code.`);
+        const cls = allClasses.find(c => c.code === code);
+        if(!cls) return showErr(errEl, 'Class code "' + code + '" not found. Ask your teacher for the correct code.');
         classIds = [cls.id];
       }
 
-      // Create Firebase Auth account
       const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
       const uid  = cred.user.uid;
-      const localId = 's'+uid8();
+      const localId = 's' + uid8();
 
-      const profile = { role:'student', name, email, grade, classIds, periodOrder:[], joined:today(), localId, uid };
-
-      // Save profile to shared profiles collection
+      const profile = { role:'student', name:name, email:email, grade:grade, classIds:classIds, periodOrder:[], joined:today(), localId:localId, uid:uid };
       await saveProfile(uid, profile);
 
-      // Save student list entry to user's own doc
-      const studentEntry = { id:localId, name, email, grade, classIds, periodOrder:[], joined:today() };
+      const studentEntry = { id:localId, name:name, email:email, grade:grade, classIds:classIds, periodOrder:[], joined:today() };
       cSet('students', [studentEntry]);
       await fsSet('students', [studentEntry]);
 
       CU = { ...profile, id: localId };
       await loadUserData();
-      toast(`Account created! Welcome, ${name} 🎉`);
+      toast('Account created! Welcome, ' + name + ' 🎉');
       loadStudentDash();
 
     } else {
-      const province = document.getElementById('su-province').value;
-      const school   = document.getElementById('su-school').value.trim();
-      if(!province) return showErr(errEl,'Please select your province.');
+      const school = document.getElementById('su-school').value.trim();
 
       const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
       const uid  = cred.user.uid;
-      const localId = 't'+uid8();
+      const localId = 't' + uid8();
 
-      const profile = { role:'teacher', name, email, province, school, socialWorker:null, joined:today(), localId, uid };
+      const profile = { role:'teacher', name:name, email:email, province:'Ontario', school:school, socialWorker:null, joined:today(), localId:localId, uid:uid };
       await saveProfile(uid, profile);
 
-      const teacherEntry = { id:localId, name, email, province, school, socialWorker:null, joined:today() };
+      const teacherEntry = { id:localId, name:name, email:email, province:'Ontario', school:school, socialWorker:null, joined:today() };
       cSet('teachers', [teacherEntry]);
       await fsSet('teachers', [teacherEntry]);
 
       CU = { ...profile, id: localId };
       await loadUserData();
-      toast(`Account created! Welcome, ${name} 📋`);
+      toast('Account created! Welcome, ' + name + ' 📋');
       loadTeacherDash();
     }
   } catch(e){
@@ -442,14 +460,6 @@ async function doSignup(){
       console.error(e);
     }
   }
-}
-
-function logout(){
-  CU=null; authRole=null;
-  pendingMoodSel=null;
-  Object.keys(cache).forEach(k=>delete cache[k]);
-  if(fbAuth) fbAuth.signOut().catch(()=>{});
-  showScreen('screen-entry');
 }
 
 // ─────────────────────────────────────────────
@@ -1175,391 +1185,126 @@ function getMyStudents(){
 }
 
 function renderTeacherOverview(){
-  const students=getMyStudents();
-  const classes=getMyClasses();
+  const students=getMyStudents();const classes=getMyClasses();
   const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);
   const alerts=moods.filter(m=>NEGATIVE_MOODS.includes(m.mood));
   const el=document.getElementById('t-stats-row');
-  if(el) el.innerHTML=`
-    <div class="tstat blue"><div class="tstat-n">${students.length}</div><div class="tstat-l">Students</div></div>
-    <div class="tstat green"><div class="tstat-n">${classes.length}</div><div class="tstat-l">Classes</div></div>
-    <div class="tstat amber"><div class="tstat-n">${moods.length}</div><div class="tstat-l">Mood Check-ins</div></div>
-    <div class="tstat red"><div class="tstat-n">${alerts.length}</div><div class="tstat-l">Need Support</div></div>`;
-  const badge=document.getElementById('t-alert-badge');
-  if(badge) badge.textContent=alerts.length;
-  const prev=document.getElementById('t-alerts-preview');
-  if(!prev) return;
-  if(alerts.length===0){ prev.innerHTML=''; return; }
-  prev.innerHTML=`<div style="background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--r-md);padding:16px 20px;margin-top:4px">
-    <h4 style="color:var(--red);margin-bottom:10px">⚠️ ${alerts.length} student${alerts.length>1?'s need':' needs'} support today</h4>
-    ${alerts.slice(0,4).map(a=>{const s=students.find(x=>x.id===a.studentId);return `<p style="font-size:.88rem;margin-bottom:4px">• <strong>${s?.name||'Student'}</strong> — feeling <em>${a.mood}</em></p>`;}).join('')}
-  </div>`;
+  if(el) el.innerHTML=`<div class="tstat blue"><div class="tstat-n">${students.length}</div><div class="tstat-l">Students</div></div><div class="tstat green"><div class="tstat-n">${classes.length}</div><div class="tstat-l">Classes</div></div><div class="tstat amber"><div class="tstat-n">${moods.length}</div><div class="tstat-l">Mood Check-ins</div></div><div class="tstat red"><div class="tstat-n">${alerts.length}</div><div class="tstat-l">Need Support</div></div>`;
+  const badge=document.getElementById('t-alert-badge');if(badge) badge.textContent=alerts.length;
+  const prev=document.getElementById('t-alerts-preview');if(!prev) return;
+  if(alerts.length===0){prev.innerHTML='';return;}
+  prev.innerHTML=`<div style="background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--r-md);padding:16px 20px;margin-top:4px"><h4 style="color:var(--red);margin-bottom:10px">⚠️ ${alerts.length} student${alerts.length>1?'s need':' needs'} support today</h4>${alerts.slice(0,4).map(a=>{const s=students.find(x=>x.id===a.studentId);return `<p style="font-size:.88rem;margin-bottom:4px">• <strong>${s?.name||'Student'}</strong> — feeling <em>${a.mood}</em></p>`;}).join('')}</div>`;
 }
 
 function renderTeacherClasses(){
-  const classes=getMyClasses();
-  const students=getMyStudents();
-  const grid=document.getElementById('t-classes-grid');
-  if(!grid) return;
+  const classes=getMyClasses();const students=getMyStudents();const grid=document.getElementById('t-classes-grid');if(!grid) return;
   if(classes.length===0){grid.innerHTML='<p style="color:var(--muted);padding:20px 0">No classes yet. Create one above!</p>';return;}
-  grid.innerHTML=classes.map(c=>{
-    const count=students.filter(s=>s.classIds?.includes(c.id)).length;
-    return `<div class="t-class-card">${buildClassBannerHTML(c,true)}
-      <div class="t-class-card-body">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span class="cls-code-badge">${c.code}</span>
-          <span style="font-size:.8rem;color:var(--muted)">${count} student${count!==1?'s':''}</span>
-        </div>
-        <span class="cls-time">🕐 ${c.startTime} – ${c.endTime} · ${c.days?.join(', ')||'—'}</span>
-        ${c.bannerMsg?`<div class="cls-banner-msg">${c.bannerMsg}</div>`:''}
-        <div class="t-class-actions">
-          <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
-          <button class="btn-outline small" onclick="deleteClass('${c.id}')" style="padding:7px 10px">🗑</button>
-        </div>
-      </div></div>`;
-  }).join('');
+  grid.innerHTML=classes.map(c=>{const count=students.filter(s=>s.classIds?.includes(c.id)).length;return `<div class="t-class-card">${buildClassBannerHTML(c,true)}<div class="t-class-card-body"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="cls-code-badge">${c.code}</span><span style="font-size:.8rem;color:var(--muted)">${count} student${count!==1?'s':''}</span></div><span class="cls-time">🕐 ${c.startTime} – ${c.endTime} · ${c.days?.join(', ')||'—'}</span>${c.bannerMsg?`<div class="cls-banner-msg">${c.bannerMsg}</div>`:''}<div class="t-class-actions"><button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button><button class="btn-outline small" onclick="deleteClass('${c.id}')" style="padding:7px 10px">🗑</button></div></div></div>`;}).join('');
 }
 
 function renderStudentTable(){
-  const myClasses=getMyClasses();
-  const students=getMyStudents();
-  const filterSel=document.getElementById('t-cls-filter');
-  if(filterSel) filterSel.innerHTML='<option value="">All Classes</option>'+myClasses.map(c=>`<option value="${c.id}">${c.subject}</option>`).join('');
-  const search=(document.getElementById('t-search')?.value||'').toLowerCase();
-  const clsFilter=document.getElementById('t-cls-filter')?.value||'';
-  let filtered=students;
-  if(clsFilter) filtered=filtered.filter(s=>s.classIds?.includes(clsFilter));
-  if(search) filtered=filtered.filter(s=>s.name.toLowerCase().includes(search)||s.email.includes(search));
-  const moods=gm().filter(m=>m.shared);
-  const wrap=document.getElementById('t-student-table');
-  if(!wrap) return;
+  const myClasses=getMyClasses();const students=getMyStudents();
+  const filterSel=document.getElementById('t-cls-filter');if(filterSel) filterSel.innerHTML='<option value="">All Classes</option>'+myClasses.map(c=>`<option value="${c.id}">${c.subject}</option>`).join('');
+  const search=(document.getElementById('t-search')?.value||'').toLowerCase();const clsFilter=document.getElementById('t-cls-filter')?.value||'';
+  let filtered=students;if(clsFilter) filtered=filtered.filter(s=>s.classIds?.includes(clsFilter));if(search) filtered=filtered.filter(s=>s.name.toLowerCase().includes(search)||s.email.includes(search));
+  const moods=gm().filter(m=>m.shared);const wrap=document.getElementById('t-student-table');if(!wrap) return;
   if(filtered.length===0){wrap.innerHTML='<p style="color:var(--muted);padding:24px 0">No students found.</p>';return;}
-  wrap.innerHTML=`<div class="table-scroll"><table><thead><tr><th>Name</th><th>Grade</th><th>Classes</th><th>Today's Mood</th><th>Sleep</th><th>Status</th></tr></thead><tbody>
-    ${filtered.map(s=>{
-      const todayMoods=moods.filter(m=>m.studentId===s.id&&m.date===today());
-      const isAlert=todayMoods.some(m=>NEGATIVE_MOODS.includes(m.mood));
-      const cls=myClasses.filter(c=>s.classIds?.includes(c.id));
-      const sleepLog=gw().filter(w=>w.studentId===s.id&&w.type==='sleep'&&w.shared&&w.date===today())[0];
-      const moodDisplay=todayMoods.length?todayMoods.map(m=>`<span class="mood-tag-sm ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${m.mood}</span>`).join(''):'<span style="color:var(--muted);font-size:.82rem">Not logged</span>';
-      const clsNames=cls.map(c=>{const short=c.subject.length>20?c.subject.slice(0,18)+'…':c.subject;return `<span title="${c.subject}" style="display:inline-block;background:var(--blue-pale);color:var(--blue);border-radius:5px;padding:1px 6px;font-size:.72rem;font-weight:700;margin:1px">${short}</span>`;}).join('');
-      return `<tr class="${isAlert?'alert-row':''}">
-        <td><strong>${s.name}</strong><br><span style="font-size:.75rem;color:var(--muted)">${s.email}</span></td>
-        <td style="white-space:nowrap">${s.grade||'—'}</td>
-        <td>${clsNames||'—'}</td>
-        <td style="min-width:120px">${moodDisplay}</td>
-        <td style="white-space:nowrap">${sleepLog?`<strong>${sleepLog.hours}h</strong> · ${sleepLog.quality}`:'<span style="color:var(--muted)">—</span>'}</td>
-        <td style="white-space:nowrap">${isAlert?'<span style="color:var(--red);font-weight:700;font-size:.85rem">⚠️ Needs support</span>':'<span style="color:var(--green);font-size:.85rem">✅ OK</span>'}</td>
-      </tr>`;
-    }).join('')}
-  </tbody></table></div>`;
+  wrap.innerHTML=`<div class="table-scroll"><table><thead><tr><th>Name</th><th>Grade</th><th>Classes</th><th>Today's Mood</th><th>Sleep</th><th>Status</th></tr></thead><tbody>${filtered.map(s=>{const todayMoods=moods.filter(m=>m.studentId===s.id&&m.date===today());const isAlert=todayMoods.some(m=>NEGATIVE_MOODS.includes(m.mood));const cls=myClasses.filter(c=>s.classIds?.includes(c.id));const sleepLog=gw().filter(w=>w.studentId===s.id&&w.type==='sleep'&&w.shared&&w.date===today())[0];const moodDisplay=todayMoods.length?todayMoods.map(m=>`<span class="mood-tag-sm ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${m.mood}</span>`).join(''):'<span style="color:var(--muted);font-size:.82rem">Not logged</span>';const clsNames=cls.map(c=>{const short=c.subject.length>20?c.subject.slice(0,18)+'…':c.subject;return `<span title="${c.subject}" style="display:inline-block;background:var(--blue-pale);color:var(--blue);border-radius:5px;padding:1px 6px;font-size:.72rem;font-weight:700;margin:1px">${short}</span>`;}).join('');return `<tr class="${isAlert?'alert-row':''}"><td><strong>${s.name}</strong><br><span style="font-size:.75rem;color:var(--muted)">${s.email}</span></td><td style="white-space:nowrap">${s.grade||'—'}</td><td>${clsNames||'—'}</td><td style="min-width:120px">${moodDisplay}</td><td style="white-space:nowrap">${sleepLog?`<strong>${sleepLog.hours}h</strong> · ${sleepLog.quality}`:'<span style="color:var(--muted)">—</span>'}</td><td style="white-space:nowrap">${isAlert?'<span style="color:var(--red);font-weight:700;font-size:.85rem">⚠️ Needs support</span>':'<span style="color:var(--green);font-size:.85rem">✅ OK</span>'}</td></tr>`;}).join('')}</tbody></table></div>`;
 }
 
 function renderMoodReports(){
-  const students=getMyStudents();
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);
-  const grid=document.getElementById('t-mood-grid');
-  if(!grid) return;
+  const students=getMyStudents();const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);const grid=document.getElementById('t-mood-grid');if(!grid) return;
   if(students.length===0){grid.innerHTML='<p style="color:var(--muted)">No students yet.</p>';return;}
-  grid.innerHTML=students.map(s=>{
-    const sm=moods.filter(m=>m.studentId===s.id);
-    const counts={};
-    sm.forEach(m=>{counts[m.mood]=(counts[m.mood]||0)+1;});
-    const total=sm.length||1;
-    const isAlert=sm.some(m=>NEGATIVE_MOODS.includes(m.mood)&&m.date===today());
-    return `<div class="t-mood-card" ${isAlert?'style="border:2px solid var(--red)"':''}>
-      <h4>${s.name} ${isAlert?'⚠️':''}</h4>
-      ${Object.entries(counts).map(([mood,n])=>`<div class="mbar-row"><span style="width:80px;font-size:.78rem">${MOOD_CFG[mood]?.icon} ${mood}</span><div class="mbar-track"><div class="mbar-fill" style="width:${(n/total*100).toFixed(0)}%;background:${NEGATIVE_MOODS.includes(mood)?'var(--red)':'var(--blue)'}"></div></div><span style="font-size:.78rem">${n}</span></div>`).join('')||'<p style="color:var(--muted);font-size:.82rem">No shared moods yet</p>'}
-    </div>`;
-  }).join('');
+  grid.innerHTML=students.map(s=>{const sm=moods.filter(m=>m.studentId===s.id);const counts={};sm.forEach(m=>{counts[m.mood]=(counts[m.mood]||0)+1;});const total=sm.length||1;const isAlert=sm.some(m=>NEGATIVE_MOODS.includes(m.mood)&&m.date===today());return `<div class="t-mood-card" ${isAlert?'style="border:2px solid var(--red)"':''}><h4>${s.name} ${isAlert?'⚠️':''}</h4>${Object.entries(counts).map(([mood,n])=>`<div class="mbar-row"><span style="width:80px;font-size:.78rem">${MOOD_CFG[mood]?.icon} ${mood}</span><div class="mbar-track"><div class="mbar-fill" style="width:${(n/total*100).toFixed(0)}%;background:${NEGATIVE_MOODS.includes(mood)?'var(--red)':'var(--blue)'}"></div></div><span style="font-size:.78rem">${n}</span></div>`).join('')||'<p style="color:var(--muted);font-size:.82rem">No shared moods yet</p>'}</div>`;}).join('');
 }
 
 function renderWellnessTable(){
-  const students=getMyStudents();
-  const myClassIds=getMyClasses().map(c=>c.id);
+  const students=getMyStudents();const myClassIds=getMyClasses().map(c=>c.id);
   const allW=gw().filter(w=>w.shared&&students.some(s=>s.id===w.studentId)&&(w.sharedWith?.teacherId===CU.id||myClassIds.includes(w.sharedWith?.classId)));
   const allR=S.get('responsibilities',[]).filter(r=>r.shared&&students.some(s=>s.id===r.studentId)&&(r.sharedWith?.teacherId===CU.id||myClassIds.includes(r.sharedWith?.classId)||!r.sharedWith));
-  const wrap=document.getElementById('t-wellness-table');
-  if(!wrap) return;
-  const classes=getMyClasses();
-  let html='';
-  if(allR.length>0){
-    const grouped={};
-    allR.forEach(r=>{if(!grouped[r.studentId])grouped[r.studentId]=[];grouped[r.studentId].push(r);});
-    html+=`<h4 style="color:var(--navy);margin-bottom:14px">📋 Student Responsibilities (Shared)</h4>`;
-    html+=Object.entries(grouped).map(([sid,resps])=>{
-      const s=students.find(x=>x.id===sid);
-      const totalHours=resps.reduce((acc,r)=>acc+(parseFloat(r.hours)||0),0);
-      return `<div class="t-goals-student" style="margin-bottom:12px"><h4>${s?.name||'Student'} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${totalHours>0?'~'+totalHours+'h/week outside school':''}</span></h4>
-        ${resps.map(r=>`<div class="t-goal-row"><span>📌</span><div><strong>${r.text}</strong>${r.when?` <span style="color:var(--muted)">(${r.when})</span>`:''}</div>${r.hours?`<span style="margin-left:auto;color:var(--muted);font-size:.8rem">~${r.hours}h/wk</span>`:''}</div>`).join('')}
-      </div>`;
-    }).join('');
-  }
-  if(allW.length>0){
-    html+=`<h4 style="color:var(--navy);margin:22px 0 14px">🌱 Wellness Logs Sent to You</h4><div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Type</th><th>Data</th><th>Period</th><th>Date</th></tr></thead><tbody>
-      ${allW.map(w=>{
-        const s=students.find(x=>x.id===w.studentId);
-        const cls=classes.find(c=>c.id===w.sharedWith?.classId);
-        const data=w.type==='sleep'?`${w.hours}h · ${w.quality}`:w.type==='energy'?`Energy: ${w.energy}/10 · 💧${w.water} glasses`:w.text||'—';
-        return `<tr><td><strong>${s?.name||'—'}</strong></td><td style="text-transform:capitalize">${w.type}</td><td>${data}</td><td>${cls?.subject||'—'}</td><td>${w.date}</td></tr>`;
-      }).join('')}
-    </tbody></table></div>`;
-  }
-  if(!html) html='<p style="color:var(--muted);padding:20px">No wellness data shared with you yet.</p>';
-  wrap.innerHTML=html;
+  const wrap=document.getElementById('t-wellness-table');if(!wrap) return;const classes=getMyClasses();let html='';
+  if(allR.length>0){const grouped={};allR.forEach(r=>{if(!grouped[r.studentId])grouped[r.studentId]=[];grouped[r.studentId].push(r);});html+=`<h4 style="color:var(--navy);margin-bottom:14px">📋 Student Responsibilities (Shared)</h4>${Object.entries(grouped).map(([sid,resps])=>{const s=students.find(x=>x.id===sid);const totalHours=resps.reduce((acc,r)=>acc+(parseFloat(r.hours)||0),0);return `<div class="t-goals-student" style="margin-bottom:12px"><h4>${s?.name||'Student'} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${totalHours>0?'~'+totalHours+'h/week outside school':''}</span></h4>${resps.map(r=>`<div class="t-goal-row"><span>📌</span><div><strong>${r.text}</strong>${r.when?` <span style="color:var(--muted)">(${r.when})</span>`:''}</div>${r.hours?`<span style="margin-left:auto;color:var(--muted);font-size:.8rem">~${r.hours}h/wk</span>`:''}</div>`).join('')}</div>`;}).join('')};}
+  if(allW.length>0){html+=`<h4 style="color:var(--navy);margin:22px 0 14px">🌱 Wellness Logs Sent to You</h4><div style="overflow-x:auto"><table><thead><tr><th>Student</th><th>Type</th><th>Data</th><th>Period</th><th>Date</th></tr></thead><tbody>${allW.map(w=>{const s=students.find(x=>x.id===w.studentId);const cls=classes.find(c=>c.id===w.sharedWith?.classId);const data=w.type==='sleep'?`${w.hours}h · ${w.quality}`:w.type==='energy'?`Energy: ${w.energy}/10 · 💧${w.water} glasses`:w.text||'—';return `<tr><td><strong>${s?.name||'—'}</strong></td><td style="text-transform:capitalize">${w.type}</td><td>${data}</td><td>${cls?.subject||'—'}</td><td>${w.date}</td></tr>`;}).join('')}</tbody></table></div>`;}
+  if(!html) html='<p style="color:var(--muted);padding:20px">No wellness data shared with you yet.</p>';wrap.innerHTML=html;
 }
 
 function renderTeacherGoals(){
-  const students=getMyStudents();
-  const goals=ggo().filter(g=>students.some(s=>s.id===g.studentId));
-  const wrap=document.getElementById('t-goals-content');
-  if(!wrap) return;
+  const students=getMyStudents();const goals=ggo().filter(g=>students.some(s=>s.id===g.studentId));const wrap=document.getElementById('t-goals-content');if(!wrap) return;
   if(goals.length===0){wrap.innerHTML='<p style="color:var(--muted);padding:20px">No student goals yet.</p>';return;}
-  const grouped={};
-  goals.forEach(g=>{if(!grouped[g.studentId])grouped[g.studentId]=[];grouped[g.studentId].push(g);});
-  wrap.innerHTML=Object.entries(grouped).map(([sid,goals])=>{
-    const s=students.find(x=>x.id===sid);
-    const done=goals.filter(g=>g.done).length;
-    return `<div class="t-goals-student" style="margin-bottom:16px">
-      <h4>${s?.name||'Student'} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${done}/${goals.length} completed</span></h4>
-      ${goals.map(g=>`<div class="t-goal-row" style="${g.done?'opacity:.5;text-decoration:line-through':''}"><span>${g.done?'✅':'⬜'}</span><div><strong>${g.task}</strong><span style="color:var(--muted);font-size:.8rem"> — ${g.day} ${g.time}</span></div></div>`).join('')}
-    </div>`;
-  }).join('');
+  const grouped={};goals.forEach(g=>{if(!grouped[g.studentId])grouped[g.studentId]=[];grouped[g.studentId].push(g);});
+  wrap.innerHTML=Object.entries(grouped).map(([sid,goals])=>{const s=students.find(x=>x.id===sid);const done=goals.filter(g=>g.done).length;return `<div class="t-goals-student" style="margin-bottom:16px"><h4>${s?.name||'Student'} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${done}/${goals.length} completed</span></h4>${goals.map(g=>`<div class="t-goal-row" style="${g.done?'opacity:.5;text-decoration:line-through':''}"><span>${g.done?'✅':'⬜'}</span><div><strong>${g.task}</strong><span style="color:var(--muted);font-size:.8rem"> — ${g.day} ${g.time}</span></div></div>`).join('')}</div>`;}).join('');
 }
 
 function renderAlerts(){
-  const students=getMyStudents();
-  const moods=gm().filter(m=>m.shared&&NEGATIVE_MOODS.includes(m.mood)&&students.some(s=>s.id===m.studentId));
-  const wrap=document.getElementById('t-alerts-content');
-  if(!wrap) return;
+  const students=getMyStudents();const moods=gm().filter(m=>m.shared&&NEGATIVE_MOODS.includes(m.mood)&&students.some(s=>s.id===m.studentId));const wrap=document.getElementById('t-alerts-content');if(!wrap) return;
   if(moods.length===0){wrap.innerHTML='<p style="color:var(--muted);padding:20px">No alerts — all students look good! ✅</p>';return;}
-  wrap.innerHTML=`<div style="background:var(--red-lt);border-radius:var(--r-md);padding:16px 20px">
-    <h4 style="color:var(--red);margin-bottom:14px">⚠️ ${moods.length} alert${moods.length>1?'s':''} — students who may need support</h4>
-    ${moods.map(m=>{
-      const s=students.find(x=>x.id===m.studentId);
-      return `<div style="padding:10px 0;border-bottom:1px solid #fca5a5">
-        <strong>${s?.name||'Student'}</strong>
-        <span class="mood-tag-sm ${m.mood}" style="margin-left:8px">${MOOD_CFG[m.mood]?.icon} ${m.mood}</span>
-        <span style="color:var(--muted);font-size:.8rem;margin-left:8px">${m.classLabel||''} · ${m.date}</span>
-      </div>`;
-    }).join('')}
-  </div>`;
+  wrap.innerHTML=`<div style="background:var(--red-lt);border-radius:var(--r-md);padding:16px 20px"><h4 style="color:var(--red);margin-bottom:14px">⚠️ ${moods.length} alert${moods.length>1?'s':''} — students who may need support</h4>${moods.map(m=>{const s=students.find(x=>x.id===m.studentId);return `<div style="padding:10px 0;border-bottom:1px solid #fca5a5"><strong>${s?.name||'Student'}</strong><span class="mood-tag-sm ${m.mood}" style="margin-left:8px">${MOOD_CFG[m.mood]?.icon} ${m.mood}</span><span style="color:var(--muted);font-size:.8rem;margin-left:8px">${m.classLabel||''} · ${m.date}</span></div>`;}).join('')}</div>`;
 }
 
-function renderTeacherHelp(){
-  const el=document.getElementById('t-help-content');
-  if(el) el.innerHTML=buildHelplinesHTML(CU.province||'Ontario', false);
+function renderTeacherHelp(){const el=document.getElementById('t-help-content');if(el) el.innerHTML=buildHelplinesHTML(CU.province||'Ontario', false);}
+
+function openClassModal(){var code='';var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(var i=0;i<6;i++) code+=chars[Math.floor(Math.random()*chars.length)];var codeEl=document.getElementById('cm-code');if(codeEl) codeEl.value=code;openModal('class-modal');}
+
+var pendingLogoDataUrl=null;
+
+function handleLogoUpload(input){if(!input.files||!input.files[0]) return;var reader=new FileReader();reader.onload=function(e){pendingLogoDataUrl=e.target.result;var preview=document.getElementById('cm-logo-preview');if(preview) preview.innerHTML='<img src="'+pendingLogoDataUrl+'" style="max-height:60px;border-radius:6px">';};reader.readAsDataURL(input.files[0]);}
+
+function clearLogo(){pendingLogoDataUrl=null;var preview=document.getElementById('cm-logo-preview');if(preview) preview.innerHTML='';var input=document.getElementById('cm-logo');if(input) input.value='';}
+
+function generateClassCode(){var code='';var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(var i=0;i<6;i++) code+=chars[Math.floor(Math.random()*chars.length)];var codeEl=document.getElementById('cm-code');if(codeEl) codeEl.value=code;}
+
+async function createClass(){
+  var subject=document.getElementById('cm-subject').value.trim();var start=document.getElementById('cm-start').value;var end=document.getElementById('cm-end').value;var code=document.getElementById('cm-code').value.trim().toUpperCase();var days=[];document.querySelectorAll('input[name="cm-day"]:checked').forEach(function(x){days.push(x.value);});var color=(document.querySelector('input[name="cm-color"]:checked')||{}).value||'#1d5fa6';var emoji=document.getElementById('cm-emoji').value.trim();var bannerMsg=document.getElementById('cm-banner-msg').value.trim();var logo=pendingLogoDataUrl||null;
+  if(!subject||!code) return toast('Please fill in subject and code.');
+  var classes=gc();if(classes.find(function(c){return c.code===code;})) return toast('That code already exists.');
+  var newClass={id:'c'+uid8(),teacherId:CU.id,subject:subject,startTime:start,endTime:end,days:days,code:code,color:color,emoji:emoji,logo:logo,bannerMsg:bannerMsg};
+  classes.push(newClass);cSet('classes',classes);S.set('classes',classes);closeModal('class-modal');
+  if(document.getElementById('cm-subject'))document.getElementById('cm-subject').value='';if(document.getElementById('cm-start'))document.getElementById('cm-start').value='09:00';if(document.getElementById('cm-end'))document.getElementById('cm-end').value='09:45';if(document.getElementById('cm-code'))document.getElementById('cm-code').value='';if(document.getElementById('cm-emoji'))document.getElementById('cm-emoji').value='';if(document.getElementById('cm-banner-msg'))document.getElementById('cm-banner-msg').value='';
+  document.querySelectorAll('input[name="cm-day"]').forEach(function(x){x.checked=false;});clearLogo();pendingLogoDataUrl=null;toast('Class created! 🎉');renderTeacherClasses();
 }
 
-function renderSettings(){
-  const el=document.getElementById('t-settings-content');
-  if(!el) return;
-  el.innerHTML=`
-    <div class="fgroup"><label>School Social Worker Name</label><input type="text" id="set-sw-name" value="${CU.socialWorker?.name||''}" placeholder="e.g. Jane Smith"/></div>
-    <div class="fgroup"><label>Social Worker Email</label><input type="email" id="set-sw-email" value="${CU.socialWorker?.email||''}" placeholder="e.g. jane@school.ca"/></div>
-    <button class="btn-main" onclick="saveSettings()">Save Settings</button>
-  `;
-}
+async function deleteClass(id){if(!confirm('Delete this class? Students will lose access.')) return;cSet('classes',gc().filter(function(c){return c.id!==id;}));S.set('classes',gc());var students=gs();students.forEach(function(s){if(s.classIds){s.classIds=s.classIds.filter(function(cid){return cid!==id;});}});S.set('students',students);toast('Class deleted.');renderTeacherClasses();}
 
-function saveSettings(){
-  const name=document.getElementById('set-sw-name').value.trim();
-  const email=document.getElementById('set-sw-email').value.trim();
-  const teachers=gt(); const t=teachers.find(x=>x.id===CU.id);
-  if(t){
-    t.socialWorker=name?{name,email}:null;
-    S.set('teachers',teachers);
-    CU.socialWorker=t.socialWorker;
-    if(fbAuth?.currentUser) fbDb.collection('profiles').doc(fbAuth.currentUser.uid).set({socialWorker:t.socialWorker},{merge:true});
-    toast('Settings saved! ✓');
-  }
-}
+function renderSettings(){var el=document.getElementById('t-settings-content');if(!el) return;el.innerHTML='<h4 style="margin-bottom:16px">Account Info</h4><div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);padding:16px 20px"><p style="margin-bottom:8px"><strong>Name:</strong> '+CU.name+'</p><p style="margin-bottom:8px"><strong>Email:</strong> '+CU.email+'</p><p style="margin-bottom:8px"><strong>School:</strong> '+(CU.school||'—')+'</p><p style="margin-bottom:8px"><strong>Province:</strong> Ontario</p><p><strong>Joined:</strong> '+(CU.joined||'—')+'</p></div><hr style="margin:24px 0;border:none;border-top:1px solid var(--border)"><button class="btn-danger" onclick="showModal(\'delete-modal\')" style="margin-top:8px">🗑 Delete Account</button>';}
 
-function renderTeacherProfile(){
-  const el=document.getElementById('t-profile-content');
-  if(!el) return;
-  el.innerHTML=`
-    <div style="text-align:center;margin-bottom:24px">
-      <div class="avatar-lg" style="margin:0 auto 12px">${CU.name[0].toUpperCase()}</div>
-      <h3>${CU.name}</h3>
-      <p style="color:var(--muted)">${CU.email}</p>
-      <p style="color:var(--muted);font-size:.85rem">${CU.province||''} · ${CU.school||''}</p>
-    </div>
-    <button class="btn-danger" onclick="showModal('delete-modal')">🗑 Delete Account</button>
-  `;
-}
+function renderTeacherProfile(){var el=document.getElementById('t-profile-content');if(!el) return;el.innerHTML='<div style="text-align:center;margin-bottom:24px"><div class="avatar-lg" style="margin:0 auto 12px">'+CU.name[0].toUpperCase()+'</div><h3>'+CU.name+'</h3><p style="color:var(--muted)">'+CU.email+'</p><p style="color:var(--muted);font-size:.85rem">Ontario · '+(CU.school||'')+'</p></div><button class="btn-danger" onclick="showModal(\'delete-modal\')">🗑 Delete Account</button>';}
 
-function executeDeleteAccount(){
-  const inp=document.getElementById('delete-confirm-input');
-  const pass=document.getElementById('delete-pass-input');
-  const errEl=document.getElementById('delete-err');
-  hideErr(errEl);
-  if(inp.value!=='DELETE') return showErr(errEl,'Type DELETE to confirm.');
-  if(!fbAuth?.currentUser) return showErr(errEl,'Not logged in.');
-  fbAuth.currentUser.delete().then(function(){
-    fbDb.collection('users').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
-    fbDb.collection('profiles').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
-    toast('Account deleted.');
-    logout();
-  }).catch(function(e){
-    if(e.code==='auth/requires-recent-login') return showErr(errEl,'Please log out and log back in before deleting.');
-    showErr(errEl,'Could not delete account.');
-  });
-}
+function executeDeleteAccount(){var inp=document.getElementById('delete-confirm-input');var errEl=document.getElementById('delete-err');hideErr(errEl);if(!inp||inp.value!=='DELETE') return showErr(errEl,'Type DELETE to confirm.');if(!fbAuth||!fbAuth.currentUser) return showErr(errEl,'Not logged in.');fbAuth.currentUser.delete().then(function(){if(fbAuth.currentUser){fbDb.collection('users').doc(fbAuth.currentUser.uid).delete().catch(function(){});fbDb.collection('profiles').doc(fbAuth.currentUser.uid).delete().catch(function(){});}toast('Account deleted.');logout();}).catch(function(e){if(e.code==='auth/requires-recent-login') return showErr(errEl,'Please log out and log back in before deleting.');showErr(errEl,'Could not delete account.');});}
 
-function copyCode(code){
-  navigator.clipboard.writeText(code).then(()=>toast('Code copied! 📋')).catch(()=>toast('Could not copy.'));
-}
+function copyCode(code){navigator.clipboard.writeText(code).then(function(){toast('Code copied! 📋');}).catch(function(){toast('Could not copy.');});}
 
-function deleteClass(id){
-  if(!confirm('Delete this class? Students will be removed from it.')) return;
-  let classes=gc();
-  const cls=classes.find(c=>c.id===id);
-  if(!cls) return;
-  classes=classes.filter(c=>c.id!==id);
-  S.set('classes',classes);
-  // Remove class from all students
-  var students=gs();
-  students.forEach(function(s){if(s.classIds){s.classIds=s.classIds.filter(cid=>cid!==id);}});
-  S.set('students',students);
-  // Also update in Firestore profiles
-  if(fbAuth?.currentUser){
-    getStudentUids([id]).then(function(profiles){
-      profiles.forEach(function(p){
-        fbDb.collection('profiles').doc(p.uid).set({classIds:p.classIds.filter(function(cid){return cid!==id;})},{merge:true}).catch(()=>{});
-      });
-    });
-  }
-  toast('Class deleted.');
-  renderTeacherClasses();
-}
-
-// ═══════════════════════════════════════════════
-// FORGOT PASSWORD — FULL FIX
-// ═══════════════════════════════════════════════
-function sendResetCode(){
-  var email = document.getElementById('forgot-email').value.trim().toLowerCase();
-  var errEl = document.getElementById('forgot-err');
-  hideErr(errEl);
-  if(!email || !validEmail(email)) return showErr(errEl, 'Please enter a valid email address.');
-  if(!fbAuth) initFirebase();
-  fbAuth.sendPasswordResetEmail(email, {
-    url: window.location.origin + window.location.pathname + '#login',
-    handleCodeInApp: true
-  }).then(function(){
-    toast('Password reset email sent! Check your inbox (and spam) 📧');
-    closeModal('forgot-modal');
-  }).catch(function(e){
-    if(e.code === 'auth/user-not-found') return showErr(errEl, 'No account found with that email.');
-    if(e.code === 'auth/invalid-email') return showErr(errEl, 'That email address is invalid.');
-    showErr(errEl, 'Could not send reset email. Try again.');
-  });
-}
-function confirmResetPassword(){ toast('Please check your email for the reset link.'); }
-function resendResetCode(){ sendResetCode(); }
-
-// Detect reset link in URL on page load
-(function(){
-  try {
-    var params = new URLSearchParams(window.location.search);
-    var mode = params.get('mode');
-    var oobCode = params.get('oobCode');
-    if(mode === 'resetPassword' && oobCode){
-      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
-      var waiter = setInterval(function(){
-        if(typeof fbAuth !== 'undefined' && fbAuth){
-          clearInterval(waiter);
-          document.getElementById('reset-modal').dataset.code = oobCode;
-          showModal('reset-modal');
-        }
-      }, 100);
-      setTimeout(function(){ clearInterval(waiter); }, 10000);
-    }
-  } catch(e){}
-})();
-
-function doResetPassword(){
-  var modal = document.getElementById('reset-modal');
-  var code = modal.dataset.code;
-  var errEl = document.getElementById('reset-err');
-  var pw = document.getElementById('reset-new-pw').value;
-  var pw2 = document.getElementById('reset-confirm-pw').value;
-  hideErr(errEl);
-  if(!pw || pw.length < 8) return showErr(errEl, 'Password must be at least 8 characters.');
-  if(pw !== pw2) return showErr(errEl, 'Passwords do not match.');
-  fbAuth.confirmPasswordReset(code, pw).then(function(){
-    toast('Password reset! You can now log in. ✅');
-    closeModal('reset-modal');
-    document.getElementById('reset-new-pw').value = '';
-    document.getElementById('reset-confirm-pw').value = '';
-  }).catch(function(e){
-    if(e.code === 'auth/expired-action-code') return showErr(errEl, 'Link expired. Request a new one.');
-    if(e.code === 'auth/invalid-action-code') return showErr(errEl, 'Link invalid or already used.');
-    if(e.code === 'auth/weak-password') return showErr(errEl, 'Password too weak. Use 8+ chars with uppercase, number, symbol.');
-    showErr(errEl, 'Could not reset. Try again.');
-  });
-}
+// ═══════════════════════════════════════════════════════════════
+// FORGOT PASSWORD
+// ═══════════════════════════════════════════════════════════════
+function sendResetCode(){var email=document.getElementById('forgot-email').value.trim().toLowerCase();var errEl=document.getElementById('forgot-err');hideErr(errEl);if(!email||!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');if(!fbAuth) initFirebase();fbAuth.sendPasswordResetEmail(email,{url:window.location.origin+window.location.pathname+'#login',handleCodeInApp:true}).then(function(){toast('Password reset email sent! Check your inbox (and spam) 📧');closeModal('forgot-modal');}).catch(function(e){if(e.code==='auth/user-not-found') return showErr(errEl,'No account found with that email.');if(e.code==='auth/invalid-email') return showErr(errEl,'That email address is invalid.');showErr(errEl,'Could not send reset email. Try again.');});}
+function confirmResetPassword(){toast('Please check your email for the reset link.');}
+function resendResetCode(){sendResetCode();}
+(function(){try{var params=new URLSearchParams(window.location.search);var mode=params.get('mode');var oobCode=params.get('oobCode');if(mode==='resetPassword'&&oobCode){window.history.replaceState({},'',window.location.pathname+window.location.hash);var waiter=setInterval(function(){if(typeof fbAuth!=='undefined'&&fbAuth){clearInterval(waiter);document.getElementById('reset-modal').dataset.code=oobCode;showModal('reset-modal');}},100);setTimeout(function(){clearInterval(waiter);},10000);}}catch(e){}})();
+function doResetPassword(){var modal=document.getElementById('reset-modal');var code=modal.dataset.code;var errEl=document.getElementById('reset-err');var pw=document.getElementById('reset-new-pw').value;var pw2=document.getElementById('reset-confirm-pw').value;hideErr(errEl);if(!pw||pw.length<8) return showErr(errEl,'Password must be at least 8 characters.');if(pw!==pw2) return showErr(errEl,'Passwords do not match.');fbAuth.confirmPasswordReset(code,pw).then(function(){toast('Password reset! You can now log in. ✅');closeModal('reset-modal');document.getElementById('reset-new-pw').value='';document.getElementById('reset-confirm-pw').value='';}).catch(function(e){if(e.code==='auth/expired-action-code') return showErr(errEl,'Link expired. Request a new one.');if(e.code==='auth/invalid-action-code') return showErr(errEl,'Link invalid or already used.');if(e.code==='auth/weak-password') return showErr(errEl,'Password too weak.');showErr(errEl,'Could not reset. Try again.');});}
 
 // ─────────────────────────────────────────────
-// UTILITY FUNCTIONS
+// UTILILITY
 // ─────────────────────────────────────────────
-function uid8(){ return Math.random().toString(36).substr(2,8); }
-function today(){ return new Date().toISOString().slice(0,10); }
-
-function showErr(el, msg){
-  if(!el) return;
-  el.textContent = msg;
-  el.classList.remove('hidden');
-}
-function hideErr(el){
-  if(!el) return;
-  el.textContent = '';
-  el.classList.add('hidden');
-}
-
-function toast(msg){
-  var el = document.getElementById('toast');
-  if(!el) return;
-  el.textContent = msg;
-  el.classList.remove('hidden');
-  clearTimeout(el._t);
-  el._t = setTimeout(function(){ el.classList.add('hidden'); }, 3500);
-}
-
-function showModal(id){
-  var el = document.getElementById(id);
-  if(el) el.classList.remove('hidden');
-}
-function closeModal(id){
-  var el = document.getElementById(id);
-  if(el) el.classList.add('hidden');
-}
-function openModal(id){ showModal(id); }
+function uid8(){return Math.random().toString(36).substr(2,8);}
+function today(){return new Date().toISOString().slice(0,10);}
+function showErr(el,msg){if(!el) return;el.textContent=msg;el.classList.remove('hidden');}
+function hideErr(el){if(!el) return;el.textContent='';el.classList.add('hidden');}
+function toast(msg){var el=document.getElementById('toast');if(!el) return;el.textContent=msg;el.classList.remove('hidden');clearTimeout(el._t);el._t=setTimeout(function(){el.classList.add('hidden');},3500);}
+function showModal(id){var el=document.getElementById(id);if(el) el.classList.remove('hidden');}
+function closeModal(id){var el=document.getElementById(id);if(el) el.classList.add('hidden');}
+function openModal(id){showModal(id);}
 
 // ─────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function(){
   initFirebase();
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js').catch(function(){});
-  }
-
+  if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(function(){});}
   fbAuth.onAuthStateChanged(function(user){
-    if(user){
-      getProfile(user.uid).then(function(profile){
-        if(!profile){ fbAuth.signOut().catch(function(){}); return; }
-        loadUserData().then(function(){
-          CU = Object.assign({}, profile, { id: profile.localId || user.uid, uid: user.uid });
-          if(CU.role === 'student') loadStudentDash();
-          else loadTeacherDash();
-        });
-      });
-    } else {
-      showScreen('screen-entry');
-    }
+    if(user){getProfile(user.uid).then(function(profile){if(!profile){fbAuth.signOut().catch(function(){});return;}loadUserData().then(function(){CU=Object.assign({},profile,{id:profile.localId||user.uid,uid:user.uid});if(CU.role==='student') loadStudentDash();else loadTeacherDash();});});}
+    else{showScreen('screen-entry');}
   });
 });
-
-
 /* ═══════════════════════════════════════════════════════════════
    WellSpace — Scale Fixes (paste at the VERY BOTTOM of script.js)
    Fixes 3 issues that break at 200+ users:
@@ -1951,17 +1696,20 @@ function renderSettings() {
     '<p style="color:var(--muted);font-size:.88rem"><strong>Joined:</strong> ' + (CU.joined || '—') + '</p>';
 }
 
-function renderTeacherProfile() {
-  var el = document.getElementById('t-profile-content');
-  if (!el) return;
+function renderSettings(){
+  var el = document.getElementById('t-settings-content');
+  if(!el) return;
   el.innerHTML =
-    '<div style="text-align:center;margin-bottom:24px">' +
-    '<div class="avatar-lg" style="margin:0 auto 12px">' + CU.name[0].toUpperCase() + '</div>' +
-    '<h3>' + CU.name + '</h3>' +
-    '<p style="color:var(--muted)">' + CU.email + '</p>' +
-    '<p style="color:var(--muted);font-size:.85rem">' + (CU.province || '') + ' · ' + (CU.school || '') + '</p>' +
+    '<h4 style="margin-bottom:16px">Account Info</h4>' +
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);padding:16px 20px">' +
+    '<p style="margin-bottom:8px"><strong>Name:</strong> ' + CU.name + '</p>' +
+    '<p style="margin-bottom:8px"><strong>Email:</strong> ' + CU.email + '</p>' +
+    '<p style="margin-bottom:8px"><strong>School:</strong> ' + (CU.school || '—') + '</p>' +
+    '<p style="margin-bottom:8px"><strong>Province:</strong> Ontario</p>' +
+    '<p><strong>Joined:</strong> ' + (CU.joined || '—') + '</p>' +
     '</div>' +
-    '<button class="btn-danger" onclick="showModal(\'delete-modal\')">🗑 Delete Account</button>';
+    '<hr style="margin:24px 0;border:none;border-top:1px solid var(--border)">' +
+    '<button class="btn-danger" onclick="showModal(\'delete-modal\')" style="margin-top:8px">🗑 Delete Account</button>';
 }
 
 function executeDeleteAccount() {
