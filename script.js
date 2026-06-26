@@ -2044,8 +2044,10 @@ async function homeJoinClass() {
   toast('Joined ' + cls.subject + '! Check My Classes in the sidebar.');
   updateStudentNav();
   renderHome();
+  
+  // **NEW: Invalidate teacher cache so they see the update immediately**
+  invalidateTeacherCache();
 }
-
 // Override joinClass
 async function joinClass() {
   const code = document.getElementById('join-code').value.trim().toUpperCase();
@@ -2069,6 +2071,9 @@ async function joinClass() {
   toast(`Joined ${cls.subject}! 🎉`);
   updateStudentNav();
   renderClassesSection();
+  
+  // **NEW: Invalidate teacher cache so they see the update immediately**
+  invalidateTeacherCache();
 }
 
 // Also patch loadUserData to pull classes from the new collection
