@@ -189,30 +189,8 @@ const gj  = ()=> S.get('journals',[]);
 
 // ─────────────────────────────────────────────
 // LOAD USER DATA FROM FIRESTORE INTO CACHE
+// (single, de-duplicated version — also loads profile + per-doc classes)
 // ─────────────────────────────────────────────
-async function loadUserData(){
-  if(!fbDb || !fbAuth?.currentUser) return;
-  try {
-    // Load user's private data
-    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
-    if(userDoc.exists){
-      const data = userDoc.data();
-      Object.entries(data).forEach(([k,v])=>{
-        try{ cSet(k, JSON.parse(v)); }catch{}
-      });
-    }
-    // Load shared data (classes)
-    const sharedDoc = await fbDb.collection('shared').doc('data').get();
-    if(sharedDoc.exists){
-      const data = sharedDoc.data();
-      ['classes'].forEach(k=>{
-        if(data[k]){ try{ cSet(k, JSON.parse(data[k])); }catch{} }
-      });
-    }
-  } catch(e){}
-}
-
-// Load another user's data (for teachers reading student data)
 async function loadUserData(){
   if(!fbDb || !fbAuth?.currentUser) return;
   try {
@@ -224,19 +202,20 @@ async function loadUserData(){
         try{ cSet(k, JSON.parse(v)); }catch{}
       });
     }
-    
+
     // ALSO load profile data (classIds, name, etc.) from /profiles/{uid}
     const profileDoc = await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).get();
     if(profileDoc.exists){
       const pdata = profileDoc.data();
-      // Merge profile data into CU if it exists
-      if(pdata.classIds) CU.classIds = pdata.classIds;
-      if(pdata.name) CU.name = pdata.name;
-      if(pdata.grade) CU.grade = pdata.grade;
-      if(pdata.periodOrder) CU.periodOrder = pdata.periodOrder;
+      if(CU){
+        if(pdata.classIds) CU.classIds = pdata.classIds;
+        if(pdata.name) CU.name = pdata.name;
+        if(pdata.grade) CU.grade = pdata.grade;
+        if(pdata.periodOrder) CU.periodOrder = pdata.periodOrder;
+      }
     }
-    
-    // Load shared data (classes) - legacy
+
+    // Load shared data (classes) - legacy blob, for backwards compatibility
     const sharedDoc = await fbDb.collection('shared').doc('data').get();
     if(sharedDoc.exists){
       const data = sharedDoc.data();
@@ -244,17 +223,18 @@ async function loadUserData(){
         if(data[k]){ try{ cSet(k, JSON.parse(data[k])); }catch{} }
       });
     }
-    
-    // Load from new per-doc classes collection
+
+    // Load from new per-doc classes collection (this is the source of truth going forward)
     const classes = await fsGetAllClasses();
     if(classes.length) cSet('classes', classes);
-    
+
   } catch(e){ console.error('loadUserData error', e); }
 }
+
 // ─────────────────────────────────────────────
 // STUDENT-TEACHER LINK — store uid mapping
 // ─────────────────────────────────────────────
-// When a user signs up we store their profile in shared/profiles/{uid}
+// When a user signs up we store their profile in /profiles/{uid}
 // So teachers can look up student uids to read their data
 async function saveProfile(uid, profile){
   if(!fbDb) return;
@@ -271,16 +251,76 @@ async function getProfile(uid){
   } catch(e){ return null; }
 }
 
-// Get all student uids in a teacher's classes
+// Get all student uids in a teacher's classes — batched to respect Firebase's
+// 10-value limit on array-contains-any, so this still works with 10+ classes.
 async function getStudentUids(classIds){
   if(!fbDb || !classIds?.length) return [];
+
+  const chunks = [];
+  for (let i = 0; i < classIds.length; i += 10) {
+    chunks.push(classIds.slice(i, i + 10));
+  }
+
+  const results = [];
+  const seen = new Set();
+
+  for (const chunk of chunks) {
+    try {
+      const snap = await fbDb.collection('profiles')
+        .where('role','==','student')
+        .where('classIds','array-contains-any', chunk)
+        .get();
+      snap.docs.forEach(d=>{
+        if(!seen.has(d.id)){
+          seen.add(d.id);
+          results.push({ uid: d.id, ...d.data() });
+        }
+      });
+    } catch(e){ console.error('getStudentUids chunk error', e); }
+  }
+
+  return results;
+}
+
+// Load a single student's full data doc (used by the teacher dashboard)
+async function loadStudentData(uid){
+  if(!fbDb) return {};
   try {
-    const snap = await fbDb.collection('profiles')
-      .where('role','==','student')
-      .where('classIds','array-contains-any', classIds)
-      .get();
-    return snap.docs.map(d=>({ uid: d.id, ...d.data() }));
-  } catch(e){ return []; }
+    const doc = await fbDb.collection('users').doc(uid).get();
+    if(!doc.exists) return {};
+    const raw = doc.data();
+    const parsed = {};
+    Object.entries(raw).forEach(([k,v])=>{
+      try{ parsed[k] = JSON.parse(v); }catch{ parsed[k] = v; }
+    });
+    // Ensure a 'students' entry always exists, built from the profile if missing,
+    // so the teacher dashboard can always render a row for this student.
+    if(!parsed.students){
+      const profile = await getProfile(uid);
+      if(profile){
+        parsed.students = [{
+          id: profile.localId || uid,
+          name: profile.name,
+          email: profile.email,
+          grade: profile.grade,
+          classIds: profile.classIds || [],
+          periodOrder: profile.periodOrder || [],
+          joined: profile.joined,
+        }];
+      }
+    }
+    return parsed;
+  } catch(e){ console.error('loadStudentData error', e); return {}; }
+}
+
+// Merge an array of records into another array by a unique key (studentId + extra fields),
+// replacing any existing record for that student/date/type combo so re-fetches don't duplicate.
+function mergeInto(target, incoming, keyField){
+  incoming.forEach(item=>{
+    const idx = target.findIndex(t => t.id && item.id && t.id === item.id);
+    if(idx >= 0) target[idx] = item;
+    else target.push(item);
+  });
 }
 
 // ─────────────────────────────────────────────
@@ -371,12 +411,12 @@ async function doLogin(){
     // Check role matches
     if(profile.role !== authRole) return showErr(errEl, `This is a ${profile.role} account. Please use the ${profile.role} login.`);
 
-    await loadUserData();
     CU = { ...profile, id: profile.localId || uid, uid };
+    await loadUserData();
 
     toast(`Welcome back, ${CU.name}! 👋`);
     if(authRole==='student') loadStudentDash();
-    else loadTeacherDash();
+    else { await loadTeacherStudents(); loadTeacherDash(); }
 
   } catch(e){
     if(e.code==='auth/wrong-password'||e.code==='auth/user-not-found'||e.code==='auth/invalid-credential'){
@@ -408,8 +448,8 @@ async function doSignup(){
       const code  = document.getElementById('su-code').value.trim().toUpperCase();
       if(!grade) return showErr(errEl,'Please select your grade.');
 
-      // Load shared classes to check code
-      const classes = await fsGetShared('classes',[]);
+      // Look up class code in the per-doc classes collection (source of truth)
+      const classes = await fsGetAllClasses();
       cSet('classes', classes);
 
       let classIds = [];
@@ -426,7 +466,7 @@ async function doSignup(){
 
       const profile = { role:'student', name, email, grade, classIds, periodOrder:[], joined:today(), localId, uid };
 
-      // Save profile to shared profiles collection
+      // Save profile to shared profiles collection (this is what teachers query)
       await saveProfile(uid, profile);
 
       // Save student list entry to user's own doc
@@ -474,20 +514,38 @@ function logout(){
   CU=null; authRole=null;
   pendingMoodSel=null;
   Object.keys(cache).forEach(k=>delete cache[k]);
+  invalidateTeacherCache();
   if(fbAuth) fbAuth.signOut().catch(()=>{});
   showScreen('screen-entry');
 }
 
 // ─────────────────────────────────────────────
 // TEACHER — load students across Firestore docs
+// Cached for 60s so the dashboard doesn't re-read everything on every click.
 // ─────────────────────────────────────────────
+let _teacherStudentCache = null;
+let _teacherStudentCacheTime = 0;
+const TEACHER_CACHE_TTL = 60 * 1000; // 60 seconds
+
 async function loadTeacherStudents(){
+  const now = Date.now();
+
+  // Serve from cache if fresh
+  if (_teacherStudentCache && (now - _teacherStudentCacheTime) < TEACHER_CACHE_TTL) {
+    Object.entries(_teacherStudentCache).forEach(([k, v]) => cSet(k, v));
+    return;
+  }
+
   const myClasses  = gc().filter(c => c.teacherId === CU.id);
   const myClassIds = myClasses.map(c => c.id);
-  if (!myClassIds.length) return;
+  if (!myClassIds.length) {
+    // No classes yet — clear any stale student data and bail
+    cSet('students', []);
+    return;
+  }
 
   try {
-    // This queries /profiles where classIds array-contains-any teacher's class IDs
+    // Batched query — works for any number of classes, not just <=10
     const studentProfiles = await getStudentUids(myClassIds);
 
     const allStudents = [];
@@ -498,20 +556,19 @@ async function loadTeacherStudents(){
 
     for (const sp of studentProfiles) {
       const data = await loadStudentData(sp.uid);
-      
-      // FIX: data.students now ALWAYS exists because loadStudentData creates it from profile
+
       if (data.students) {
-        // Only add students who are actually in one of teacher's classes
-        const myStudents = data.students.filter(s => 
+        // Only add students who are actually in one of this teacher's classes
+        const myStudents = data.students.filter(s =>
           s.classIds && s.classIds.some(id => myClassIds.includes(id))
         );
         allStudents.push(...myStudents);
       }
-      
-      if (data.moods)          mergeInto(allMoods,    data.moods,    'studentId');
-      if (data.goals)          mergeInto(allGoals,    data.goals,    'studentId');
-      if (data.wellness)       mergeInto(allWellness, data.wellness, 'studentId');
-      if (data.responsibilities) mergeInto(allResps, data.responsibilities, 'studentId');
+
+      if (data.moods)            mergeInto(allMoods,    data.moods,            'studentId');
+      if (data.goals)            mergeInto(allGoals,    data.goals,            'studentId');
+      if (data.wellness)         mergeInto(allWellness, data.wellness,         'studentId');
+      if (data.responsibilities) mergeInto(allResps,    data.responsibilities, 'studentId');
     }
 
     cSet('students',         allStudents);
@@ -520,7 +577,6 @@ async function loadTeacherStudents(){
     cSet('wellness',         allWellness);
     cSet('responsibilities', allResps);
 
-    // Save to cache
     _teacherStudentCache = {
       students: allStudents,
       moods: [...allMoods],
@@ -528,10 +584,18 @@ async function loadTeacherStudents(){
       wellness: [...allWellness],
       responsibilities: [...allResps],
     };
-    _teacherStudentCacheTime = Date.now();
+    _teacherStudentCacheTime = now;
 
   } catch (e) { console.error('loadTeacherStudents error', e); }
 }
+
+// Call this after any action that changes student/class data, so the next
+// dashboard read pulls fresh data instead of serving the 60s cache.
+function invalidateTeacherCache(){
+  _teacherStudentCache = null;
+  _teacherStudentCacheTime = 0;
+}
+
 // ─────────────────────────────────────────────
 // STUDENT DASHBOARD
 // ─────────────────────────────────────────────
@@ -1124,7 +1188,73 @@ function savePeriodOrder(){
   toast('Period order saved! ✓');
 }
 
-homeJoinClass
+// ─────────────────────────────────────────────
+// CLASSES (student) — JOIN A CLASS BY CODE
+// Single, correct version. Updates:
+//   - student's local 'students' cache entry
+//   - /profiles/{uid}  (so teacher queries find this student)
+//   - /users/{uid}     (so loadStudentData can rebuild the student row)
+// Then invalidates the teacher cache so the teacher sees it on next load.
+// ─────────────────────────────────────────────
+async function joinClass(){
+  const inp  = document.getElementById('join-code');
+  const code = (inp?.value || '').trim().toUpperCase();
+  if(!code) return toast('Please enter a class code.');
+
+  const classes = await fsGetAllClasses();
+  cSet('classes', classes);
+  const cls = classes.find(c => c.code === code);
+  if(!cls) return toast(`Class code "${code}" not found. Double-check with your teacher.`);
+  if(CU.classIds?.includes(cls.id)) return toast("You're already in this class!");
+
+  // Update local student list entry
+  const students = gs();
+  const s = students.find(x => x.id === CU.id);
+  if(s){
+    s.classIds = [...(s.classIds || []), cls.id];
+    S.set('students', students);
+    CU.classIds = s.classIds;
+  } else {
+    CU.classIds = [...(CU.classIds || []), cls.id];
+  }
+
+  if(fbAuth?.currentUser){
+    // Update /profiles/{uid} — this is what the teacher's query reads
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ classIds: CU.classIds }, { merge: true });
+
+    // Update /users/{uid} so loadStudentData() can find/rebuild this student's row
+    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    let existingStudents = [];
+    if(userDoc.exists){
+      try{ existingStudents = JSON.parse(userDoc.data().students || '[]'); }catch{}
+    }
+    let myEntry = existingStudents.find(x => x.id === CU.id);
+    if(!myEntry){
+      myEntry = {
+        id: CU.id, name: CU.name, email: CU.email, grade: CU.grade,
+        periodOrder: CU.periodOrder || [], joined: CU.joined || today()
+      };
+      existingStudents.push(myEntry);
+    }
+    myEntry.classIds = CU.classIds;
+    await fbDb.collection('users').doc(fbAuth.currentUser.uid).set({
+      students: JSON.stringify(existingStudents)
+    }, { merge: true });
+  }
+
+  if(inp) inp.value = '';
+  toast(`Joined ${cls.subject}! 🎉`);
+  updateStudentNav();
+
+  // Refresh whichever screen is visible
+  if(document.getElementById('s-sec-classes')?.classList.contains('active')) renderClassesSection();
+  else renderHome();
+
+  // So the teacher's next dashboard load picks up the new student immediately
+  invalidateTeacherCache();
+}
+
 // ─────────────────────────────────────────────
 // TEACHER DASHBOARD
 // ─────────────────────────────────────────────
@@ -1150,7 +1280,7 @@ function tSection(name){
   const sec=document.getElementById('t-sec-'+name);
   if(sec) sec.classList.add('active');
 
-  if(name==='overview')  renderTeacherOverview();
+  if(name==='overview')  { loadTeacherStudents().then(renderTeacherOverview); }
   if(name==='classes')   renderTeacherClasses();
   if(name==='students')  { loadTeacherStudents().then(renderStudentTable); }
   if(name==='moods')     { loadTeacherStudents().then(renderMoodReports); }
@@ -1166,17 +1296,13 @@ function getMyClasses(){ return gc().filter(c=>c.teacherId===CU.id); }
 function getMyStudents(){
   const myIds = getMyClasses().map(c=>c.id);
   if(!myIds.length) return [];
-  
-  // First try cache (populated by loadTeacherStudents)
+
   const cached = gs().filter(s=>s.classIds?.some(id=>myIds.includes(id)));
-  
-  // If cache is empty but we have classes, wait for loadTeacherStudents to populate it
+
   if(cached.length === 0 && myIds.length > 0){
-    // The teacher's students should already be loaded by loadTeacherStudents
-    // If they're not here, the load failed or data isn't syncing
     console.warn('⚠️ getMyStudents: Cache is empty but teacher has classes. Data may not be loaded yet.');
   }
-  
+
   return cached;
 }
 
@@ -1474,6 +1600,33 @@ function clearLogo(){
   document.getElementById('cm-logo-file').value = '';
 }
 
+// ─────────────────────────────────────────────
+// CLASSES (teacher) — CREATE / DELETE
+// Classes are stored as individual Firestore docs in 'shared_classes'
+// (one doc per class) so this scales past the old single-blob approach.
+// ─────────────────────────────────────────────
+async function fsSetClass(cls){
+  if(!fbDb) return;
+  try {
+    await fbDb.collection('shared_classes').doc(cls.id).set(cls);
+  } catch(e){ console.error('fsSetClass', e); }
+}
+
+async function fsDeleteClass(classId){
+  if(!fbDb) return;
+  try {
+    await fbDb.collection('shared_classes').doc(classId).delete();
+  } catch(e){}
+}
+
+async function fsGetAllClasses(){
+  if(!fbDb) return [];
+  try {
+    const snap = await fbDb.collection('shared_classes').get();
+    return snap.docs.map(d => d.data());
+  } catch(e){ return []; }
+}
+
 async function createClass(){
   const subject  = document.getElementById('cm-subject').value.trim();
   const start    = document.getElementById('cm-start').value;
@@ -1487,14 +1640,16 @@ async function createClass(){
 
   if(!subject||!code)return toast('Please fill in subject and code.');
 
-  // Check code uniqueness in shared classes
-  const existingClasses = await fsGetShared('classes',[]);
+  // Check code uniqueness across all class docs
+  const existingClasses = await fsGetAllClasses();
   if(existingClasses.find(c=>c.code===code)) return toast('That code already exists — try generating a new one.');
 
   const newClass = {id:'c'+uid8(),teacherId:CU.id,subject,startTime:start,endTime:end,days,code,color,emoji,logo,bannerMsg};
-  existingClasses.push(newClass);
-  cSet('classes', existingClasses);
-  await fsSetShared('classes', existingClasses);
+
+  await fsSetClass(newClass);
+
+  const updated = [...existingClasses, newClass];
+  cSet('classes', updated);
 
   closeModal('class-modal');
   document.getElementById('cm-subject').value='';
@@ -1508,16 +1663,17 @@ async function createClass(){
   pendingLogoDataUrl=null;
   toast('Class created! 🎉');
   renderTeacherClasses();
+  invalidateTeacherCache();
 }
 
 async function deleteClass(id){
   if(!confirm('Delete this class? Students will lose access.'))return;
-  const classes = await fsGetShared('classes',[]);
-  const updated = classes.filter(c=>c.id!==id);
+  await fsDeleteClass(id);
+  const updated = cGet('classes', []).filter(c=>c.id!==id);
   cSet('classes', updated);
-  await fsSetShared('classes', updated);
   toast('Class deleted.');
   renderTeacherClasses();
+  invalidateTeacherCache();
 }
 
 function copyCode(code){
@@ -1866,7 +2022,7 @@ async function confirmVerifyCode(){
       if(role === 'student'){
         const grade = pendingVerify.grade;
         const classCode = pendingVerify.code_class || '';
-        const classes = await fsGetShared('classes',[]);
+        const classes = await fsGetAllClasses();
         cSet('classes', classes);
         let classIds = [];
         if(classCode){
@@ -1940,7 +2096,9 @@ function sendResetCode(){
   });
 }
 function confirmResetPassword(){ toast('Please check your email for the reset link.'); }
-function resendResetCode(){ sendResetCode(); }// ─────────────────────────────────────────────
+function resendResetCode(){ sendResetCode(); }
+
+// ─────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async ()=>{
@@ -1958,8 +2116,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         // User was logged in — restore session
         const profile = await getProfile(user.uid);
         if(profile){
-          await loadUserData();
           CU = { ...profile, id: profile.localId || user.uid, uid: user.uid };
+          await loadUserData();
           if(profile.role==='student') loadStudentDash();
           else { await loadTeacherStudents(); loadTeacherDash(); }
         } else {
@@ -1973,350 +2131,3 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     showScreen('screen-entry');
   }
 });
-
-
-/* ═══════════════════════════════════════════════════════════════
-   WellSpace — Scale Fixes (paste at the VERY BOTTOM of script.js)
-   Fixes 3 issues that break at 200+ users:
-   1. Classes stored per-document instead of one giant blob
-   2. array-contains-any batched to handle 10+ classes
-   3. Teacher student data cached (60s) to stop read overload
-═══════════════════════════════════════════════════════════════ */
-
-// ─────────────────────────────────────────────
-// FIX 1 — Classes stored as individual Firestore docs
-// Replaces fsSetShared / fsGetShared for the 'classes' key only.
-// Other shared keys still use the old path (there are none currently).
-// ─────────────────────────────────────────────
-
-async function fsSetClass(cls) {
-  // Save a single class to shared/classes/{classId}
-  if (!fbDb) return;
-  try {
-    await fbDb.collection('shared_classes').doc(cls.id).set(cls);
-  } catch (e) { console.error('fsSetClass', e); }
-}
-
-async function fsDeleteClass(classId) {
-  if (!fbDb) return;
-  try {
-    await fbDb.collection('shared_classes').doc(classId).delete();
-  } catch (e) {}
-}
-
-async function fsGetAllClasses() {
-  if (!fbDb) return [];
-  try {
-    const snap = await fbDb.collection('shared_classes').get();
-    return snap.docs.map(d => d.data());
-  } catch (e) { return []; }
-}
-
-// Override createClass to use the new per-doc approach
-async function createClass() {
-  const subject   = document.getElementById('cm-subject').value.trim();
-  const start     = document.getElementById('cm-start').value;
-  const end       = document.getElementById('cm-end').value;
-  const code      = document.getElementById('cm-code').value.trim().toUpperCase();
-  const days      = [...document.querySelectorAll('input[name="cm-day"]:checked')].map(x => x.value);
-  const color     = document.querySelector('input[name="cm-color"]:checked')?.value || '#1d5fa6';
-  const emoji     = document.getElementById('cm-emoji').value.trim();
-  const bannerMsg = document.getElementById('cm-banner-msg').value.trim();
-  const logo      = pendingLogoDataUrl || null;
-
-  if (!subject || !code) return toast('Please fill in subject and code.');
-
-  // Check code uniqueness across all class docs
-  const existingClasses = await fsGetAllClasses();
-  if (existingClasses.find(c => c.code === code))
-    return toast('That code already exists — try generating a new one.');
-
-  const newClass = {
-    id: 'c' + uid8(), teacherId: CU.id, subject,
-    startTime: start, endTime: end, days, code, color, emoji, logo, bannerMsg
-  };
-
-  // Save to per-doc collection
-  await fsSetClass(newClass);
-
-  // Update local cache
-  const updated = [...existingClasses, newClass];
-  cSet('classes', updated);
-
-  closeModal('class-modal');
-  document.getElementById('cm-subject').value = '';
-  document.getElementById('cm-start').value = '09:00';
-  document.getElementById('cm-end').value = '09:45';
-  document.getElementById('cm-code').value = '';
-  document.getElementById('cm-emoji').value = '';
-  document.getElementById('cm-banner-msg').value = '';
-  document.querySelectorAll('input[name="cm-day"]').forEach(x => x.checked = false);
-  clearLogo();
-  pendingLogoDataUrl = null;
-  toast('Class created! 🎉');
-  renderTeacherClasses();
-}
-
-// Override deleteClass
-async function deleteClass(id) {
-  if (!confirm('Delete this class? Students will lose access.')) return;
-  await fsDeleteClass(id);
-  const updated = cGet('classes', []).filter(c => c.id !== id);
-  cSet('classes', updated);
-  toast('Class deleted.');
-  renderTeacherClasses();
-}
-
-// Override homeJoinClass — uses new per-doc classes
-async function joinClass() {
-  const code = document.getElementById('join-code').value.trim().toUpperCase();
-  if (!code) return toast('Please enter a class code.');
-
-  const classes = await fsGetAllClasses();
-  cSet('classes', classes);
-  const cls = classes.find(c => c.code === code);
-  if (!cls) return toast(`Class code "${code}" not found. Double-check with your teacher.`);
-  if (CU.classIds?.includes(cls.id)) return toast('You\'re already in this class!');
-
-  // Update local student list
-  const students = gs();
-  const s = students.find(x => x.id === CU.id);
-  if (s) { 
-    s.classIds = [...(s.classIds || []), cls.id]; 
-    S.set('students', students); 
-    CU.classIds = s.classIds; 
-  }
-
-  // Update Firestore profile (so teacher can find this student)
-  if (fbAuth?.currentUser) {
-    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
-      .set({ classIds: CU.classIds }, { merge: true });
-    
-    // ALSO update /users/{uid} so loadStudentData finds the student entry
-    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
-    let existingStudents = [];
-    if(userDoc.exists){
-      try{ existingStudents = JSON.parse(userDoc.data().students || '[]'); }catch{}
-    }
-    const myEntry = existingStudents.find(x => x.id === CU.id) || {
-      id: CU.id, name: CU.name, email: CU.email, grade: CU.grade,
-      periodOrder: CU.periodOrder || [], joined: CU.joined || today()
-    };
-    myEntry.classIds = CU.classIds;
-    await fbDb.collection('users').doc(fbAuth.currentUser.uid).set({
-      students: JSON.stringify(existingStudents)
-    }, { merge: true });
-  }
-  
-  document.getElementById('join-code').value = '';
-  toast(`Joined ${cls.subject}! 🎉`);
-  updateStudentNav();
-  renderClassesSection();
-  invalidateTeacherCache();
-}
-
-  // Update Firestore profile (so teacher can find this student)
-  if (fbAuth?.currentUser) {
-    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
-      .set({ classIds: CU.classIds }, { merge: true });
-    
-    // ALSO update /users/{uid} so loadStudentData finds the student entry
-    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
-    let existingStudents = [];
-    if(userDoc.exists){
-      try{ existingStudents = JSON.parse(userDoc.data().students || '[]'); }catch{}
-    }
-    const myEntry = existingStudents.find(x => x.id === CU.id) || {
-      id: CU.id, name: CU.name, email: CU.email, grade: CU.grade,
-      periodOrder: CU.periodOrder || [], joined: CU.joined || today()
-    };
-    myEntry.classIds = CU.classIds;
-    await fbDb.collection('users').doc(fbAuth.currentUser.uid).set({
-      students: JSON.stringify(existingStudents)
-    }, { merge: true });
-  }
-  
-  if (inp) inp.value = '';
-  toast('Joined ' + cls.subject + '! Check My Classes in the sidebar.');
-  updateStudentNav();
-  renderHome();
-  invalidateTeacherCache();
-}
-// Override joinClass
-async function joinClass() {
-  const code = document.getElementById('join-code').value.trim().toUpperCase();
-  if (!code) return toast('Please enter a class code.');
-
-  const classes = await fsGetAllClasses();
-  cSet('classes', classes);
-  const cls = classes.find(c => c.code === code);
-  if (!cls) return toast(`Class code "${code}" not found. Double-check with your teacher.`);
-  if (CU.classIds?.includes(cls.id)) return toast('You\'re already in this class!');
-
-  const students = gs();
-  const s = students.find(x => x.id === CU.id);
-  if (s) { s.classIds = [...(s.classIds || []), cls.id]; S.set('students', students); CU.classIds = s.classIds; }
-
-  if (fbAuth?.currentUser) {
-    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
-      .set({ classIds: CU.classIds }, { merge: true });
-  }
-  document.getElementById('join-code').value = '';
-  toast(`Joined ${cls.subject}! 🎉`);
-  updateStudentNav();
-  renderClassesSection();
-  
-  // **NEW: Invalidate teacher cache so they see the update immediately**
-  invalidateTeacherCache();
-}
-
-// Also patch loadUserData to pull classes from the new collection
-const _origLoadUserData = loadUserData;
-loadUserData = async function () {
-  await _origLoadUserData();
-  // Refresh classes from per-doc collection
-  const classes = await fsGetAllClasses();
-  if (classes.length) cSet('classes', classes);
-};
-
-
-// ─────────────────────────────────────────────
-// FIX 2 — Batch array-contains-any (Firebase limit = 10)
-// Replaces getStudentUids
-// ─────────────────────────────────────────────
-
-async function getStudentUids(classIds) {
-  if (!fbDb || !classIds?.length) return [];
-
-  // Split into chunks of 10 (Firebase hard limit)
-  const chunks = [];
-  for (let i = 0; i < classIds.length; i += 10) {
-    chunks.push(classIds.slice(i, i + 10));
-  }
-
-  const results = [];
-  const seen = new Set();
-
-  for (const chunk of chunks) {
-    try {
-      const snap = await fbDb.collection('profiles')
-        .where('role', '==', 'student')
-        .where('classIds', 'array-contains-any', chunk)
-        .get();
-
-      snap.docs.forEach(d => {
-        if (!seen.has(d.id)) {
-          seen.add(d.id);
-          results.push({ uid: d.id, ...d.data() });
-        }
-      });
-    } catch (e) { console.error('getStudentUids chunk error', e); }
-  }
-
-  return results;
-}
-
-
-// ─────────────────────────────────────────────
-// FIX 3 — Cache teacher student data for 60s
-// Replaces loadTeacherStudents
-// ─────────────────────────────────────────────
-
-let _teacherStudentCache = null;
-let _teacherStudentCacheTime = 0;
-const TEACHER_CACHE_TTL = 60 * 1000; // 60 seconds
-
-async function loadTeacherStudents() {
-  const now = Date.now();
-
-  // Return cached data if fresh
-  if (_teacherStudentCache && (now - _teacherStudentCacheTime) < TEACHER_CACHE_TTL) {
-    // Restore from cache into the live cache object
-    Object.entries(_teacherStudentCache).forEach(([k, v]) => cSet(k, v));
-    return;
-  }
-
-  const myClasses  = gc().filter(c => c.teacherId === CU.id);
-  const myClassIds = myClasses.map(c => c.id);
-  if (!myClassIds.length) return;
-
-  try {
-    const studentProfiles = await getStudentUids(myClassIds); // now batched
-
-    const allStudents = [];
-    const allMoods    = cGet('moods', []);
-    const allGoals    = cGet('goals', []);
-    const allWellness = cGet('wellness', []);
-    const allResps    = cGet('responsibilities', []);
-
-    for (const sp of studentProfiles) {
-      const data = await loadStudentData(sp.uid);
-      if (data.students)          allStudents.push(...(data.students || []));
-      if (data.moods)             mergeInto(allMoods,    data.moods,             'studentId');
-      if (data.goals)             mergeInto(allGoals,    data.goals,             'studentId');
-      if (data.wellness)          mergeInto(allWellness, data.wellness,          'studentId');
-      if (data.responsibilities)  mergeInto(allResps,    data.responsibilities,  'studentId');
-    }
-
-    cSet('students',         allStudents);
-    cSet('moods',            allMoods);
-    cSet('goals',            allGoals);
-    cSet('wellness',         allWellness);
-    cSet('responsibilities', allResps);
-
-    // Save to cache
-    _teacherStudentCache = {
-      students: allStudents,
-      moods: [...allMoods],
-      goals: [...allGoals],
-      wellness: [...allWellness],
-      responsibilities: [...allResps],
-    };
-    _teacherStudentCacheTime = now;
-
-  } catch (e) { console.error('loadTeacherStudents error', e); }
-}
-
-// Call this after any action that changes student data so cache is invalidated
-function invalidateTeacherCache() {
-  _teacherStudentCache = null;
-  _teacherStudentCacheTime = 0;
-}
-
-/* ─────────────────────────────────────────────
-   FIRESTORE RULES — paste into Firebase Console → Firestore → Rules
-   (replacing everything that's there now)
-
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    // Private user data — only the owner
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Profiles — any logged-in user can read (teachers need to find students)
-    // Only the owner can write their own profile
-    match /profiles/{userId} {
-      allow read:  if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Per-class documents — any logged-in user can read
-    // Only authenticated users can create; only the teacher who owns it can delete
-    match /shared_classes/{classId} {
-      allow read:   if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
-    }
-
-    // Legacy shared blob — keep read access so old data still loads
-    match /shared/{doc} {
-      allow read:  if request.auth != null;
-      allow write: if request.auth != null;
-    }
-  }
-}
-───────────────────────────────────────────── */
