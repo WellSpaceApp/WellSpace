@@ -1218,10 +1218,20 @@ async function joinClass(){
     CU.classIds = [...(CU.classIds || []), cls.id];
   }
 
+  // Track which teacher(s) this student is now connected to, as a plain
+  // array of teacher UIDs on their own profile. Security rules can check
+  // this single, direct field to grant a teacher read access to this
+  // student's private /users/{uid} doc — far simpler than cross-referencing
+  // classIds arrays across two different documents inside a rule.
+  const existingTeacherUids = new Set(CU.teacherUids || []);
+  existingTeacherUids.add(cls.teacherUid || cls.teacherId); // teacherUid is the auth uid; fall back if not present
+  CU.teacherUids = [...existingTeacherUids];
+
   if(fbAuth?.currentUser){
-    // Update /profiles/{uid} — this is what the teacher's query reads
+    // Update /profiles/{uid} — this is what the teacher's query reads,
+    // and now also carries teacherUids for the security rule check.
     await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
-      .set({ classIds: CU.classIds }, { merge: true });
+      .set({ classIds: CU.classIds, teacherUids: CU.teacherUids }, { merge: true });
 
     // Update /users/{uid} so loadStudentData() can find/rebuild this student's row
     const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
@@ -1644,7 +1654,11 @@ async function createClass(){
   const existingClasses = await fsGetAllClasses();
   if(existingClasses.find(c=>c.code===code)) return toast('That code already exists — try generating a new one.');
 
-  const newClass = {id:'c'+uid8(),teacherId:CU.id,subject,startTime:start,endTime:end,days,code,color,emoji,logo,bannerMsg};
+  // teacherId is the short display id (used everywhere else in the UI).
+  // teacherUid is the real Firebase Auth uid — needed so students who join
+  // can record which teacher's auth uid to grant read-access to, since
+  // security rules can only check request.auth.uid, not the short id.
+  const newClass = {id:'c'+uid8(),teacherId:CU.id,teacherUid:CU.uid,subject,startTime:start,endTime:end,days,code,color,emoji,logo,bannerMsg};
 
   await fsSetClass(newClass);
 
