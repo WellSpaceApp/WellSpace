@@ -213,18 +213,44 @@ async function loadUserData(){
 }
 
 // Load another user's data (for teachers reading student data)
-async function loadStudentData(uid){
-  if(!fbDb) return {};
+async function loadUserData(){
+  if(!fbDb || !fbAuth?.currentUser) return;
   try {
-    const doc = await fbDb.collection('users').doc(uid).get();
-    if(!doc.exists) return {};
-    const data = doc.data();
-    const result = {};
-    Object.entries(data).forEach(([k,v])=>{ try{ result[k]=JSON.parse(v); }catch{} });
-    return result;
-  } catch(e){ return {}; }
+    // Load user's private data from /users/{uid}
+    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    if(userDoc.exists){
+      const data = userDoc.data();
+      Object.entries(data).forEach(([k,v])=>{
+        try{ cSet(k, JSON.parse(v)); }catch{}
+      });
+    }
+    
+    // ALSO load profile data (classIds, name, etc.) from /profiles/{uid}
+    const profileDoc = await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).get();
+    if(profileDoc.exists){
+      const pdata = profileDoc.data();
+      // Merge profile data into CU if it exists
+      if(pdata.classIds) CU.classIds = pdata.classIds;
+      if(pdata.name) CU.name = pdata.name;
+      if(pdata.grade) CU.grade = pdata.grade;
+      if(pdata.periodOrder) CU.periodOrder = pdata.periodOrder;
+    }
+    
+    // Load shared data (classes) - legacy
+    const sharedDoc = await fbDb.collection('shared').doc('data').get();
+    if(sharedDoc.exists){
+      const data = sharedDoc.data();
+      ['classes'].forEach(k=>{
+        if(data[k]){ try{ cSet(k, JSON.parse(data[k])); }catch{} }
+      });
+    }
+    
+    // Load from new per-doc classes collection
+    const classes = await fsGetAllClasses();
+    if(classes.length) cSet('classes', classes);
+    
+  } catch(e){ console.error('loadUserData error', e); }
 }
-
 // ─────────────────────────────────────────────
 // STUDENT-TEACHER LINK — store uid mapping
 // ─────────────────────────────────────────────
@@ -456,47 +482,56 @@ function logout(){
 // TEACHER — load students across Firestore docs
 // ─────────────────────────────────────────────
 async function loadTeacherStudents(){
-  const myClasses = gc().filter(c=>c.teacherId===CU.id);
-  const myClassIds = myClasses.map(c=>c.id);
-  if(!myClassIds.length) return;
+  const myClasses  = gc().filter(c => c.teacherId === CU.id);
+  const myClassIds = myClasses.map(c => c.id);
+  if (!myClassIds.length) return;
 
   try {
-    // Get all student profiles in my classes
+    // This queries /profiles where classIds array-contains-any teacher's class IDs
     const studentProfiles = await getStudentUids(myClassIds);
 
-    // Load each student's data and merge into cache
     const allStudents = [];
-    const allMoods    = cGet('moods',[]);
-    const allGoals    = cGet('goals',[]);
-    const allWellness = cGet('wellness',[]);
-    const allResps    = cGet('responsibilities',[]);
+    const allMoods    = cGet('moods', []);
+    const allGoals    = cGet('goals', []);
+    const allWellness = cGet('wellness', []);
+    const allResps    = cGet('responsibilities', []);
 
-    for(const sp of studentProfiles){
+    for (const sp of studentProfiles) {
       const data = await loadStudentData(sp.uid);
-      // Merge student entry
-      if(data.students) allStudents.push(...(data.students||[]));
-      // Merge shared data (moods, goals, wellness that this student shared)
-      if(data.moods)          mergeInto(allMoods,    data.moods,    'studentId');
-      if(data.goals)          mergeInto(allGoals,    data.goals,    'studentId');
-      if(data.wellness)       mergeInto(allWellness, data.wellness, 'studentId');
-      if(data.responsibilities) mergeInto(allResps,  data.responsibilities, 'studentId');
+      
+      // FIX: data.students now ALWAYS exists because loadStudentData creates it from profile
+      if (data.students) {
+        // Only add students who are actually in one of teacher's classes
+        const myStudents = data.students.filter(s => 
+          s.classIds && s.classIds.some(id => myClassIds.includes(id))
+        );
+        allStudents.push(...myStudents);
+      }
+      
+      if (data.moods)          mergeInto(allMoods,    data.moods,    'studentId');
+      if (data.goals)          mergeInto(allGoals,    data.goals,    'studentId');
+      if (data.wellness)       mergeInto(allWellness, data.wellness, 'studentId');
+      if (data.responsibilities) mergeInto(allResps, data.responsibilities, 'studentId');
     }
 
-    cSet('students',        allStudents);
-    cSet('moods',           allMoods);
-    cSet('goals',           allGoals);
-    cSet('wellness',        allWellness);
-    cSet('responsibilities',allResps);
-  } catch(e){}
-}
+    cSet('students',         allStudents);
+    cSet('moods',            allMoods);
+    cSet('goals',            allGoals);
+    cSet('wellness',         allWellness);
+    cSet('responsibilities', allResps);
 
-function mergeInto(target, incoming, idKey){
-  incoming.forEach(item=>{
-    const idx = target.findIndex(x=>x.id===item.id || (x[idKey]===item[idKey] && x.date===item.date && x.classId===item.classId));
-    if(idx>=0) target[idx]=item; else target.push(item);
-  });
-}
+    // Save to cache
+    _teacherStudentCache = {
+      students: allStudents,
+      moods: [...allMoods],
+      goals: [...allGoals],
+      wellness: [...allWellness],
+      responsibilities: [...allResps],
+    };
+    _teacherStudentCacheTime = Date.now();
 
+  } catch (e) { console.error('loadTeacherStudents error', e); }
+}
 // ─────────────────────────────────────────────
 // STUDENT DASHBOARD
 // ─────────────────────────────────────────────
@@ -2033,31 +2068,78 @@ async function deleteClass(id) {
 }
 
 // Override homeJoinClass — uses new per-doc classes
-async function homeJoinClass() {
-  const inp  = document.getElementById('home-join-code');
-  const code = inp ? inp.value.trim().toUpperCase() : '';
+async function joinClass() {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
   if (!code) return toast('Please enter a class code.');
 
   const classes = await fsGetAllClasses();
   cSet('classes', classes);
   const cls = classes.find(c => c.code === code);
-  if (!cls) return toast('Class code not found. Double-check with your teacher.');
-  if (CU.classIds && CU.classIds.includes(cls.id)) return toast('You are already in this class!');
+  if (!cls) return toast(`Class code "${code}" not found. Double-check with your teacher.`);
+  if (CU.classIds?.includes(cls.id)) return toast('You\'re already in this class!');
 
+  // Update local student list
   const students = gs();
   const s = students.find(x => x.id === CU.id);
-  if (s) { s.classIds = [...(s.classIds || []), cls.id]; S.set('students', students); CU.classIds = s.classIds; }
+  if (s) { 
+    s.classIds = [...(s.classIds || []), cls.id]; 
+    S.set('students', students); 
+    CU.classIds = s.classIds; 
+  }
 
+  // Update Firestore profile (so teacher can find this student)
   if (fbAuth?.currentUser) {
     await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
       .set({ classIds: CU.classIds }, { merge: true });
+    
+    // ALSO update /users/{uid} so loadStudentData finds the student entry
+    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    let existingStudents = [];
+    if(userDoc.exists){
+      try{ existingStudents = JSON.parse(userDoc.data().students || '[]'); }catch{}
+    }
+    const myEntry = existingStudents.find(x => x.id === CU.id) || {
+      id: CU.id, name: CU.name, email: CU.email, grade: CU.grade,
+      periodOrder: CU.periodOrder || [], joined: CU.joined || today()
+    };
+    myEntry.classIds = CU.classIds;
+    await fbDb.collection('users').doc(fbAuth.currentUser.uid).set({
+      students: JSON.stringify(existingStudents)
+    }, { merge: true });
   }
+  
+  document.getElementById('join-code').value = '';
+  toast(`Joined ${cls.subject}! 🎉`);
+  updateStudentNav();
+  renderClassesSection();
+  invalidateTeacherCache();
+}
+
+  // Update Firestore profile (so teacher can find this student)
+  if (fbAuth?.currentUser) {
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ classIds: CU.classIds }, { merge: true });
+    
+    // ALSO update /users/{uid} so loadStudentData finds the student entry
+    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    let existingStudents = [];
+    if(userDoc.exists){
+      try{ existingStudents = JSON.parse(userDoc.data().students || '[]'); }catch{}
+    }
+    const myEntry = existingStudents.find(x => x.id === CU.id) || {
+      id: CU.id, name: CU.name, email: CU.email, grade: CU.grade,
+      periodOrder: CU.periodOrder || [], joined: CU.joined || today()
+    };
+    myEntry.classIds = CU.classIds;
+    await fbDb.collection('users').doc(fbAuth.currentUser.uid).set({
+      students: JSON.stringify(existingStudents)
+    }, { merge: true });
+  }
+  
   if (inp) inp.value = '';
   toast('Joined ' + cls.subject + '! Check My Classes in the sidebar.');
   updateStudentNav();
   renderHome();
-  
-  // **NEW: Invalidate teacher cache so they see the update immediately**
   invalidateTeacherCache();
 }
 // Override joinClass
