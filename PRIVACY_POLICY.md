@@ -131,6 +131,9 @@ Upon account deletion:
 
 WellSpace does not retain any personal data after account deletion. There is no backup or archive of deleted user data.
 
+**Automatic deletion:** Accounts inactive for 24 months are automatically deleted along with all associated data.
+
+**Important note for educators:** WellSpace is not an official record system. Any student disclosures that require follow-up, documentation, or safeguarding action must be recorded through your school's standard procedures. WellSpace data should never be relied upon as the sole record of a student concern. When a student deletes their account, all their data is permanently removed and cannot be recovered by anyone.
 ---
 
 ## 9. Third-Party Services
