@@ -38,7 +38,7 @@ WellSpace is committed to collecting only the minimum information necessary to o
 
 **What We Do Not Collect**
 
-WellSpace does not collect location data, device identifiers, IP addresses, browsing history, cookie tracking data, or any information beyond what is listed above.
+WellSpace does not directly collect location data, device identifiers, IP addresses, browsing history, or cookie tracking data. However, our third-party infrastructure providers (Google Firebase and GitHub Pages) may automatically log IP addresses as part of standard server operations.
 
 ---
 
@@ -53,7 +53,7 @@ We use the information collected solely to:
 - Send password reset emails when requested by the user
 
 We do not use personal information for advertising, profiling, marketing, or any commercial purpose.
-
+WellSpace does not use personal information to create individual profiles for advertising, analytics, or any purpose beyond operating the platform.
 ---
 
 ## 3. Student Data is Private by Default
@@ -89,6 +89,7 @@ Security measures include:
 - Strict per-user Firestore security rules so each user's data is stored in an isolated private document with no cross-user access possible at the database level
 - Passwords are managed entirely by Firebase Authentication using industry-standard encryption. WellSpace never stores, sees, or has access to user passwords
 - No shared data blobs. Every user has their own isolated Firestore document
+- WellSpace uses browser localStorage to temporarily cache session data for performance. No advertising cookies or third-party tracking pixels are used at any point.
 
 ---
 
