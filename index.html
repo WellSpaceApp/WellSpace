@@ -60,7 +60,7 @@
 <div id="cookie-banner" class="cookie-banner hidden">
   <div class="cookie-banner-inner">
     <p class="cookie-text">
-      🍪 We use a small amount of website analytics (Google Analytics) to see how many people visit WellSpace and which pages are useful - never your mood check-ins, journal entries, or any personal info. Read our <a href="#" onclick="openModal('privacy-modal');return false;">Privacy Policy</a>.
+      🍪 We use a small amount of website analytics (Google Analytics) to see how many people visit WellSpace and which pages are useful - never your mood check-ins, journal entries, or any personal info. Read our <a href="#" onclick="openModal('cookie-policy-modal');return false;">Cookie Policy</a>.
     </p>
     <div class="cookie-actions">
       <button class="btn-outline small" onclick="setCookieConsent(false)">Decline</button>
@@ -672,10 +672,32 @@
       <p><strong>PIPEDA Compliance</strong><br>We comply with Canada's Personal Information Protection and Electronic Documents Act (PIPEDA). We collect only the minimum data necessary to operate WellSpace.</p>
       <p><strong>Deleting your account</strong><br>Delete your account anytime in Profile settings. Your Firebase Auth account, Firestore data, and profile are all permanently deleted immediately. No data is retained after deletion.</p>
       <p><strong>Third-party services</strong><br>Google Firebase (database & auth), EmailJS (verification emails), GitHub Pages (hosting), Google Analytics (basic website usage stats).</p>
-      <p><strong>Google Analytics - what it does and does not see</strong><br>We use Google Analytics (GA4) only to understand general site usage - things like how many people visit, which pages are viewed, and device/browser type. GA never receives your name, email, mood check-ins, sleep or energy logs, goals, journal entries, or any other health-related data - that information stays only in our encrypted Firebase database and is never sent to Google. We do not use Google Signals or ad personalization, and IP addresses are anonymized. Analytics only loads if you accept cookies in the banner shown when you first visit; you can decline and still use WellSpace normally. You can also opt out anytime using Google's <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">Analytics opt-out browser add-on</a>.</p>
+      <p><strong>Google Analytics - what it does and does not see</strong><br>We use Google Analytics (GA4) only to understand general site usage - things like how many people visit, which pages are viewed, and device/browser type. GA never receives your name, email, mood check-ins, sleep or energy logs, goals, journal entries, or any other health-related data - that information stays only in our encrypted Firebase database and is never sent to Google. See our full <a href="#" onclick="closeModal('privacy-modal');openModal('cookie-policy-modal');return false;">Cookie Policy</a> for details.</p>
       <p style="font-size:.78rem;color:var(--muted)">Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
     </div>
     <button class="btn-main small" onclick="closeModal('privacy-modal')" style="margin-top:8px">Got It</button>
+  </div>
+</div>
+
+<!-- COOKIE POLICY MODAL -->
+<div id="cookie-policy-modal" class="modal-bg hidden">
+  <div class="modal" style="max-width:600px;max-height:80vh;overflow-y:auto">
+    <div class="modal-hdr"><h3>🍪 Cookie Policy</h3><button class="modal-close" onclick="closeModal('cookie-policy-modal')">✕</button></div>
+    <p style="font-size:.78rem;color:var(--muted)">Last updated: July 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
+      <p><strong>What cookies are</strong><br>Cookies (and similar tools like local storage) are small pieces of data a website saves in your browser so it can remember things between visits, like whether you're logged in.</p>
+      <p><strong>Cookies WellSpace uses</strong><br>
+        • Login session - keeps you signed in to your account (required for the app to work)<br>
+        • Cookie preference - remembers whether you accepted or declined analytics cookies, so we don't ask you every time<br>
+        • Google Analytics (only if you accept) - basic, anonymized website usage stats
+      </p>
+      <p><strong>We ask once, not every visit</strong><br>When you accept or decline analytics cookies, that choice is saved to your account, not just your browser. So once you've answered, on any device you log in on we already know your answer and won't ask again. You can still change your mind anytime from Profile settings or by clearing your browser data.</p>
+      <p><strong>What Google Analytics does and does not see</strong><br>If you accept, Google Analytics receives basic technical info like page views and device type. It never receives your name, email, mood check-ins, journal entries, or any health-related data - that stays only in our encrypted database. We don't use Google Signals or ad personalization, and IP addresses are anonymized.</p>
+      <p><strong>No advertising cookies</strong><br>WellSpace has no ad trackers and does not use cookies for advertising or to build a profile of you for marketing.</p>
+      <p><strong>Managing cookies</strong><br>You can decline analytics cookies anytime in the banner or by emailing us, and you can always clear cookies through your browser settings. Declining does not affect your ability to use WellSpace - only the login session cookie is required.</p>
+      <p style="font-size:.78rem;color:var(--muted)">This Cookie Policy works alongside our <a href="#" onclick="closeModal('cookie-policy-modal');openModal('privacy-modal');return false;">Privacy Policy</a>. Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    </div>
+    <button class="btn-main small" onclick="closeModal('cookie-policy-modal')" style="margin-top:8px">Got It</button>
   </div>
 </div>
 
@@ -776,6 +798,11 @@
     localStorage.setItem('wellspace_cookie_consent', accepted ? 'accepted' : 'declined');
     document.getElementById('cookie-banner').classList.add('hidden');
     if(accepted) loadGoogleAnalytics();
+    // If someone is logged in, save the choice to their account too,
+    // so it's remembered on any device, not just this browser.
+    if(typeof window.saveCookieConsentToAccount === 'function'){
+      window.saveCookieConsentToAccount(accepted);
+    }
   }
 
   (function initCookieConsent(){
