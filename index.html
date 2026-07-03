@@ -8,11 +8,11 @@
   <meta name="theme-color" content="#0f2942"/>
   <meta property="og:type" content="website" />
 <meta property="og:url" content="https://wellspaceapp.github.io/WellSpace/" />
-<meta property="og:title" content="WellSpace — Student Wellness Web App" />
+<meta property="og:title" content="WellSpace - Student Wellness Web App" />
 <meta property="og:description" content="Free wellness platform for high school students and educators. Private mood check-ins, goal tracking, and teacher dashboards. No download required." />
 <meta property="og:image" content="https://wellspaceapp.github.io/WellSpace/og-image.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="WellSpace — Student Wellness Web App" />
+<meta name="twitter:title" content="WellSpace - Student Wellness Web App" />
 <meta name="twitter:description" content="Free wellness platform for high school students and educators. Private mood check-ins, goal tracking, and teacher dashboards." />
 <meta name="twitter:image" content="https://wellspaceapp.github.io/WellSpace/og-image.png" />
   <meta name="mobile-web-app-capable" content="yes"/>
@@ -33,7 +33,7 @@
 <div id="cookie-banner" class="cookie-banner hidden">
   <div class="cookie-banner-inner">
     <p class="cookie-text">
-      🍪 We use a small amount of website analytics (Google Analytics) to see how many people visit WellSpace and which pages are useful — never your mood check-ins, journal entries, or any personal info. Read our <a href="#" onclick="openModal('privacy-modal');return false;">Privacy Policy</a>.
+      🍪 We use a small amount of website analytics (Google Analytics) to see how many people visit WellSpace and which pages are useful - never your mood check-ins, journal entries, or any personal info. Read our <a href="#" onclick="openModal('privacy-modal');return false;">Privacy Policy</a>.
     </p>
     <div class="cookie-actions">
       <button class="btn-outline small" onclick="setCookieConsent(false)">Decline</button>
@@ -68,7 +68,7 @@
         <span class="role-arrow">→</span>
       </button>
     </div>
-    <p class="entry-help-note">Need mental health support right now? <a href="#" onclick="showHelplines()">Click here</a> — no account needed.</p>
+    <p class="entry-help-note">Need mental health support right now? <a href="#" onclick="showHelplines()">Click here</a> - no account needed.</p>
   </div>
 </div>
 
@@ -145,7 +145,7 @@
             </select>
           </div>
           <div class="fgroup">
-            <label>Class Code <span class="opt-label">(optional — from your teacher)</span></label>
+            <label>Class Code <span class="opt-label">(optional - from your teacher)</span></label>
             <input type="text" id="su-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
             <span class="field-hint">You can join a class later too</span>
           </div>
@@ -170,10 +170,10 @@
         </div>
         <div class="privacy-check">
           <input type="checkbox" id="su-privacy"/>
-          <label for="su-privacy">I agree to the <a href="./privacy.html" target="_blank">Privacy Policy</a> — my data is private and never shared without consent</label>
+          <label for="su-privacy">I agree to the <a href="./privacy.html" target="_blank">Privacy Policy</a> - my data is private and never shared without consent</label>
         </div>
         <div id="signup-err" class="ferr hidden"></div>
-        <button class="btn-main" onclick="doSignup()">Create Account</button>
+        <button class="btn-main" onclick="startSignupVerification()">Create Account</button>
       </div>
     </div>
   </div>
@@ -229,7 +229,7 @@
 
       <!-- GOALS -->
       <section class="dsec" id="s-sec-goals">
-        <div class="sec-hdr"><h3>Weekly Goals & Planner</h3><p>Stay on track — one task at a time</p></div>
+        <div class="sec-hdr"><h3>Weekly Goals & Planner</h3><p>Stay on track - one task at a time</p></div>
         <div class="goals-toolbar">
           <select id="goal-cls-sel" class="sel" onchange="renderGoals()"></select>
           <button class="btn-main small" onclick="openGoalModal()">+ Add Task</button>
@@ -253,7 +253,7 @@
 
       <!-- WELLNESS -->
       <section class="dsec" id="s-sec-wellness">
-        <div class="sec-hdr"><h3>🌱 Wellness Tracker</h3><p>Private — only visible to you (unless you choose to share)</p></div>
+        <div class="sec-hdr"><h3>🌱 Wellness Tracker</h3><p>Private - only visible to you (unless you choose to share)</p></div>
         <div class="wellness-grid">
           <div class="wcard">
             <h4>😴 Hours Slept Last Night</h4>
@@ -305,7 +305,7 @@
           </div>
           <div class="wcard">
             <h4>📝 Private Journal Note</h4>
-            <textarea id="w-journal" rows="4" placeholder="Write anything — thoughts, worries, wins…"></textarea>
+            <textarea id="w-journal" rows="4" placeholder="Write anything - thoughts, worries, wins…"></textarea>
             <p class="privacy-note">🔒 This is always private. Never shared with anyone.</p>
             <button class="btn-main small" onclick="saveJournal()">Save Note</button>
             <div id="journal-saved" class="hidden" style="color:var(--green);font-size:.85rem;margin-top:6px">✓ Saved privately</div>
@@ -315,7 +315,7 @@
 
       <!-- HELP & CRISIS -->
       <section class="dsec" id="s-sec-help">
-        <div class="sec-hdr"><h3>💙 Help & Crisis Support</h3><p>You're not alone — real people are available 24/7</p></div>
+        <div class="sec-hdr"><h3>💙 Help & Crisis Support</h3><p>You're not alone - real people are available 24/7</p></div>
         <div id="help-content"></div>
       </section>
 
@@ -359,7 +359,7 @@
           </div>
           <div class="profile-card">
             <h4 style="color:var(--navy);margin-bottom:4px">📋 My Responsibilities</h4>
-            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Add things outside of school — work, family, sports, etc.</p>
+            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Add things outside of school - work, family, sports, etc.</p>
             <div class="fgroup"><label>Responsibility</label><input type="text" id="resp-text" placeholder="e.g. Part-time job, babysit siblings…"/></div>
             <div class="fgroup"><label>Days / When</label><input type="text" id="resp-when" placeholder="e.g. Mon–Wed 4–8pm"/></div>
             <div class="fgroup"><label>Hours per week (approx)</label><input type="number" id="resp-hours" min="0" max="80" placeholder="e.g. 15"/></div>
@@ -535,7 +535,7 @@
         <option value="other">📌 Other</option>
       </select></div>
     <div class="fgroup"><label>Class (optional)</label>
-      <select id="gm-class"><option value="">— No specific class —</option></select></div>
+      <select id="gm-class"><option value=""> - No specific class - </option></select></div>
     <div class="modal-foot">
       <button class="btn-main" onclick="addGoal()">Add Task</button>
       <button class="btn-outline" onclick="closeModal('goal-modal')">Cancel</button>
@@ -547,7 +547,7 @@
 <div id="class-modal" class="modal-bg hidden">
   <div class="modal">
     <div class="modal-hdr"><h3>➕ Create Class</h3><button class="modal-close" onclick="closeModal('class-modal')">✕</button></div>
-    <div class="fgroup"><label>Subject Name</label><input type="text" id="cm-subject" placeholder="e.g. English — Grade 10 (ENG2D)"/></div>
+    <div class="fgroup"><label>Subject Name</label><input type="text" id="cm-subject" placeholder="e.g. English - Grade 10 (ENG2D)"/></div>
     <div class="fgroup two-col">
       <div><label>Start Time</label><input type="time" id="cm-start" value="09:00"/></div>
       <div><label>End Time</label><input type="time" id="cm-end" value="09:45"/></div>
@@ -625,16 +625,16 @@
     <div class="modal-hdr"><h3>🔒 Privacy Policy</h3><button class="modal-close" onclick="closeModal('privacy-modal')">✕</button></div>
     <p style="font-size:.78rem;color:var(--muted)">Last updated: June 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
     <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
-      <p><strong>What we collect</strong><br>Name, email, grade (students) or school/province (teachers), mood check-ins, sleep logs, energy logs, goals, journal entries, and class codes. Nothing else — no location, no device ID, no browsing history.</p>
-      <p><strong>Student data is private by default</strong><br>Every entry you make is private. Data is only visible to your teacher when YOU actively click "Share with Teacher." Teachers never see anything you haven't explicitly shared. Your journal is always 100% private — no one can ever see it.</p>
+      <p><strong>What we collect</strong><br>Name, email, grade (students) or school/province (teachers), mood check-ins, sleep logs, energy logs, goals, journal entries, and class codes. Nothing else - no location, no device ID, no browsing history.</p>
+      <p><strong>Student data is private by default</strong><br>Every entry you make is private. Data is only visible to your teacher when YOU actively click "Share with Teacher." Teachers never see anything you haven't explicitly shared. Your journal is always 100% private - no one can ever see it.</p>
       <p><strong>Who sees your data</strong><br>
-        • You — always see your own data<br>
-        • Your teacher — only data you've shared with them<br>
-        • Other teachers — nothing<br>
-        • Other students — nothing<br>
-        • WellSpace — nothing beyond what's needed to run the app
+        • You - always see your own data<br>
+        • Your teacher - only data you've shared with them<br>
+        • Other teachers - nothing<br>
+        • Other students - nothing<br>
+        • WellSpace - nothing beyond what's needed to run the app
       </p>
-      <p><strong>How we store it</strong><br>All data is stored on Google Firebase with encrypted HTTPS connections and strict per-user Firestore security rules. Each user's data is stored in their own private document — no shared blobs, no cross-user access. Passwords are never stored by us — Firebase Authentication handles them entirely with industry-standard encryption.</p>
+      <p><strong>How we store it</strong><br>All data is stored on Google Firebase with encrypted HTTPS connections and strict per-user Firestore security rules. Each user's data is stored in their own private document - no shared blobs, no cross-user access. Passwords are never stored by us - Firebase Authentication handles them entirely with industry-standard encryption.</p>
       <p><strong>We never</strong><br>
         • Sell your data to anyone<br>
         • Use your data for advertising<br>
@@ -645,7 +645,7 @@
       <p><strong>PIPEDA Compliance</strong><br>We comply with Canada's Personal Information Protection and Electronic Documents Act (PIPEDA). We collect only the minimum data necessary to operate WellSpace.</p>
       <p><strong>Deleting your account</strong><br>Delete your account anytime in Profile settings. Your Firebase Auth account, Firestore data, and profile are all permanently deleted immediately. No data is retained after deletion.</p>
       <p><strong>Third-party services</strong><br>Google Firebase (database & auth), EmailJS (verification emails), GitHub Pages (hosting), Google Analytics (basic website usage stats).</p>
-      <p><strong>Google Analytics — what it does and does not see</strong><br>We use Google Analytics (GA4) only to understand general site usage — things like how many people visit, which pages are viewed, and device/browser type. GA never receives your name, email, mood check-ins, sleep or energy logs, goals, journal entries, or any other health-related data — that information stays only in our encrypted Firebase database and is never sent to Google. We do not use Google Signals or ad personalization, and IP addresses are anonymized. Analytics only loads if you accept cookies in the banner shown when you first visit; you can decline and still use WellSpace normally. You can also opt out anytime using Google's <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">Analytics opt-out browser add-on</a>.</p>
+      <p><strong>Google Analytics - what it does and does not see</strong><br>We use Google Analytics (GA4) only to understand general site usage - things like how many people visit, which pages are viewed, and device/browser type. GA never receives your name, email, mood check-ins, sleep or energy logs, goals, journal entries, or any other health-related data - that information stays only in our encrypted Firebase database and is never sent to Google. We do not use Google Signals or ad personalization, and IP addresses are anonymized. Analytics only loads if you accept cookies in the banner shown when you first visit; you can decline and still use WellSpace normally. You can also opt out anytime using Google's <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">Analytics opt-out browser add-on</a>.</p>
       <p style="font-size:.78rem;color:var(--muted)">Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
     </div>
     <button class="btn-main small" onclick="closeModal('privacy-modal')" style="margin-top:8px">Got It</button>
@@ -712,7 +712,7 @@
 <!-- TOAST -->
 <div id="toast" class="toast hidden"></div>
 
-<!-- FIREBASE — must load BEFORE script.js -->
+<!-- FIREBASE - must load BEFORE script.js -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
