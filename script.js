@@ -389,6 +389,44 @@ function authTab(tab){
 }
 
 // ─────────────────────────────────────────────
+// COOKIE CONSENT - synced to the account, not just the browser
+// So the consent question only ever gets asked once per account,
+// even if the student logs in on a different device later.
+// ─────────────────────────────────────────────
+async function saveCookieConsentToAccount(accepted){
+  if(!fbAuth?.currentUser) return; // not logged in yet, localStorage handles it for now
+  try {
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).set(
+      { cookieConsent: accepted, cookieConsentDate: today() },
+      { merge: true }
+    );
+  } catch(e){}
+}
+window.saveCookieConsentToAccount = saveCookieConsentToAccount;
+
+async function syncCookieConsentAfterLogin(uid){
+  try {
+    const profile = await getProfile(uid);
+    const banner = document.getElementById('cookie-banner');
+    if(profile && typeof profile.cookieConsent === 'boolean'){
+      // Account already answered before (maybe on another device) - use that,
+      // don't ask again.
+      localStorage.setItem('wellspace_cookie_consent', profile.cookieConsent ? 'accepted' : 'declined');
+      if(banner) banner.classList.add('hidden');
+      if(profile.cookieConsent && typeof loadGoogleAnalytics==='function') loadGoogleAnalytics();
+    } else {
+      // Account has no answer yet. If this browser already answered
+      // (e.g. they chose on the entry screen before logging in), save
+      // that answer to the account now so it's remembered going forward.
+      const local = localStorage.getItem('wellspace_cookie_consent');
+      if(local === 'accepted' || local === 'declined'){
+        await saveCookieConsentToAccount(local === 'accepted');
+      }
+    }
+  } catch(e){}
+}
+
+// ─────────────────────────────────────────────
 // AUTH - LOGIN (Firebase Auth)
 // ─────────────────────────────────────────────
 async function doLogin(){
@@ -413,6 +451,7 @@ async function doLogin(){
 
     CU = { ...profile, id: profile.localId || uid, uid };
     await loadUserData();
+    syncCookieConsentAfterLogin(uid);
 
     toast(`Welcome back, ${CU.name}! 👋`);
     if(authRole==='student') loadStudentDash();
@@ -2067,6 +2106,7 @@ async function confirmVerifyCode(){
       pendingVerify = null;
       closeModal('verify-modal');
       toast(`Account created! Welcome, ${name} 🎉`);
+      syncCookieConsentAfterLogin(CU.uid);
       if(CU.role==='student') loadStudentDash(); else loadTeacherDash();
     } catch(e){
       showErr(errEl, e.code==='auth/email-already-in-use'
@@ -2132,6 +2172,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         if(profile){
           CU = { ...profile, id: profile.localId || user.uid, uid: user.uid };
           await loadUserData();
+          syncCookieConsentAfterLogin(user.uid);
           if(profile.role==='student') loadStudentDash();
           else { await loadTeacherStudents(); loadTeacherDash(); }
         } else {
