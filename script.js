@@ -6,6 +6,23 @@
 // ─────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// XSS PREVENTION - escape any user-supplied text before it goes into
+// innerHTML. Use this on every field a student/teacher typed themselves
+// (names, class subjects, task/goal text, journal entries, banner
+// messages, responsibilities, etc). Never needed for values you fully
+// control (hardcoded strings, computed dates, enum labels like mood names).
+// ─────────────────────────────────────────────
+function escapeHtml(str){
+  if(str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
 const NEGATIVE_MOODS = ['Sad','Frustrated','Tired','Confused'];
 const MOOD_CFG = {
   Happy:     {icon:'😊', msg:"You're radiating good energy today! Keep it up 🌟"},
@@ -108,7 +125,10 @@ async function fsSet(key, value){
   try {
     await fbDb.collection('users').doc(fbAuth.currentUser.uid)
       .set({ [key]: JSON.stringify(value) }, { merge: true });
-  } catch(e){}
+  } catch(e){
+    console.error('fsSet failed for key', key, e);
+    toast('⚠️ Could not save - check your connection and try again.');
+  }
 }
 
 // Read a key from the current user's private Firestore doc
@@ -128,7 +148,10 @@ async function fsSetShared(key, value){
   try {
     await fbDb.collection('shared').doc('data')
       .set({ [key]: JSON.stringify(value) }, { merge: true });
-  } catch(e){}
+  } catch(e){
+    console.error('fsSetShared failed for key', key, e);
+    toast('⚠️ Could not save - check your connection and try again.');
+  }
 }
 
 // Read from shared collection
@@ -240,7 +263,10 @@ async function saveProfile(uid, profile){
   if(!fbDb) return;
   try {
     await fbDb.collection('profiles').doc(uid).set(profile, { merge: true });
-  } catch(e){}
+  } catch(e){
+    console.error('saveProfile failed', e);
+    toast('⚠️ Could not save your profile - check your connection and try again.');
+  }
 }
 
 async function getProfile(uid){
@@ -400,7 +426,7 @@ async function saveCookieConsentToAccount(accepted){
       { cookieConsent: accepted, cookieConsentDate: today() },
       { merge: true }
     );
-  } catch(e){}
+  } catch(e){ console.error('saveCookieConsentToAccount failed', e); }
 }
 window.saveCookieConsentToAccount = saveCookieConsentToAccount;
 
@@ -423,7 +449,7 @@ async function syncCookieConsentAfterLogin(uid){
         await saveCookieConsentToAccount(local === 'accepted');
       }
     }
-  } catch(e){}
+  } catch(e){ console.error('syncCookieConsentAfterLogin failed', e); }
 }
 
 // ─────────────────────────────────────────────
@@ -697,7 +723,7 @@ function renderHome(){
     [0,5,"Very late, {n}! 🌙 You need rest. Your goals will be here tomorrow."],
   ];
   const [, , msg] = msgs.find(([s,e])=>hour>=s&&hour<e)||msgs[0];
-  bannerEl.innerHTML=`<strong>${msg.replace('{n}',CU.name)}</strong><p>${new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</p>`;
+  bannerEl.innerHTML=`<strong>${msg.replace('{n}',escapeHtml(CU.name))}</strong><p>${new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</p>`;
 
   const goals=ggo().filter(g=>g.studentId===CU.id&&!g.done).slice(0,4);
   const todayDay=new Date().toLocaleDateString('en-CA',{weekday:'long'});
@@ -709,7 +735,7 @@ function renderHome(){
       ${todayGoals.map(g=>`
         <div class="goal-row" style="margin-bottom:8px">
           <div class="gcheck ${g.done?'checked':''}" onclick="quickToggleGoal('${g.id}');">${g.done?'✓':''}</div>
-          <div class="ginfo"><h5>${g.task}</h5><span class="gmeta">🕐 ${g.time} · ${g.duration}</span></div>
+          <div class="ginfo"><h5>${escapeHtml(g.task)}</h5><span class="gmeta">🕐 ${escapeHtml(g.time)} · ${escapeHtml(g.duration)}</span></div>
           <span class="gtype-badge gtype-${g.type||'study'}">${typeLabel(g.type)}</span>
         </div>
       `).join('')}
@@ -744,8 +770,8 @@ function renderMoodCheck(){
     return `
       <div class="mood-card">
         <div class="mood-card-hdr">
-          <h4>${item.isClass ? '📚 ' : ''}${item.label}</h4>
-          ${item.time ? `<span class="cls-time">${item.time}</span>` : ''}
+          <h4>${item.isClass ? '📚 ' : ''}${escapeHtml(item.label)}</h4>
+          ${item.time ? `<span class="cls-time">${escapeHtml(item.time)}</span>` : ''}
         </div>
         <div class="mood-btns">
           ${Object.keys(MOOD_CFG).map(mood=>`
@@ -815,8 +841,8 @@ function showSWPopup(mood){
     contactEl.innerHTML = `
       <div class="sw-contact-box">
         <strong>Your School Social Worker</strong>
-        <div>${swInfo.name}</div>
-        <div><a href="mailto:${swInfo.email}">${swInfo.email}</a></div>
+        <div>${escapeHtml(swInfo.name)}</div>
+        <div><a href="mailto:${escapeHtml(swInfo.email)}">${escapeHtml(swInfo.email)}</a></div>
         <p style="font-size:.78rem;color:var(--muted);margin-top:6px">They won't be notified automatically - this is just their contact info.</p>
       </div>`;
   } else {
@@ -840,7 +866,7 @@ function renderGoalsSection(){
   const sel = document.getElementById('goal-cls-sel');
   if(hasClasses()){
     sel.style.display = '';
-    sel.innerHTML = `<option value="">All Tasks</option>` + myClasses.map(c=>`<option value="${c.id}">${c.subject}</option>`).join('');
+    sel.innerHTML = `<option value="">All Tasks</option>` + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
   } else {
     sel.style.display = 'none';
   }
@@ -871,8 +897,8 @@ function renderGoals(){
       row.innerHTML=`
         <div class="gcheck ${g.done?'checked':''}" onclick="toggleGoal('${g.id}')">${g.done?'✓':''}</div>
         <div class="ginfo">
-          <h5 style="${g.done?'text-decoration:line-through':''}">${g.task}</h5>
-          <span class="gmeta">🕐 ${g.time} · ⏱ ${g.duration}</span>
+          <h5 style="${g.done?'text-decoration:line-through':''}">${escapeHtml(g.task)}</h5>
+          <span class="gmeta">🕐 ${escapeHtml(g.time)} · ⏱ ${escapeHtml(g.duration)}</span>
         </div>
         <span class="gtype-badge gtype-${g.type||'study'}">${typeLabel(g.type)}</span>
         <button class="gdel" onclick="deleteGoal('${g.id}')">🗑</button>
@@ -902,7 +928,7 @@ function openGoalModal(){
   const clsGroup = sel?.closest('.fgroup');
   if(hasClasses()){
     if(clsGroup) clsGroup.style.display = '';
-    sel.innerHTML = `<option value=""> - No specific class - </option>` + myClasses.map(c=>`<option value="${c.id}">${c.subject}</option>`).join('');
+    sel.innerHTML = `<option value=""> - No specific class - </option>` + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
   } else {
     if(clsGroup) clsGroup.style.display = 'none';
     sel.innerHTML = '';
@@ -990,8 +1016,8 @@ function renderStats(){
   hist.innerHTML=[...myMoods].reverse().slice(0,20).map(m=>{
     const cls=classes.find(c=>c.id===m.classId);
     return `<div class="mood-hist-item">
-      <span class="mtag ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${m.mood}</span>
-      <span>${cls?.subject||m.classLabel||'General'}</span>
+      <span class="mtag ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)}</span>
+      <span>${escapeHtml(cls?.subject||m.classLabel||'General')}</span>
       <span style="margin-left:auto;color:var(--muted);font-size:.78rem">${m.date}</span>
     </div>`;
   }).join('')||'<p style="color:var(--muted);padding:16px 0">No mood history yet.</p>';
@@ -1003,13 +1029,13 @@ function renderWellnessSection(){
   const sleepLogs = logs.filter(l => l.type==='sleep').slice(-5).reverse();
   document.getElementById('sleep-log-display').innerHTML = sleepLogs.map(l=>`
     <div class="wlog-entry">
-      <span>${l.date} · ${l.hours}h · ${l.quality}</span>
+      <span>${escapeHtml(l.date)} · ${escapeHtml(l.hours)}h · ${escapeHtml(l.quality)}</span>
       <span style="color:var(--muted);font-size:.75rem">${l.sharedWith ? '📤 Sent to teacher' : '🔒 Private'}</span>
     </div>`).join('');
 
   const respLogs = logs.filter(l => l.type==='resp').slice(-5).reverse();
   document.getElementById('resp-log-display').innerHTML = respLogs.map(l=>`
-    <div class="wlog-entry"><span>${l.text}</span><span>${l.date}</span></div>`).join('');
+    <div class="wlog-entry"><span>${escapeHtml(l.text)}</span><span>${escapeHtml(l.date)}</span></div>`).join('');
 
   const myClasses = gc().filter(c => CU.classIds?.includes(c.id));
   const shareRows = ['sleep-share-row','resp-share-row','energy-share-row'];
@@ -1149,9 +1175,9 @@ function buildClassBannerHTML(c, isTeacher=false){
   if(c.logo || c.emoji){
     return `<div class="cls-banner-header" style="background:${color};color:${textColor}">
       ${c.logo
-        ? `<img class="cls-banner-logo" src="${c.logo}" alt="logo"/>`
-        : `<span class="cls-banner-emoji">${c.emoji}</span>`}
-      <div class="cls-banner-text"><h4 style="color:${textColor}">${c.subject}</h4></div>
+        ? `<img class="cls-banner-logo" src="${escapeHtml(c.logo)}" alt="logo"/>`
+        : `<span class="cls-banner-emoji">${escapeHtml(c.emoji)}</span>`}
+      <div class="cls-banner-text"><h4 style="color:${textColor}">${escapeHtml(c.subject)}</h4></div>
     </div>`;
   }
   return `<div class="cls-banner" style="background:${color}"></div>`;
@@ -1182,9 +1208,9 @@ function renderClassesSection(){
         <div class="s-class-card">
           ${bannerHtml}
           <div class="s-class-card-body">
-            <div class="s-class-meta">Period ${i+1} · ${c.startTime} - ${c.endTime} · ${c.days?.join(', ')||'-'}</div>
-            <span class="cls-code-badge">${c.code}</span>
-            ${c.bannerMsg?`<div class="cls-banner-msg" style="margin-top:10px">${c.bannerMsg}</div>`:''}
+            <div class="s-class-meta">Period ${i+1} · ${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)} · ${escapeHtml(c.days?.join(', ')||'-')}</div>
+            <span class="cls-code-badge">${escapeHtml(c.code)}</span>
+            ${c.bannerMsg?`<div class="cls-banner-msg" style="margin-top:10px">${escapeHtml(c.bannerMsg)}</div>`:''}
           </div>
         </div>`;
     }).join('');
@@ -1198,7 +1224,7 @@ function renderClassesSection(){
     document.getElementById('period-order-list').innerHTML=orderedClasses.map((c,i)=>`
       <div class="period-row" id="pr-${c.id}" data-id="${c.id}">
         <span class="period-handle">⠿</span>
-        <span style="flex:1">${i+1}. ${c.subject} <span style="color:var(--muted);font-size:.8rem">${c.startTime} - ${c.endTime}</span></span>
+        <span style="flex:1">${i+1}. ${escapeHtml(c.subject)} <span style="color:var(--muted);font-size:.8rem">${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)}</span></span>
         <div class="period-arrows">
           <button onclick="movePeriod('${c.id}',-1)" title="Move up">▲</button>
           <button onclick="movePeriod('${c.id}',1)" title="Move down">▼</button>
@@ -1373,7 +1399,7 @@ function renderTeacherOverview(){
   prev.innerHTML=`
     <div style="background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--r-md);padding:16px 20px;margin-top:4px">
       <h4 style="color:var(--red);margin-bottom:10px">⚠️ ${alerts.length} student${alerts.length>1?'s need':'needs'} support today</h4>
-      ${alerts.slice(0,4).map(a=>{ const s=students.find(x=>x.id===a.studentId); return `<p style="font-size:.88rem;margin-bottom:4px">• <strong>${s?.name||'Student'}</strong> - feeling <em>${a.mood}</em></p>`; }).join('')}
+      ${alerts.slice(0,4).map(a=>{ const s=students.find(x=>x.id===a.studentId); return `<p style="font-size:.88rem;margin-bottom:4px">• <strong>${escapeHtml(s?.name||'Student')}</strong> - feeling <em>${escapeHtml(a.mood)}</em></p>`; }).join('')}
     </div>`;
 }
 
@@ -1392,11 +1418,11 @@ function renderTeacherClasses(){
         ${bannerHtml}
         <div class="t-class-card-body">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span class="cls-code-badge">${c.code}</span>
+            <span class="cls-code-badge">${escapeHtml(c.code)}</span>
             <span style="font-size:.8rem;color:var(--muted)">${count} student${count!==1?'s':''}</span>
           </div>
-          <span class="cls-time">🕐 ${c.startTime} - ${c.endTime} · ${c.days?.join(', ')||'-'}</span>
-          ${c.bannerMsg ? `<div class="cls-banner-msg">${c.bannerMsg}</div>` : ''}
+          <span class="cls-time">🕐 ${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)} · ${escapeHtml(c.days?.join(', ')||'-')}</span>
+          ${c.bannerMsg ? `<div class="cls-banner-msg">${escapeHtml(c.bannerMsg)}</div>` : ''}
           <div class="t-class-actions">
             <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
             <button class="btn-outline small" onclick="deleteClass('${c.id}')" style="padding:7px 10px">🗑</button>
@@ -1411,7 +1437,7 @@ function renderStudentTable(){
   const myClasses = getMyClasses();
   const students  = getMyStudents();
   const filterSel = document.getElementById('t-cls-filter');
-  filterSel.innerHTML = '<option value="">All Classes</option>' + myClasses.map(c=>`<option value="${c.id}">${c.subject}</option>`).join('');
+  filterSel.innerHTML = '<option value="">All Classes</option>' + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
 
   const search    = (document.getElementById('t-search')?.value||'').toLowerCase();
   const clsFilter = document.getElementById('t-cls-filter')?.value||'';
@@ -1436,18 +1462,18 @@ function renderStudentTable(){
           const cls        = myClasses.filter(c=>s.classIds?.includes(c.id));
           const sleepLog   = gw().filter(w=>w.studentId===s.id&&w.type==='sleep'&&w.shared&&w.date===today())[0];
           const moodDisplay= todayMoods.length
-            ? todayMoods.map(m=>`<span class="mood-tag-sm ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${m.mood}</span>`).join('')
+            ? todayMoods.map(m=>`<span class="mood-tag-sm ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)}</span>`).join('')
             : '<span style="color:var(--muted);font-size:.82rem">Not logged</span>';
           const clsNames   = cls.map(c=>{
             const short = c.subject.length > 20 ? c.subject.slice(0,18)+'…' : c.subject;
-            return `<span title="${c.subject}" style="display:inline-block;background:var(--blue-pale);color:var(--blue);border-radius:5px;padding:1px 6px;font-size:.72rem;font-weight:700;margin:1px">${short}</span>`;
+            return `<span title="${escapeHtml(c.subject)}" style="display:inline-block;background:var(--blue-pale);color:var(--blue);border-radius:5px;padding:1px 6px;font-size:.72rem;font-weight:700;margin:1px">${escapeHtml(short)}</span>`;
           }).join('');
           return `<tr class="${isAlert?'alert-row':''}">
-            <td><strong>${s.name}</strong><br><span style="font-size:.75rem;color:var(--muted)">${s.email}</span></td>
-            <td style="white-space:nowrap">${s.grade||'-'}</td>
+            <td><strong>${escapeHtml(s.name)}</strong><br><span style="font-size:.75rem;color:var(--muted)">${escapeHtml(s.email)}</span></td>
+            <td style="white-space:nowrap">${escapeHtml(s.grade||'-')}</td>
             <td>${clsNames||'-'}</td>
             <td style="min-width:120px">${moodDisplay}</td>
-            <td style="white-space:nowrap">${sleepLog?`<strong>${sleepLog.hours}h</strong> · ${sleepLog.quality}`:'<span style="color:var(--muted)"> - </span>'}</td>
+            <td style="white-space:nowrap">${sleepLog?`<strong>${escapeHtml(sleepLog.hours)}h</strong> · ${escapeHtml(sleepLog.quality)}`:'<span style="color:var(--muted)"> - </span>'}</td>
             <td style="white-space:nowrap">${isAlert?'<span style="color:var(--red);font-weight:700;font-size:.85rem">⚠️ Needs support</span>':'<span style="color:var(--green);font-size:.85rem">✅ OK</span>'}</td>
           </tr>`;
         }).join('')}
@@ -1470,10 +1496,10 @@ function renderMoodReports(){
     const isAlert=sm.some(m=>NEGATIVE_MOODS.includes(m.mood)&&m.date===today());
     return `
       <div class="t-mood-card" ${isAlert?'style="border:2px solid var(--red)"':''}>
-        <h4>${s.name} ${isAlert?'⚠️':''}</h4>
+        <h4>${escapeHtml(s.name)} ${isAlert?'⚠️':''}</h4>
         ${Object.entries(counts).map(([mood,n])=>`
           <div class="mbar-row">
-            <span style="width:80px;font-size:.78rem">${MOOD_CFG[mood]?.icon} ${mood}</span>
+            <span style="width:80px;font-size:.78rem">${MOOD_CFG[mood]?.icon} ${escapeHtml(mood)}</span>
             <div class="mbar-track"><div class="mbar-fill" style="width:${(n/total*100).toFixed(0)}%;background:${NEGATIVE_MOODS.includes(mood)?'var(--red)':'var(--blue)'}"></div></div>
             <span style="font-size:.78rem">${n}</span>
           </div>`).join('')||'<p style="color:var(--muted);font-size:.82rem">No shared moods yet</p>'}
@@ -1506,11 +1532,11 @@ function renderWellnessTable(){
       const s = students.find(x => x.id === sid);
       const totalHours = resps.reduce((acc,r) => acc+(parseFloat(r.hours)||0), 0);
       return `<div class="t-goals-student" style="margin-bottom:12px">
-        <h4>${s?.name||'Student'} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${totalHours>0?'~'+totalHours+'h/week outside school':''}</span></h4>
+        <h4>${escapeHtml(s?.name||'Student')} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${totalHours>0?'~'+totalHours+'h/week outside school':''}</span></h4>
         ${resps.map(r=>`<div class="t-goal-row">
           <span>📌</span>
-          <div><strong>${r.text}</strong>${r.when?` <span style="color:var(--muted)">(${r.when})</span>`:''}</div>
-          ${r.hours?`<span style="margin-left:auto;color:var(--muted);font-size:.8rem">~${r.hours}h/wk</span>`:''}
+          <div><strong>${escapeHtml(r.text)}</strong>${r.when?` <span style="color:var(--muted)">(${escapeHtml(r.when)})</span>`:''}</div>
+          ${r.hours?`<span style="margin-left:auto;color:var(--muted);font-size:.8rem">~${escapeHtml(r.hours)}h/wk</span>`:''}
         </div>`).join('')}
       </div>`;
     }).join('');
@@ -1523,15 +1549,15 @@ function renderWellnessTable(){
         ${allW.map(w => {
           const s = students.find(x => x.id === w.studentId);
           const cls = classes.find(c => c.id === w.sharedWith?.classId);
-          const data = w.type==='sleep' ? `${w.hours}h · ${w.quality}`
-                     : w.type==='energy' ? `Energy: ${w.energy}/10 · 💧${w.water} glasses`
-                     : w.text||'-';
+          const data = w.type==='sleep' ? `${escapeHtml(w.hours)}h · ${escapeHtml(w.quality)}`
+                     : w.type==='energy' ? `Energy: ${escapeHtml(w.energy)}/10 · 💧${escapeHtml(w.water)} glasses`
+                     : escapeHtml(w.text||'-');
           return `<tr>
-            <td><strong>${s?.name||'-'}</strong></td>
-            <td style="text-transform:capitalize">${w.type}</td>
+            <td><strong>${escapeHtml(s?.name||'-')}</strong></td>
+            <td style="text-transform:capitalize">${escapeHtml(w.type)}</td>
             <td>${data}</td>
-            <td style="font-size:.82rem;color:var(--muted)">${cls?.subject||'-'}</td>
-            <td>${w.date}</td>
+            <td style="font-size:.82rem;color:var(--muted)">${escapeHtml(cls?.subject||'-')}</td>
+            <td>${escapeHtml(w.date)}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -1548,9 +1574,9 @@ function renderTeacherGoals(){
   el.innerHTML=students.map(s=>{
     const gs_=ggo().filter(g=>g.studentId===s.id);
     return `<div class="t-goals-student">
-      <h4>${s.name} <span style="font-weight:400;color:var(--muted);font-size:.82rem">${gs_.length} task${gs_.length!==1?'s':''}</span></h4>
+      <h4>${escapeHtml(s.name)} <span style="font-weight:400;color:var(--muted);font-size:.82rem">${gs_.length} task${gs_.length!==1?'s':''}</span></h4>
       ${gs_.slice(0,6).map(g=>`
-        <div class="t-goal-row">${g.done?'✅':'⬜'} <strong>${g.day}</strong> ${g.time} - ${g.task} (${g.duration})</div>`).join('')
+        <div class="t-goal-row">${g.done?'✅':'⬜'} <strong>${escapeHtml(g.day)}</strong> ${escapeHtml(g.time)} - ${escapeHtml(g.task)} (${escapeHtml(g.duration)})</div>`).join('')
       || '<p style="font-size:.82rem;color:var(--muted)">No goals entered yet.</p>'}
       ${gs_.length>6?`<p style="font-size:.78rem;color:var(--muted);margin-top:4px">+${gs_.length-6} more</p>`:''}
     </div>`;
@@ -1571,8 +1597,8 @@ function renderAlerts(){
     const cls=gc().find(c=>c.id===recent.classId);
     return `<div class="alert-card-t">
       <span style="font-size:1.5rem">⚠️</span>
-      <div><h5>${s?.name||'Student'}</h5>
-      <p style="font-size:.85rem;color:var(--text-2)">Feeling <strong>${recent.mood}</strong> in ${cls?.subject||recent.classLabel||'class'} on ${recent.date}</p></div>
+      <div><h5>${escapeHtml(s?.name||'Student')}</h5>
+      <p style="font-size:.85rem;color:var(--text-2)">Feeling <strong>${escapeHtml(recent.mood)}</strong> in ${escapeHtml(cls?.subject||recent.classLabel||'class')} on ${escapeHtml(recent.date)}</p></div>
       <span class="alert-abadge">${ms.length} alert${ms.length>1?'s':''}</span>
     </div>`;
   }).join('');
@@ -1593,11 +1619,11 @@ function renderSettings(){
     document.getElementById('sw-email').value=CU.socialWorker.email||'';
   }
   document.getElementById('t-account-info').innerHTML=`
-    <p><strong>Name:</strong> ${CU.name}</p>
-    <p><strong>Email:</strong> ${CU.email}</p>
-    <p><strong>School:</strong> ${CU.school||'-'}</p>
-    <p><strong>Province:</strong> ${CU.province||'-'}</p>
-    <p><strong>Joined:</strong> ${CU.joined||'-'}</p>
+    <p><strong>Name:</strong> ${escapeHtml(CU.name)}</p>
+    <p><strong>Email:</strong> ${escapeHtml(CU.email)}</p>
+    <p><strong>School:</strong> ${escapeHtml(CU.school||'-')}</p>
+    <p><strong>Province:</strong> ${escapeHtml(CU.province||'-')}</p>
+    <p><strong>Joined:</strong> ${escapeHtml(CU.joined||'-')}</p>
   `;
 }
 
@@ -1665,7 +1691,10 @@ async function fsDeleteClass(classId){
   if(!fbDb) return;
   try {
     await fbDb.collection('shared_classes').doc(classId).delete();
-  } catch(e){}
+  } catch(e){
+    console.error('fsDeleteClass failed', e);
+    toast('⚠️ Could not delete class - check your connection and try again.');
+  }
 }
 
 async function fsGetAllClasses(){
@@ -1688,6 +1717,7 @@ async function createClass(){
   const logo     = pendingLogoDataUrl||null;
 
   if(!subject||!code)return toast('Please fill in subject and code.');
+  if(!/^[A-Z0-9]{3,12}$/.test(code)) return toast('Class code must be 3-12 letters/numbers only.');
 
   // Check code uniqueness across all class docs
   const existingClasses = await fsGetAllClasses();
@@ -1873,8 +1903,8 @@ function renderRespList(){
   el.innerHTML = all.map(r => `
     <div class="resp-item">
       <div class="resp-item-info">
-        <strong>${r.text}</strong>
-        <span>${r.when ? '🕐 '+r.when : ''} ${r.hours ? '· ~'+r.hours+'h/week' : ''}</span>
+        <strong>${escapeHtml(r.text)}</strong>
+        <span>${r.when ? '🕐 '+escapeHtml(r.when) : ''} ${r.hours ? '· ~'+escapeHtml(r.hours)+'h/week' : ''}</span>
       </div>
       <span class="${r.shared ? 'resp-shared-badge' : 'resp-private-badge'}">${r.shared ? '👁 Shared' : '🔒 Private'}</span>
       <button onclick="deleteResp('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:.9rem;padding:2px 6px;transition:color var(--t)" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">✕</button>
@@ -1917,12 +1947,12 @@ function renderTeacherProfile(){
     const student = myStudents.find(s => s.id === sid);
     return `
       <div style="margin-bottom:14px">
-        <p style="font-weight:700;font-size:.9rem;color:var(--navy);margin-bottom:6px">${student?.name || 'Student'}</p>
+        <p style="font-weight:700;font-size:.9rem;color:var(--navy);margin-bottom:6px">${escapeHtml(student?.name || 'Student')}</p>
         ${resps.map(r => `
           <div class="resp-item" style="margin-bottom:6px">
             <div class="resp-item-info">
-              <strong>${r.text}</strong>
-              <span>${r.when ? '🕐 '+r.when : ''} ${r.hours ? '· ~'+r.hours+'h/week' : ''}</span>
+              <strong>${escapeHtml(r.text)}</strong>
+              <span>${r.when ? '🕐 '+escapeHtml(r.when) : ''} ${r.hours ? '· ~'+escapeHtml(r.hours)+'h/week' : ''}</span>
             </div>
           </div>`).join('')}
       </div>`;
@@ -2175,7 +2205,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   }
 
   // Init Firebase
-  try { initFirebase(); } catch(e){}
+  try { initFirebase(); } catch(e){ console.error('initFirebase failed', e); }
 
   // Wait for Firebase Auth to restore session
   if(fbAuth){
