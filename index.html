@@ -3,7 +3,34 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WellSpace – Student Wellness & Productivity</title>
+  <title>WellSpace - Student Wellness & Productivity</title>
+  <meta name="description" content="WellSpace is a free wellness platform for high school students and teachers. Students track mood, sleep, energy, goals, and journal entries privately; teachers see classroom wellness trends and get alerts when a student may need support. Built for schools, not advertisers."/>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "WellSpace",
+    "url": "https://wellspaceapp.github.io/WellSpace/",
+    "description": "WellSpace is a free wellness platform for high school students and teachers. Students track mood, sleep, energy, goals, and journal entries privately; teachers see classroom wellness trends and get alerts when a student may need support.",
+    "applicationCategory": "EducationApplication",
+    "operatingSystem": "Any (web browser)",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "audience": [
+      { "@type": "EducationalAudience", "educationalRole": "student" },
+      { "@type": "EducationalAudience", "educationalRole": "teacher" }
+    ],
+    "publisher": {
+      "@type": "Organization",
+      "name": "WellSpace",
+      "url": "https://wellspaceapp.github.io/WellSpace/",
+      "email": "wellspacewebsite@gmail.com"
+    }
+  }
+  </script>
   <link rel="manifest" href="manifest.json"/>
   <meta name="theme-color" content="#0f2942"/>
   <meta property="og:type" content="website" />
@@ -288,7 +315,7 @@
           <div class="wcard">
             <h4>⚡ Energy & Hydration</h4>
             <div class="fgroup">
-              <label>Energy Level (1–10)</label>
+              <label>Energy Level (1-10)</label>
               <input type="range" id="w-energy" min="1" max="10" value="5" oninput="document.getElementById('energy-val').textContent=this.value"/>
               <span id="energy-val">5</span>
             </div>
@@ -361,7 +388,7 @@
             <h4 style="color:var(--navy);margin-bottom:4px">📋 My Responsibilities</h4>
             <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Add things outside of school - work, family, sports, etc.</p>
             <div class="fgroup"><label>Responsibility</label><input type="text" id="resp-text" placeholder="e.g. Part-time job, babysit siblings…"/></div>
-            <div class="fgroup"><label>Days / When</label><input type="text" id="resp-when" placeholder="e.g. Mon–Wed 4–8pm"/></div>
+            <div class="fgroup"><label>Days / When</label><input type="text" id="resp-when" placeholder="e.g. Mon-Wed 4-8pm"/></div>
             <div class="fgroup"><label>Hours per week (approx)</label><input type="number" id="resp-hours" min="0" max="80" placeholder="e.g. 15"/></div>
             <div class="share-toggle" style="margin-bottom:14px">
               <input type="checkbox" id="resp-share"/>
