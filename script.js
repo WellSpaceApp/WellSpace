@@ -25,14 +25,14 @@ const HELPLINES = {
       {name:"Kids Help Phone",desc:"Free support for young people (24/7, confidential)",url:"https://www.kidshelpphone.ca",contact:"📞 1-800-668-6868 | Text CONNECT to 686868"},
       {name:"Good2Talk",desc:"Counselling & referrals for post-secondary students",url:"https://www.good2talk.ca",contact:"📞 1-866-925-5454 | Online chat 24/7"},
       {name:"ConnexOntario",desc:"Mental health, addiction & crisis services info/referral",url:"https://www.connexontario.ca",contact:"📞 1-866-531-2600"},
-      {name:"One Stop Talk",desc:"Free therapy sessions for youth ages 6–18",url:"https://onestoptalk.ca",contact:"📞 1-855-416-8255"},
+      {name:"One Stop Talk",desc:"Free therapy sessions for youth ages 6-18",url:"https://onestoptalk.ca",contact:"📞 1-855-416-8255"},
       {name:"Canada Suicide Prevention Service",desc:"English/French, 24/7",url:"https://www.crisisservicescanada.ca",contact:"📞 1-833-456-4566"},
       {name:"Hope for Wellness Help Line",desc:"24/7 counselling for Indigenous Peoples",url:"https://hopeforwellness.ca/home.html",contact:"📞 1-855-242-3310"},
     ],
     online:[
-      {name:"Youth Wellness Hubs Ontario",desc:"In-person supports ages 12–25",url:"https://youthhubs.ca/en/"},
+      {name:"Youth Wellness Hubs Ontario",desc:"In-person supports ages 12-25",url:"https://youthhubs.ca/en/"},
       {name:"Ontario Mental Health Support Directory",desc:"Government directory of local supports",url:"https://www.ontario.ca/page/find-mental-health-support"},
-      {name:"School Mental Health Ontario – Helpline Hub",desc:"Crisis & wellness info for students",url:"https://smho-smso.ca/students/helpline-hub/"},
+      {name:"School Mental Health Ontario - Helpline Hub",desc:"Crisis & wellness info for students",url:"https://smho-smso.ca/students/helpline-hub/"},
       {name:"Be There",desc:"Tips on supporting friends & yourself",url:"https://bethere.org/Home"},
       {name:"Mind Your Mind",desc:"Youth mental health tools & info",url:"https://mindyourmind.ca"},
     ]
@@ -55,7 +55,7 @@ const HELPLINES = {
       {name:"211 Alberta",url:"https://ab.211.ca",contact:"📞 2-1-1",desc:"Connect to social & mental health services"},
     ],
     online:[
-      {name:"Alberta Health Services – Mental Health",desc:"Provincial mental health services",url:"https://www.albertahealthservices.ca/findhealth/service.aspx?id=6810&serviceAtFacilityID=1047652"},
+      {name:"Alberta Health Services-Mental Health",desc:"Provincial mental health services",url:"https://www.albertahealthservices.ca/findhealth/service.aspx?id=6810&serviceAtFacilityID=1047652"},
     ]
   },
   default:{
@@ -688,7 +688,7 @@ function renderMoodCheck(){
   const hasTeacher = hasClasses();
 
   const items = [
-    ...(hasTeacher ? myClasses.map(c => ({id:c.id, label:c.subject, time:`${c.startTime} – ${c.endTime}`, isClass:true})) : []),
+    ...(hasTeacher ? myClasses.map(c => ({id:c.id, label:c.subject, time:`${c.startTime} - ${c.endTime}`, isClass:true})) : []),
     {id:'general', label:'How are you feeling today?', time:'', isClass:false},
   ];
 
@@ -849,7 +849,7 @@ function renderAINudge(){
   let tip='Add your tasks above and I\'ll generate scheduling tips!';
   if(gymGoals.length>0){
     const gymDays=[...new Set(gymGoals.map(g=>g.day))].join(', ');
-    tip=`🏋️ Gym on ${gymDays}! After your workout, wait 30–45 min before intense studying - your focus peaks around then. I'd move lighter review sessions right after gym.`;
+    tip=`🏋️ Gym on ${gymDays}! After your workout, wait 30-45 min before intense studying - your focus peaks around then. I'd move lighter review sessions right after gym.`;
   } else if(goals.length>5){
     tip=`📊 You have ${goals.length} tasks this week! Make sure you have at least one break day.`;
   }
@@ -1143,7 +1143,7 @@ function renderClassesSection(){
         <div class="s-class-card">
           ${bannerHtml}
           <div class="s-class-card-body">
-            <div class="s-class-meta">Period ${i+1} · ${c.startTime} – ${c.endTime} · ${c.days?.join(', ')||'-'}</div>
+            <div class="s-class-meta">Period ${i+1} · ${c.startTime} - ${c.endTime} · ${c.days?.join(', ')||'-'}</div>
             <span class="cls-code-badge">${c.code}</span>
             ${c.bannerMsg?`<div class="cls-banner-msg" style="margin-top:10px">${c.bannerMsg}</div>`:''}
           </div>
@@ -1159,7 +1159,7 @@ function renderClassesSection(){
     document.getElementById('period-order-list').innerHTML=orderedClasses.map((c,i)=>`
       <div class="period-row" id="pr-${c.id}" data-id="${c.id}">
         <span class="period-handle">⠿</span>
-        <span style="flex:1">${i+1}. ${c.subject} <span style="color:var(--muted);font-size:.8rem">${c.startTime}–${c.endTime}</span></span>
+        <span style="flex:1">${i+1}. ${c.subject} <span style="color:var(--muted);font-size:.8rem">${c.startTime} - ${c.endTime}</span></span>
         <div class="period-arrows">
           <button onclick="movePeriod('${c.id}',-1)" title="Move up">▲</button>
           <button onclick="movePeriod('${c.id}',1)" title="Move down">▼</button>
@@ -1356,7 +1356,7 @@ function renderTeacherClasses(){
             <span class="cls-code-badge">${c.code}</span>
             <span style="font-size:.8rem;color:var(--muted)">${count} student${count!==1?'s':''}</span>
           </div>
-          <span class="cls-time">🕐 ${c.startTime} – ${c.endTime} · ${c.days?.join(', ')||'-'}</span>
+          <span class="cls-time">🕐 ${c.startTime} - ${c.endTime} · ${c.days?.join(', ')||'-'}</span>
           ${c.bannerMsg ? `<div class="cls-banner-msg">${c.bannerMsg}</div>` : ''}
           <div class="t-class-actions">
             <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
