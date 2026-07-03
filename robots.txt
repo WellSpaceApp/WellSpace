@@ -1,0 +1,29 @@
+# WellSpace - robots.txt
+# Allow standard search engines
+User-agent: *
+Allow: /
+
+# Allow AI / LLM crawlers explicitly (so tools like ChatGPT, Claude,
+# Perplexity, and Google's AI Overviews can read and describe the site)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+Sitemap: https://wellspaceapp.github.io/WellSpace/sitemap.xml

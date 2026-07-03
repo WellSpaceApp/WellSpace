@@ -1,0 +1,23 @@
+# WellSpace
+
+> WellSpace is a free wellness and productivity web app for high school students and teachers. It is not a medical or crisis service. It is a self-check-in and classroom-awareness tool.
+
+## What it is
+WellSpace lets students privately track daily mood, sleep, energy levels, goals, and journal entries. Teachers see aggregated classroom wellness trends and receive alerts when a student's check-ins suggest they may need support, but only for data the student has chosen to share. Journals are always private and are never visible to teachers.
+
+## Who it's for
+- High school students (and university students) who want a simple daily check-in habit.
+- Teachers and school staff who want a general sense of classroom wellbeing and early signals when a student may be struggling.
+
+## Privacy and safety
+- Student data is private by default; nothing goes to a teacher unless the student actively shares it.
+- No data is sold or used for advertising.
+- The app links to crisis hotlines (e.g. 988 in the US) and does not replace professional mental health care or emergency services.
+- Full details are in the in-app Privacy Policy.
+
+## Key pages
+- Homepage / app: https://wellspaceapp.github.io/WellSpace/
+- Source code: https://github.com/WellSpaceApp/WellSpace
+
+## Contact
+wellspacewebsite@gmail.com
