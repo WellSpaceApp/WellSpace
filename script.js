@@ -1741,6 +1741,20 @@ function openModal(id){ document.getElementById(id).classList.remove('hidden'); 
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 function showErr(el,msg){ if(!el)return toast(msg); el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),5000); }
 function showPrivacy(){ openModal('privacy-modal'); }
+function showCookiePolicy(){ openModal('cookie-policy-modal'); }
+
+function toggleCookieConsent(){
+  const current = localStorage.getItem('wellspace_cookie_consent');
+  const wasAccepted = current === 'accepted';
+  const newValue = !wasAccepted;
+  if(typeof window.setCookieConsent === 'function') window.setCookieConsent(newValue);
+  if(wasAccepted && !newValue){
+    toast('Analytics cookies declined - reloading to apply');
+    setTimeout(()=>location.reload(), 900);
+  } else {
+    toast(newValue ? 'Analytics cookies accepted 🍪' : 'Analytics cookies declined');
+  }
+}
 
 function toast(msg){
   const t=document.getElementById('toast');
