@@ -29,6 +29,19 @@
 </head>
 <body>
 
+<!-- COOKIE CONSENT BANNER -->
+<div id="cookie-banner" class="cookie-banner hidden">
+  <div class="cookie-banner-inner">
+    <p class="cookie-text">
+      🍪 We use a small amount of website analytics (Google Analytics) to see how many people visit WellSpace and which pages are useful — never your mood check-ins, journal entries, or any personal info. Read our <a href="#" onclick="openModal('privacy-modal');return false;">Privacy Policy</a>.
+    </p>
+    <div class="cookie-actions">
+      <button class="btn-outline small" onclick="setCookieConsent(false)">Decline</button>
+      <button class="btn-main small" onclick="setCookieConsent(true)">Accept</button>
+    </div>
+  </div>
+</div>
+
 <!-- ENTRY SCREEN -->
 <div id="screen-entry" class="screen active">
   <div class="entry-bg">
@@ -631,7 +644,8 @@
       </p>
       <p><strong>PIPEDA Compliance</strong><br>We comply with Canada's Personal Information Protection and Electronic Documents Act (PIPEDA). We collect only the minimum data necessary to operate WellSpace.</p>
       <p><strong>Deleting your account</strong><br>Delete your account anytime in Profile settings. Your Firebase Auth account, Firestore data, and profile are all permanently deleted immediately. No data is retained after deletion.</p>
-      <p><strong>Third-party services</strong><br>Google Firebase (database & auth), EmailJS (verification emails), GitHub Pages (hosting). No ad trackers, no Google Analytics, no Facebook Pixel.</p>
+      <p><strong>Third-party services</strong><br>Google Firebase (database & auth), EmailJS (verification emails), GitHub Pages (hosting), Google Analytics (basic website usage stats).</p>
+      <p><strong>Google Analytics — what it does and does not see</strong><br>We use Google Analytics (GA4) only to understand general site usage — things like how many people visit, which pages are viewed, and device/browser type. GA never receives your name, email, mood check-ins, sleep or energy logs, goals, journal entries, or any other health-related data — that information stays only in our encrypted Firebase database and is never sent to Google. We do not use Google Signals or ad personalization, and IP addresses are anonymized. Analytics only loads if you accept cookies in the banner shown when you first visit; you can decline and still use WellSpace normally. You can also opt out anytime using Google's <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">Analytics opt-out browser add-on</a>.</p>
       <p style="font-size:.78rem;color:var(--muted)">Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
     </div>
     <button class="btn-main small" onclick="closeModal('privacy-modal')" style="margin-top:8px">Got It</button>
@@ -706,6 +720,47 @@
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
   if(typeof emailjs !== 'undefined') emailjs.init('hgQbp6YnQ4Y8QabYh');
+</script>
+<!-- GOOGLE ANALYTICS (privacy-safe, loads only after cookie consent) -->
+<script>
+  window.WELLSPACE_GA_ID = 'G-ZE25K1RHBZ';
+
+  function loadGoogleAnalytics(){
+    if(window.__gaLoaded) return;
+    window.__gaLoaded = true;
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.WELLSPACE_GA_ID;
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    window.gtag = gtag;
+    gtag('js', new Date());
+    // Privacy-safe config: no ad personalization, no Google Signals,
+    // IP anonymization (default in GA4), and no automatic PII collection.
+    gtag('config', window.WELLSPACE_GA_ID, {
+      anonymize_ip: true,
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false
+    });
+  }
+
+  function setCookieConsent(accepted){
+    localStorage.setItem('wellspace_cookie_consent', accepted ? 'accepted' : 'declined');
+    document.getElementById('cookie-banner').classList.add('hidden');
+    if(accepted) loadGoogleAnalytics();
+  }
+
+  (function initCookieConsent(){
+    var consent = localStorage.getItem('wellspace_cookie_consent');
+    if(consent === 'accepted'){
+      loadGoogleAnalytics();
+    } else if(consent !== 'declined'){
+      document.addEventListener('DOMContentLoaded', function(){
+        document.getElementById('cookie-banner').classList.remove('hidden');
+      });
+    }
+  })();
 </script>
 <!-- APP -->
 <script src="script.js"></script>
