@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   WellSpace v2 — script.js
+   WellSpace v2 - script.js
    Full application logic
 ═══════════════════════════════════════════════ */
 
@@ -9,7 +9,7 @@
 const NEGATIVE_MOODS = ['Sad','Frustrated','Tired','Confused'];
 const MOOD_CFG = {
   Happy:     {icon:'😊', msg:"You're radiating good energy today! Keep it up 🌟"},
-  Energized: {icon:'⚡', msg:"Amazing — channel that energy into something great!"},
+  Energized: {icon:'⚡', msg:"Amazing - channel that energy into something great!"},
   Sad:       {icon:'😢', msg:"It's okay to feel sad. Be kind to yourself today 💙"},
   Frustrated:{icon:'😤', msg:"Take a breath. This feeling is temporary. You've got this 💪"},
   Tired:     {icon:'😴', msg:"Rest is productive too. Small breaks help a lot 🌙"},
@@ -99,7 +99,7 @@ function initFirebase(){
 }
 
 // ─────────────────────────────────────────────
-// FIRESTORE HELPERS — per-user + shared
+// FIRESTORE HELPERS - per-user + shared
 // ─────────────────────────────────────────────
 
 // Save a key to the current user's private Firestore doc
@@ -122,7 +122,7 @@ async function fsGet(key, def=null){
   } catch(e){ return def; }
 }
 
-// Save to shared collection (class codes, classes list — readable by all authenticated users)
+// Save to shared collection (class codes, classes list - readable by all authenticated users)
 async function fsSetShared(key, value){
   if(!fbDb) return;
   try {
@@ -143,7 +143,7 @@ async function fsGetShared(key, def=null){
 }
 
 // ─────────────────────────────────────────────
-// LOCAL CACHE — fast reads, Firestore is source of truth
+// LOCAL CACHE - fast reads, Firestore is source of truth
 // ─────────────────────────────────────────────
 const cache = {};
 
@@ -159,7 +159,7 @@ const CROSS_KEYS  = ['moods','goals','wellness','responsibilities','journals','m
 const PRIVATE_KEYS= ['students','teachers'];
 
 // ─────────────────────────────────────────────
-// UNIFIED S — same API as before, now Firestore-backed
+// UNIFIED S - same API as before, now Firestore-backed
 // ─────────────────────────────────────────────
 const S = {
   get(k, def=null){
@@ -177,7 +177,7 @@ const S = {
   },
 };
 
-// Shortcuts — same as original
+// Shortcuts - same as original
 const gs  = ()=> S.get('students',[]);
 const gt  = ()=> S.get('teachers',[]);
 const gc  = ()=> S.get('classes',[]);
@@ -189,7 +189,7 @@ const gj  = ()=> S.get('journals',[]);
 
 // ─────────────────────────────────────────────
 // LOAD USER DATA FROM FIRESTORE INTO CACHE
-// (single, de-duplicated version — also loads profile + per-doc classes)
+// (single, de-duplicated version - also loads profile + per-doc classes)
 // ─────────────────────────────────────────────
 async function loadUserData(){
   if(!fbDb || !fbAuth?.currentUser) return;
@@ -232,7 +232,7 @@ async function loadUserData(){
 }
 
 // ─────────────────────────────────────────────
-// STUDENT-TEACHER LINK — store uid mapping
+// STUDENT-TEACHER LINK - store uid mapping
 // ─────────────────────────────────────────────
 // When a user signs up we store their profile in /profiles/{uid}
 // So teachers can look up student uids to read their data
@@ -251,7 +251,7 @@ async function getProfile(uid){
   } catch(e){ return null; }
 }
 
-// Get all student uids in a teacher's classes — batched to respect Firebase's
+// Get all student uids in a teacher's classes - batched to respect Firebase's
 // 10-value limit on array-contains-any, so this still works with 10+ classes.
 async function getStudentUids(classIds){
   if(!fbDb || !classIds?.length) return [];
@@ -389,7 +389,7 @@ function authTab(tab){
 }
 
 // ─────────────────────────────────────────────
-// AUTH — LOGIN (Firebase Auth)
+// AUTH - LOGIN (Firebase Auth)
 // ─────────────────────────────────────────────
 async function doLogin(){
   const email = document.getElementById('login-email').value.trim().toLowerCase();
@@ -428,7 +428,7 @@ async function doLogin(){
 }
 
 // ─────────────────────────────────────────────
-// AUTH — SIGNUP (Firebase Auth)
+// AUTH - SIGNUP (Firebase Auth)
 // ─────────────────────────────────────────────
 async function doSignup(){
   const name  = document.getElementById('su-name').value.trim();
@@ -520,7 +520,7 @@ function logout(){
 }
 
 // ─────────────────────────────────────────────
-// TEACHER — load students across Firestore docs
+// TEACHER - load students across Firestore docs
 // Cached for 60s so the dashboard doesn't re-read everything on every click.
 // ─────────────────────────────────────────────
 let _teacherStudentCache = null;
@@ -539,13 +539,13 @@ async function loadTeacherStudents(){
   const myClasses  = gc().filter(c => c.teacherId === CU.id);
   const myClassIds = myClasses.map(c => c.id);
   if (!myClassIds.length) {
-    // No classes yet — clear any stale student data and bail
+    // No classes yet - clear any stale student data and bail
     cSet('students', []);
     return;
   }
 
   try {
-    // Batched query — works for any number of classes, not just <=10
+    // Batched query - works for any number of classes, not just <=10
     const studentProfiles = await getStudentUids(myClassIds);
 
     const allStudents = [];
@@ -651,10 +651,10 @@ function renderHome(){
   const bannerEl=document.getElementById('s-home-banner');
   const msgs=[
     [5,11,"Morning, {n}! 🌅 Start your day with intention."],
-    [11,14,"Hey {n}! 🌤 It's the middle of the day — how are you feeling?"],
+    [11,14,"Hey {n}! 🌤 It's the middle of the day - how are you feeling?"],
     [14,18,"Afternoon, {n}! 📚 Great time to focus on your most important tasks."],
     [18,21,"Evening, {n}! 🌙 Wind down your work and get ready for tomorrow."],
-    [21,24,"Late night, {n}! 😴 Remember — sleep is the best productivity tool."],
+    [21,24,"Late night, {n}! 😴 Remember - sleep is the best productivity tool."],
     [0,5,"Very late, {n}! 🌙 You need rest. Your goals will be here tomorrow."],
   ];
   const [, , msg] = msgs.find(([s,e])=>hour>=s&&hour<e)||msgs[0];
@@ -693,7 +693,7 @@ function renderMoodCheck(){
   ];
 
   const sub = document.querySelector('#s-sec-mood .sec-hdr p');
-  if(sub) sub.textContent = hasTeacher ? 'How are you feeling in each period today?' : 'Check in with yourself — just for you 🌱';
+  if(sub) sub.textContent = hasTeacher ? 'How are you feeling in each period today?' : 'Check in with yourself - just for you 🌱';
 
   container.innerHTML = items.map(item => {
     const existing = todayMoods.find(m => m.classId === item.id);
@@ -778,7 +778,7 @@ function showSWPopup(mood){
         <strong>Your School Social Worker</strong>
         <div>${swInfo.name}</div>
         <div><a href="mailto:${swInfo.email}">${swInfo.email}</a></div>
-        <p style="font-size:.78rem;color:var(--muted);margin-top:6px">They won't be notified automatically — this is just their contact info.</p>
+        <p style="font-size:.78rem;color:var(--muted);margin-top:6px">They won't be notified automatically - this is just their contact info.</p>
       </div>`;
   } else {
     contactEl.innerHTML = `<div class="sw-contact-box"><strong>💙 Help is available</strong><p style="font-size:.88rem;margin-top:4px">Head to Help & Crisis for 24/7 support lines.</p></div>`;
@@ -791,7 +791,7 @@ function dismissSWPopup(dontShowAgain){
   closeModal('sw-popup');
   if(dontShowAgain){
     S.set('sw_dismissed_' + CU.id, true);
-    toast("Got it — we won't show this again 👍");
+    toast("Got it - we won't show this again 👍");
   }
 }
 
@@ -849,7 +849,7 @@ function renderAINudge(){
   let tip='Add your tasks above and I\'ll generate scheduling tips!';
   if(gymGoals.length>0){
     const gymDays=[...new Set(gymGoals.map(g=>g.day))].join(', ');
-    tip=`🏋️ Gym on ${gymDays}! After your workout, wait 30–45 min before intense studying — your focus peaks around then. I'd move lighter review sessions right after gym.`;
+    tip=`🏋️ Gym on ${gymDays}! After your workout, wait 30–45 min before intense studying - your focus peaks around then. I'd move lighter review sessions right after gym.`;
   } else if(goals.length>5){
     tip=`📊 You have ${goals.length} tasks this week! Make sure you have at least one break day.`;
   }
@@ -863,7 +863,7 @@ function openGoalModal(){
   const clsGroup = sel?.closest('.fgroup');
   if(hasClasses()){
     if(clsGroup) clsGroup.style.display = '';
-    sel.innerHTML = `<option value="">— No specific class —</option>` + myClasses.map(c=>`<option value="${c.id}">${c.subject}</option>`).join('');
+    sel.innerHTML = `<option value=""> - No specific class - </option>` + myClasses.map(c=>`<option value="${c.id}">${c.subject}</option>`).join('');
   } else {
     if(clsGroup) clsGroup.style.display = 'none';
     sel.innerHTML = '';
@@ -1143,7 +1143,7 @@ function renderClassesSection(){
         <div class="s-class-card">
           ${bannerHtml}
           <div class="s-class-card-body">
-            <div class="s-class-meta">Period ${i+1} · ${c.startTime} – ${c.endTime} · ${c.days?.join(', ')||'—'}</div>
+            <div class="s-class-meta">Period ${i+1} · ${c.startTime} – ${c.endTime} · ${c.days?.join(', ')||'-'}</div>
             <span class="cls-code-badge">${c.code}</span>
             ${c.bannerMsg?`<div class="cls-banner-msg" style="margin-top:10px">${c.bannerMsg}</div>`:''}
           </div>
@@ -1189,7 +1189,7 @@ function savePeriodOrder(){
 }
 
 // ─────────────────────────────────────────────
-// CLASSES (student) — JOIN A CLASS BY CODE
+// CLASSES (student) - JOIN A CLASS BY CODE
 // Single, correct version. Updates:
 //   - student's local 'students' cache entry
 //   - /profiles/{uid}  (so teacher queries find this student)
@@ -1221,14 +1221,14 @@ async function joinClass(){
   // Track which teacher(s) this student is now connected to, as a plain
   // array of teacher UIDs on their own profile. Security rules can check
   // this single, direct field to grant a teacher read access to this
-  // student's private /users/{uid} doc — far simpler than cross-referencing
+  // student's private /users/{uid} doc - far simpler than cross-referencing
   // classIds arrays across two different documents inside a rule.
   const existingTeacherUids = new Set(CU.teacherUids || []);
   existingTeacherUids.add(cls.teacherUid || cls.teacherId); // teacherUid is the auth uid; fall back if not present
   CU.teacherUids = [...existingTeacherUids];
 
   if(fbAuth?.currentUser){
-    // Update /profiles/{uid} — this is what the teacher's query reads,
+    // Update /profiles/{uid} - this is what the teacher's query reads,
     // and now also carries teacherUids for the security rule check.
     await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
       .set({ classIds: CU.classIds, teacherUids: CU.teacherUids }, { merge: true });
@@ -1334,7 +1334,7 @@ function renderTeacherOverview(){
   prev.innerHTML=`
     <div style="background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--r-md);padding:16px 20px;margin-top:4px">
       <h4 style="color:var(--red);margin-bottom:10px">⚠️ ${alerts.length} student${alerts.length>1?'s need':'needs'} support today</h4>
-      ${alerts.slice(0,4).map(a=>{ const s=students.find(x=>x.id===a.studentId); return `<p style="font-size:.88rem;margin-bottom:4px">• <strong>${s?.name||'Student'}</strong> — feeling <em>${a.mood}</em></p>`; }).join('')}
+      ${alerts.slice(0,4).map(a=>{ const s=students.find(x=>x.id===a.studentId); return `<p style="font-size:.88rem;margin-bottom:4px">• <strong>${s?.name||'Student'}</strong> - feeling <em>${a.mood}</em></p>`; }).join('')}
     </div>`;
 }
 
@@ -1356,7 +1356,7 @@ function renderTeacherClasses(){
             <span class="cls-code-badge">${c.code}</span>
             <span style="font-size:.8rem;color:var(--muted)">${count} student${count!==1?'s':''}</span>
           </div>
-          <span class="cls-time">🕐 ${c.startTime} – ${c.endTime} · ${c.days?.join(', ')||'—'}</span>
+          <span class="cls-time">🕐 ${c.startTime} – ${c.endTime} · ${c.days?.join(', ')||'-'}</span>
           ${c.bannerMsg ? `<div class="cls-banner-msg">${c.bannerMsg}</div>` : ''}
           <div class="t-class-actions">
             <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
@@ -1405,10 +1405,10 @@ function renderStudentTable(){
           }).join('');
           return `<tr class="${isAlert?'alert-row':''}">
             <td><strong>${s.name}</strong><br><span style="font-size:.75rem;color:var(--muted)">${s.email}</span></td>
-            <td style="white-space:nowrap">${s.grade||'—'}</td>
-            <td>${clsNames||'—'}</td>
+            <td style="white-space:nowrap">${s.grade||'-'}</td>
+            <td>${clsNames||'-'}</td>
             <td style="min-width:120px">${moodDisplay}</td>
-            <td style="white-space:nowrap">${sleepLog?`<strong>${sleepLog.hours}h</strong> · ${sleepLog.quality}`:'<span style="color:var(--muted)">—</span>'}</td>
+            <td style="white-space:nowrap">${sleepLog?`<strong>${sleepLog.hours}h</strong> · ${sleepLog.quality}`:'<span style="color:var(--muted)"> - </span>'}</td>
             <td style="white-space:nowrap">${isAlert?'<span style="color:var(--red);font-weight:700;font-size:.85rem">⚠️ Needs support</span>':'<span style="color:var(--green);font-size:.85rem">✅ OK</span>'}</td>
           </tr>`;
         }).join('')}
@@ -1486,12 +1486,12 @@ function renderWellnessTable(){
           const cls = classes.find(c => c.id === w.sharedWith?.classId);
           const data = w.type==='sleep' ? `${w.hours}h · ${w.quality}`
                      : w.type==='energy' ? `Energy: ${w.energy}/10 · 💧${w.water} glasses`
-                     : w.text||'—';
+                     : w.text||'-';
           return `<tr>
-            <td><strong>${s?.name||'—'}</strong></td>
+            <td><strong>${s?.name||'-'}</strong></td>
             <td style="text-transform:capitalize">${w.type}</td>
             <td>${data}</td>
-            <td style="font-size:.82rem;color:var(--muted)">${cls?.subject||'—'}</td>
+            <td style="font-size:.82rem;color:var(--muted)">${cls?.subject||'-'}</td>
             <td>${w.date}</td>
           </tr>`;
         }).join('')}
@@ -1511,7 +1511,7 @@ function renderTeacherGoals(){
     return `<div class="t-goals-student">
       <h4>${s.name} <span style="font-weight:400;color:var(--muted);font-size:.82rem">${gs_.length} task${gs_.length!==1?'s':''}</span></h4>
       ${gs_.slice(0,6).map(g=>`
-        <div class="t-goal-row">${g.done?'✅':'⬜'} <strong>${g.day}</strong> ${g.time} — ${g.task} (${g.duration})</div>`).join('')
+        <div class="t-goal-row">${g.done?'✅':'⬜'} <strong>${g.day}</strong> ${g.time} - ${g.task} (${g.duration})</div>`).join('')
       || '<p style="font-size:.82rem;color:var(--muted)">No goals entered yet.</p>'}
       ${gs_.length>6?`<p style="font-size:.78rem;color:var(--muted);margin-top:4px">+${gs_.length-6} more</p>`:''}
     </div>`;
@@ -1523,7 +1523,7 @@ function renderAlerts(){
   const students=getMyStudents();
   const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&NEGATIVE_MOODS.includes(m.mood));
   const el=document.getElementById('t-alerts-list');
-  if(moods.length===0){ el.innerHTML='<p style="color:var(--muted);text-align:center;padding:40px 0">🎉 No alerts — all students seem to be doing well!</p>'; return; }
+  if(moods.length===0){ el.innerHTML='<p style="color:var(--muted);text-align:center;padding:40px 0">🎉 No alerts - all students seem to be doing well!</p>'; return; }
   const grouped={};
   moods.forEach(m=>{ if(!grouped[m.studentId])grouped[m.studentId]=[]; grouped[m.studentId].push(m); });
   el.innerHTML=Object.entries(grouped).map(([sid,ms])=>{
@@ -1556,9 +1556,9 @@ function renderSettings(){
   document.getElementById('t-account-info').innerHTML=`
     <p><strong>Name:</strong> ${CU.name}</p>
     <p><strong>Email:</strong> ${CU.email}</p>
-    <p><strong>School:</strong> ${CU.school||'—'}</p>
-    <p><strong>Province:</strong> ${CU.province||'—'}</p>
-    <p><strong>Joined:</strong> ${CU.joined||'—'}</p>
+    <p><strong>School:</strong> ${CU.school||'-'}</p>
+    <p><strong>Province:</strong> ${CU.province||'-'}</p>
+    <p><strong>Joined:</strong> ${CU.joined||'-'}</p>
   `;
 }
 
@@ -1611,7 +1611,7 @@ function clearLogo(){
 }
 
 // ─────────────────────────────────────────────
-// CLASSES (teacher) — CREATE / DELETE
+// CLASSES (teacher) - CREATE / DELETE
 // Classes are stored as individual Firestore docs in 'shared_classes'
 // (one doc per class) so this scales past the old single-blob approach.
 // ─────────────────────────────────────────────
@@ -1652,10 +1652,10 @@ async function createClass(){
 
   // Check code uniqueness across all class docs
   const existingClasses = await fsGetAllClasses();
-  if(existingClasses.find(c=>c.code===code)) return toast('That code already exists — try generating a new one.');
+  if(existingClasses.find(c=>c.code===code)) return toast('That code already exists - try generating a new one.');
 
   // teacherId is the short display id (used everywhere else in the UI).
-  // teacherUid is the real Firebase Auth uid — needed so students who join
+  // teacherUid is the real Firebase Auth uid - needed so students who join
   // can record which teacher's auth uid to grant read-access to, since
   // security rules can only check request.auth.uid, not the short id.
   const newClass = {id:'c'+uid8(),teacherId:CU.id,teacherUid:CU.uid,subject,startTime:start,endTime:end,days,code,color,emoji,logo,bannerMsg};
@@ -1987,9 +1987,9 @@ function startSignupVerification(){
 
   if(authRole==='student'){
     const grade = document.getElementById('su-grade').value;
-    const code  = document.getElementById('su-code').value.trim().toUpperCase();
+    const classCode = document.getElementById('su-code').value.trim().toUpperCase();
     if(!grade) return showErr(errEl,'Please select your grade.');
-    pendingVerify = { name, email, pass, grade, code, role:'student' };
+    pendingVerify = { name, email, pass, grade, code_class: classCode, role:'student' };
   } else {
     const province = document.getElementById('su-province').value;
     const school   = document.getElementById('su-school').value.trim();
@@ -2088,7 +2088,7 @@ function resendVerifyCode(){
   }).then(()=>toast('New code sent! 📧')).catch(()=>toast('Could not resend. Try again.'));
 }
 
-// FORGOT PASSWORD — sends reset email that opens on YOUR site
+// FORGOT PASSWORD - sends reset email that opens on YOUR site
 function sendResetCode(){
   const email = document.getElementById('forgot-email').value.trim().toLowerCase();
   const errEl = document.getElementById('forgot-err');
@@ -2127,7 +2127,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(fbAuth){
     fbAuth.onAuthStateChanged(async (user)=>{
       if(user && !CU){
-        // User was logged in — restore session
+        // User was logged in - restore session
         const profile = await getProfile(user.uid);
         if(profile){
           CU = { ...profile, id: profile.localId || user.uid, uid: user.uid };
