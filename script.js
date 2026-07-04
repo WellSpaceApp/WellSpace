@@ -2175,8 +2175,42 @@ async function confirmVerifyCode(){
   }, 1200);
 }
 
+// ─────────────────────────────────────────────
+// Simple client-side cooldown to stop spam-clicking "Resend" from
+// burning through the EmailJS free-tier quota or being used to
+// email-bomb someone else's address. This is a UX-level speed bump,
+// not a real security boundary - the actual fix is restricting
+// allowed origins + enabling rate limiting in the EmailJS dashboard,
+// since a determined attacker can call emailjs.send() directly from
+// the browser console and skip the UI/button entirely.
+// ─────────────────────────────────────────────
+const _emailCooldowns = {};
+function emailOnCooldown(key, seconds, btnEl){
+  const now = Date.now();
+  if(_emailCooldowns[key] && now < _emailCooldowns[key]) return true;
+  _emailCooldowns[key] = now + seconds*1000;
+  if(btnEl){
+    const original = btnEl.textContent;
+    btnEl.disabled = true;
+    let remaining = seconds;
+    btnEl.textContent = `Wait ${remaining}s`;
+    const iv = setInterval(()=>{
+      remaining--;
+      if(remaining <= 0){
+        clearInterval(iv);
+        btnEl.disabled = false;
+        btnEl.textContent = original;
+      } else {
+        btnEl.textContent = `Wait ${remaining}s`;
+      }
+    }, 1000);
+  }
+  return false;
+}
+
 function resendVerifyCode(){
   if(!pendingVerify) return;
+  if(emailOnCooldown('verify', 30, event?.currentTarget)) return toast('Please wait before requesting another code.');
   const newCode = generateCode();
   pendingVerify.code    = newCode;
   pendingVerify.expires = Date.now() + 10*60*1000;
@@ -2192,20 +2226,22 @@ function sendResetCode(){
   const email = document.getElementById('forgot-email').value.trim().toLowerCase();
   const errEl = document.getElementById('forgot-err');
   if(!email||!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
+  if(emailOnCooldown('reset:'+email, 30, event?.currentTarget)) return showErr(errEl,'Please wait before requesting another email.');
   if(!fbAuth) initFirebase();
 
   fbAuth.sendPasswordResetEmail(email, {
     url: window.location.origin + window.location.pathname,
     handleCodeInApp: true
   }).then(()=>{
-    toast('Password reset email sent! Check your inbox 📧');
+    toast('If that account exists, a reset email has been sent 📧');
     closeModal('forgot-modal');
   }).catch(e=>{
-    if(e.code==='auth/user-not-found'){
-      showErr(errEl,'No account found with that email address.');
-    } else {
-      showErr(errEl,'Could not send reset email. Please try again.');
-    }
+    // Deliberately generic regardless of the real error (including
+    // auth/user-not-found) - confirming or denying an email exists
+    // is an account-enumeration leak, so both outcomes look the same
+    // to whoever is submitting the form.
+    toast('If that account exists, a reset email has been sent 📧');
+    closeModal('forgot-modal');
   });
 }
 function confirmResetPassword(){ toast('Please check your email for the reset link.'); }
