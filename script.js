@@ -1767,8 +1767,23 @@ function copyCode(code){
 // ─────────────────────────────────────────────
 // UTILITIES
 // ─────────────────────────────────────────────
-function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
-function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+function openModal(id){
+  const el = document.getElementById(id);
+  el.classList.remove('hidden');
+  // Accessibility: move focus into the dialog and let Escape close it.
+  el._lastFocused = document.activeElement;
+  const dialog = el.querySelector('[role="dialog"]') || el;
+  const focusable = dialog.querySelector('input, select, textarea, button, a[href]');
+  (focusable || dialog).focus?.();
+  el._escHandler = (e) => { if(e.key === 'Escape') closeModal(id); };
+  document.addEventListener('keydown', el._escHandler);
+}
+function closeModal(id){
+  const el = document.getElementById(id);
+  el.classList.add('hidden');
+  if(el._escHandler){ document.removeEventListener('keydown', el._escHandler); el._escHandler = null; }
+  if(el._lastFocused){ el._lastFocused.focus?.(); el._lastFocused = null; }
+}
 function showErr(el,msg){ if(!el)return toast(msg); el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),5000); }
 function showPrivacy(){ openModal('privacy-modal'); }
 function showCookiePolicy(){ openModal('cookie-policy-modal'); }
