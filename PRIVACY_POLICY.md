@@ -1,7 +1,7 @@
 # WellSpace Privacy Policy
 
 **Effective Date:** June 2026
-**Last Updated:** June 2026
+**Last Updated:** July 2026
 **Contact:** wellspacewebsite@gmail.com
 **Platform:** wellspaceapp.github.io/WellSpace
 
@@ -12,6 +12,8 @@
 WellSpace is a free student wellness web application designed for high school students and teachers in Canada. This Privacy Policy explains what personal information WellSpace collects, how it is used, who can access it, and how it is protected.
 
 WellSpace is committed to collecting only the minimum information necessary to operate the platform. Student data is private by default and is never shared without the explicit, informed consent of the student.
+
+This Privacy Policy should be read together with our [Cookie Policy], which explains in detail the specific cookies WellSpace uses and how to manage them.
 
 ---
 
@@ -38,7 +40,7 @@ WellSpace is committed to collecting only the minimum information necessary to o
 
 **What We Do Not Collect**
 
-WellSpace does not directly collect location data, device identifiers, IP addresses, browsing history, or cookie tracking data. However, our third-party infrastructure providers (Google Firebase and GitHub Pages) may automatically log IP addresses as part of standard server operations.
+WellSpace does not collect location data, device identifiers, browsing history, or advertising/tracking cookies. WellSpace does use a small number of functional cookies (such as keeping you logged in and remembering your cookie preference) and, only if you consent, Google Analytics cookies for basic, anonymized usage stats. See our Cookie Policy for the full list. Our third-party infrastructure providers (Google Firebase and GitHub Pages) may also automatically log IP addresses as part of standard server operations.
 
 ---
 
@@ -51,9 +53,12 @@ We use the information collected solely to:
 - Connect students to a teacher's class via class codes
 - Display to teachers only the data a student has explicitly chosen to share
 - Send password reset emails when requested by the user
+- Keep you securely logged in and remember your cookie preference (see Cookie Policy)
+- Measure basic, anonymized site usage, only if you consent to analytics cookies
 
 We do not use personal information for advertising, profiling, marketing, or any commercial purpose.
 WellSpace does not use personal information to create individual profiles for advertising, analytics, or any purpose beyond operating the platform.
+
 ---
 
 ## 3. Student Data is Private by Default
@@ -89,7 +94,7 @@ Security measures include:
 - Strict per-user Firestore security rules so each user's data is stored in an isolated private document with no cross-user access possible at the database level
 - Passwords are managed entirely by Firebase Authentication using industry-standard encryption. WellSpace never stores, sees, or has access to user passwords
 - No shared data blobs. Every user has their own isolated Firestore document
-- WellSpace uses browser localStorage to temporarily cache session data for performance. No advertising cookies or third-party tracking pixels are used at any point.
+- WellSpace uses a small number of functional cookies and browser storage to keep you logged in, remember your cookie preference, and (only with consent) measure basic site usage via Google Analytics. No advertising cookies or third-party tracking pixels are used at any point. See our Cookie Policy for details.
 
 ---
 
@@ -116,7 +121,7 @@ As a WellSpace user, you have the right to:
 - **Access** all personal data we hold about you. Email wellspacewebsite@gmail.com to request a copy.
 - **Correct** inaccurate information by updating it directly in your profile settings.
 - **Delete** your data at any time by deleting your account in Profile settings. All data is permanently and immediately removed.
-- **Withdraw consent** at any time by deleting your account.
+- **Withdraw consent** at any time by deleting your account, or by changing your cookie preference (see Cookie Policy) without affecting your account.
 
 ---
 
@@ -135,6 +140,7 @@ WellSpace does not retain any personal data after account deletion. There is no 
 **Automatic deletion:** Accounts inactive for 24 months are automatically deleted along with all associated data.
 
 **Important note for educators:** WellSpace is not an official record system. Any student disclosures that require follow-up, documentation, or safeguarding action must be recorded through your school's standard procedures. WellSpace data should never be relied upon as the sole record of a student concern. When a student deletes their account, all their data is permanently removed and cannot be recovered by anyone.
+
 ---
 
 ## 9. Third-Party Services
@@ -146,12 +152,19 @@ WellSpace uses the following third-party services to operate:
 | Google Firebase | User authentication and cloud database | firebase.google.com/support/privacy |
 | EmailJS | Sending email verification codes | emailjs.com/legal/privacy-policy |
 | GitHub Pages | Hosting the web application | docs.github.com/en/site-policy/privacy-policies |
+| Google Analytics | Basic, anonymized usage statistics (only with your consent) | See our Cookie Policy |
 
-WellSpace does not use Google Analytics, Facebook Pixel, or any advertising tracking tools. No user data is sold to or shared with any data broker or advertiser.
+WellSpace does not use Facebook Pixel or any advertising tracking tools. No user data is sold to or shared with any data broker or advertiser. Google Analytics, where used, never receives your name, email, mood data, sleep/energy logs, goals, or journal entries — only anonymized visit statistics.
 
 ---
 
-## 10. Students and Minors
+## 10. Cookies
+
+WellSpace uses a small number of cookies: a required login-session cookie to keep you signed in, a cookie that remembers your analytics preference, and, only if you consent, Google Analytics cookies for anonymized usage stats. None of these cookies ever contain or transmit your mood check-ins, sleep/energy logs, goals, or journal entries. You can review, accept, or decline analytics cookies at any time in Profile settings ("Manage Cookie Preference"). For full details on each cookie, its purpose, and how to manage it, see our Cookie Policy.
+
+---
+
+## 11. Students and Minors
 
 WellSpace is designed for use by high school students, including those under the age of 18. We take this responsibility seriously:
 
@@ -164,13 +177,13 @@ Teachers and schools using WellSpace are responsible for obtaining appropriate p
 
 ---
 
-## 11. Changes to This Policy
+## 12. Changes to This Policy
 
 If we make material changes to this Privacy Policy, we will post a notice within the WellSpace application. Continued use of WellSpace after the effective date of any changes constitutes acceptance of the updated policy.
 
 ---
 
-## 12. Contact
+## 13. Contact
 
 For any privacy-related questions, data access requests, or concerns, please contact:
 
