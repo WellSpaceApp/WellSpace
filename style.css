@@ -582,3 +582,34 @@ tr:hover td { background:var(--bg); }
 .cookie-banner .btn-outline.small { border-color:rgba(255,255,255,.4); color:#fff; background:transparent; }
 .cookie-banner .btn-outline.small:hover { border-color:#fff; background:rgba(255,255,255,.08); }
 @media(max-width:600px){ .cookie-banner-inner{flex-direction:column;align-items:stretch;} .cookie-actions{justify-content:flex-end;} }
+
+/* ── Accessibility: skip link + visible focus states ── */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  background: var(--navy, #12294e);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  z-index: 10000;
+  text-decoration: none;
+  font-weight: 600;
+  transition: top .15s ease;
+}
+.skip-link:focus {
+  top: 8px;
+}
+/* Make sure keyboard focus is always visible, even where the design
+   removed outline for mouse users - :focus-visible only shows this
+   for keyboard/assistive-tech interaction, not mouse clicks. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #4d9fff;
+  outline-offset: 2px;
+}
