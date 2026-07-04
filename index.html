@@ -56,6 +56,8 @@
 </head>
 <body>
 
+<a href="#" class="skip-link" onclick="event.preventDefault(); const m = document.getElementById('s-main').offsetParent ? 's-main' : (document.getElementById('t-main').offsetParent ? 't-main' : null); if(m){ const el=document.getElementById(m); el.setAttribute('tabindex','-1'); el.focus(); }">Skip to main content</a>
+
 <!-- COOKIE CONSENT BANNER -->
 <div id="cookie-banner" class="cookie-banner hidden">
   <div class="cookie-banner-inner">
@@ -120,11 +122,11 @@
       </div>
       <div id="form-login">
         <div class="fgroup">
-          <label>Email Address</label>
+          <label for="login-email">Email Address</label>
           <input type="email" id="login-email" placeholder="you@email.com" autocomplete="email"/>
         </div>
         <div class="fgroup">
-          <label>Password</label>
+          <label for="login-pass">Password</label>
           <div class="pw-wrap">
             <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/>
             <button class="pw-toggle" onclick="togglePw('login-pass',this)">👁</button>
@@ -138,16 +140,16 @@
       </div>
       <div id="form-signup" class="hidden">
         <div class="fgroup">
-          <label>Full Name</label>
+          <label for="su-name">Full Name</label>
           <input type="text" id="su-name" placeholder="Your full name"/>
         </div>
         <div class="fgroup">
-          <label>Email Address</label>
+          <label for="su-email">Email Address</label>
           <input type="email" id="su-email" placeholder="you@school.ca"/>
           <span class="field-hint">Must be a valid email (e.g. name@school.ca)</span>
         </div>
         <div class="fgroup">
-          <label>Password</label>
+          <label for="su-pass">Password</label>
           <div class="pw-wrap">
             <input type="password" id="su-pass" placeholder="Create password" oninput="checkPwStrength(this.value)"/>
             <button class="pw-toggle" onclick="togglePw('su-pass',this)">👁</button>
@@ -162,7 +164,7 @@
         </div>
         <div id="su-student-fields">
           <div class="fgroup">
-            <label>Grade</label>
+            <label for="su-grade">Grade</label>
             <select id="su-grade">
               <option value="">Select grade…</option>
               <option>Grade 9</option><option>Grade 10</option>
@@ -173,13 +175,13 @@
           </div>
           <div class="fgroup">
             <label>Class Code <span class="opt-label">(optional - from your teacher)</span></label>
-            <input type="text" id="su-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
+            <input aria-label="e.g. ENG2D-2024" type="text" id="su-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
             <span class="field-hint">You can join a class later too</span>
           </div>
         </div>
         <div id="su-teacher-fields" class="hidden">
           <div class="fgroup">
-            <label>Province / Territory</label>
+            <label for="su-province">Province / Territory</label>
             <select id="su-province">
               <option value="">Select province…</option>
               <option>Ontario</option><option>British Columbia</option>
@@ -191,7 +193,7 @@
             </select>
           </div>
           <div class="fgroup">
-            <label>School Name</label>
+            <label for="su-school">School Name</label>
             <input type="text" id="su-school" placeholder="e.g. Westview Secondary School"/>
           </div>
         </div>
@@ -237,12 +239,12 @@
       <section class="dsec active" id="s-sec-home">
         <div class="home-banner" id="s-home-banner"></div>
         <div class="home-grid">
-          <div class="home-quick-card" onclick="sSection('mood')"><span>😊</span><strong>Check Mood</strong><p>Log today's feelings</p></div>
-          <div class="home-quick-card" onclick="sSection('goals')"><span>🎯</span><strong>Goals</strong><p>View & add tasks</p></div>
-          <div class="home-quick-card" onclick="sSection('wellness')"><span>🌱</span><strong>Wellness</strong><p>Sleep, habits & more</p></div>
+          <div class="home-quick-card" onclick="sSection('mood')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('mood')}"><span>😊</span><strong>Check Mood</strong><p>Log today's feelings</p></div>
+          <div class="home-quick-card" onclick="sSection('goals')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('goals')}"><span>🎯</span><strong>Goals</strong><p>View & add tasks</p></div>
+          <div class="home-quick-card" onclick="sSection('wellness')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('wellness')}"><span>🌱</span><strong>Wellness</strong><p>Sleep, habits & more</p></div>
         </div>
         <div class="join-class-row" style="margin-top:20px">
-          <input type="text" id="home-join-code" placeholder="Have a class code? Enter it here…" style="text-transform:uppercase"/>
+          <input aria-label="Have a class code? Enter it here" type="text" id="home-join-code" placeholder="Have a class code? Enter it here…" style="text-transform:uppercase"/>
           <button class="btn-main small" onclick="homeJoinClass()">Join Class</button>
         </div>
         <div id="s-home-goals-preview"></div>
@@ -258,7 +260,7 @@
       <section class="dsec" id="s-sec-goals">
         <div class="sec-hdr"><h3>Weekly Goals & Planner</h3><p>Stay on track - one task at a time</p></div>
         <div class="goals-toolbar">
-          <select id="goal-cls-sel" class="sel" onchange="renderGoals()"></select>
+          <select id="goal-cls-sel" class="sel" onchange="renderGoals()" aria-label="Filter tasks by class"></select>
           <button class="btn-main small" onclick="openGoalModal()">+ Add Task</button>
         </div>
         <div id="goals-container"></div>
@@ -285,8 +287,8 @@
           <div class="wcard">
             <h4>😴 Hours Slept Last Night</h4>
             <div class="sleep-input-row">
-              <input type="number" id="w-sleep" min="0" max="24" step="0.5" placeholder="e.g. 7.5"/>
-              <select id="w-sleep-quality">
+              <input aria-label="e.g. 7.5" type="number" id="w-sleep" min="0" max="24" step="0.5" placeholder="e.g. 7.5"/>
+              <select id="w-sleep-quality" aria-label="Sleep quality">
                 <option value="">Sleep quality…</option>
                 <option>Great</option><option>Okay</option><option>Poor</option>
               </select>
@@ -294,7 +296,7 @@
             <div class="share-toggle" id="sleep-share-row">
               <input type="checkbox" id="share-sleep"/>
               <label for="share-sleep">Send to a teacher</label>
-              <select id="sleep-teacher-sel" class="sel-inline hidden"></select>
+              <select id="sleep-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share sleep log with"></select>
             </div>
             <button class="btn-main small" onclick="logWellness('sleep')">Log Sleep</button>
             <div id="sleep-log-display" class="wlog-display"></div>
@@ -302,12 +304,12 @@
           <div class="wcard">
             <h4>📋 Today's Responsibilities</h4>
             <div class="resp-input-row">
-              <input type="text" id="w-resp" placeholder="e.g. babysit sibling, part-time job…"/>
+              <input aria-label="e.g. babysit sibling, part-time job" type="text" id="w-resp" placeholder="e.g. babysit sibling, part-time job…"/>
             </div>
             <div class="share-toggle" id="resp-share-row">
               <input type="checkbox" id="share-resp"/>
               <label for="share-resp">Send to a teacher</label>
-              <select id="resp-teacher-sel" class="sel-inline hidden"></select>
+              <select id="resp-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share responsibilities with"></select>
             </div>
             <button class="btn-main small" onclick="logWellness('resp')">Add</button>
             <div id="resp-log-display" class="wlog-display"></div>
@@ -315,18 +317,18 @@
           <div class="wcard">
             <h4>⚡ Energy & Hydration</h4>
             <div class="fgroup">
-              <label>Energy Level (1-10)</label>
+              <label for="w-energy">Energy Level (1-10)</label>
               <input type="range" id="w-energy" min="1" max="10" value="5" oninput="document.getElementById('energy-val').textContent=this.value"/>
               <span id="energy-val">5</span>
             </div>
             <div class="fgroup">
-              <label>Glasses of water today</label>
+              <label for="w-water">Glasses of water today</label>
               <input type="number" id="w-water" min="0" max="20" placeholder="8"/>
             </div>
             <div class="share-toggle" id="energy-share-row">
               <input type="checkbox" id="share-energy"/>
               <label for="share-energy">Send to a teacher</label>
-              <select id="energy-teacher-sel" class="sel-inline hidden"></select>
+              <select id="energy-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share energy log with"></select>
             </div>
             <button class="btn-main small" onclick="logWellness('energy')">Log</button>
           </div>
@@ -350,7 +352,7 @@
       <section class="dsec" id="s-sec-classes">
         <div class="sec-hdr"><h3>🏫 My Classes</h3><p>Classes you've joined via teacher codes</p></div>
         <div class="join-class-row">
-          <input type="text" id="join-code" placeholder="Enter class code from your teacher…" style="text-transform:uppercase"/>
+          <input aria-label="Enter class code from your teacher" type="text" id="join-code" placeholder="Enter class code from your teacher…" style="text-transform:uppercase"/>
           <button class="btn-main small" onclick="joinClass()">Join Class</button>
         </div>
         <div id="s-classes-list"></div>
@@ -376,10 +378,10 @@
               </div>
             </div>
             <div class="profile-section-title">Edit Name</div>
-            <div class="fgroup"><label>Full Name</label><input type="text" id="s-edit-name" placeholder="Your name"/></div>
+            <div class="fgroup"><label for="s-edit-name">Full Name</label><input type="text" id="s-edit-name" placeholder="Your name"/></div>
             <div class="profile-section-title">Change Password</div>
-            <div class="fgroup"><label>Current Password</label><input type="password" id="s-old-pass" placeholder="••••••••"/></div>
-            <div class="fgroup"><label>New Password</label><input type="password" id="s-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+            <div class="fgroup"><label for="s-old-pass">Current Password</label><input type="password" id="s-old-pass" placeholder="••••••••"/></div>
+            <div class="fgroup"><label for="s-new-pass">New Password</label><input type="password" id="s-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
             <div id="s-profile-err" class="ferr hidden"></div>
             <div id="s-profile-ok" class="success-note hidden">✓ Profile updated!</div>
             <button class="btn-main small" onclick="saveStudentProfile()">Save Changes</button>
@@ -387,9 +389,9 @@
           <div class="profile-card">
             <h4 style="color:var(--navy);margin-bottom:4px">📋 My Responsibilities</h4>
             <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Add things outside of school - work, family, sports, etc.</p>
-            <div class="fgroup"><label>Responsibility</label><input type="text" id="resp-text" placeholder="e.g. Part-time job, babysit siblings…"/></div>
-            <div class="fgroup"><label>Days / When</label><input type="text" id="resp-when" placeholder="e.g. Mon-Wed 4-8pm"/></div>
-            <div class="fgroup"><label>Hours per week (approx)</label><input type="number" id="resp-hours" min="0" max="80" placeholder="e.g. 15"/></div>
+            <div class="fgroup"><label for="resp-text">Responsibility</label><input type="text" id="resp-text" placeholder="e.g. Part-time job, babysit siblings…"/></div>
+            <div class="fgroup"><label for="resp-when">Days / When</label><input type="text" id="resp-when" placeholder="e.g. Mon-Wed 4-8pm"/></div>
+            <div class="fgroup"><label for="resp-hours">Hours per week (approx)</label><input type="number" id="resp-hours" min="0" max="80" placeholder="e.g. 15"/></div>
             <div class="share-toggle" style="margin-bottom:14px">
               <input type="checkbox" id="resp-share"/>
               <label for="resp-share">Share this with my teacher so they understand my workload</label>
@@ -448,8 +450,8 @@
       <section class="dsec" id="t-sec-students">
         <div class="sec-hdr"><h3>👥 My Students</h3></div>
         <div class="t-filter-row">
-          <input type="text" id="t-search" class="search-inp" placeholder="Search students…" oninput="renderStudentTable()"/>
-          <select id="t-cls-filter" class="sel" onchange="renderStudentTable()"><option value="">All Classes</option></select>
+          <input aria-label="Search students" type="text" id="t-search" class="search-inp" placeholder="Search students…" oninput="renderStudentTable()"/>
+          <select id="t-cls-filter" class="sel" onchange="renderStudentTable()" aria-label="Filter students by class"><option value="">All Classes</option></select>
         </div>
         <div id="t-student-table"></div>
       </section>
@@ -479,14 +481,14 @@
           <div class="settings-card">
             <h4>School Social Worker</h4>
             <p class="field-hint">Students who need help will see this contact info</p>
-            <div class="fgroup"><label>Social Worker Name</label><input type="text" id="sw-name" placeholder="e.g. Ms. Thompson"/></div>
-            <div class="fgroup"><label>Social Worker Email</label><input type="email" id="sw-email" placeholder="mthompson@school.ca"/></div>
+            <div class="fgroup"><label for="sw-name">Social Worker Name</label><input type="text" id="sw-name" placeholder="e.g. Ms. Thompson"/></div>
+            <div class="fgroup"><label for="sw-email">Social Worker Email</label><input type="email" id="sw-email" placeholder="mthompson@school.ca"/></div>
             <button class="btn-main small" onclick="saveSocialWorker()">Save Contact</button>
             <div id="sw-saved" class="hidden success-note">✓ Saved</div>
           </div>
           <div class="settings-card">
             <h4>Province / Territory</h4>
-            <select id="t-province-setting" class="sel"></select>
+            <select id="t-province-setting" class="sel" aria-label="Province or territory"></select>
             <button class="btn-main small" onclick="saveProvince()" style="margin-top:10px">Update Province</button>
           </div>
           <div class="settings-card">
@@ -508,11 +510,11 @@
               </div>
             </div>
             <div class="profile-section-title">Edit Details</div>
-            <div class="fgroup"><label>Full Name</label><input type="text" id="t-edit-name" placeholder="Your name"/></div>
-            <div class="fgroup"><label>School Name</label><input type="text" id="t-edit-school" placeholder="Your school"/></div>
+            <div class="fgroup"><label for="t-edit-name">Full Name</label><input type="text" id="t-edit-name" placeholder="Your name"/></div>
+            <div class="fgroup"><label for="t-edit-school">School Name</label><input type="text" id="t-edit-school" placeholder="Your school"/></div>
             <div class="profile-section-title">Change Password</div>
-            <div class="fgroup"><label>Current Password</label><input type="password" id="t-old-pass" placeholder="••••••••"/></div>
-            <div class="fgroup"><label>New Password</label><input type="password" id="t-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+            <div class="fgroup"><label for="t-old-pass">Current Password</label><input type="password" id="t-old-pass" placeholder="••••••••"/></div>
+            <div class="fgroup"><label for="t-new-pass">New Password</label><input type="password" id="t-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
             <div id="t-profile-err" class="ferr hidden"></div>
             <div id="t-profile-ok" class="success-note hidden">✓ Profile updated!</div>
             <button class="btn-main small" onclick="saveTeacherProfile()">Save Changes</button>
@@ -540,23 +542,23 @@
 
 <!-- GOAL MODAL -->
 <div id="goal-modal" class="modal-bg hidden">
-  <div class="modal">
-    <div class="modal-hdr"><h3>➕ Add Task</h3><button class="modal-close" onclick="closeModal('goal-modal')">✕</button></div>
-    <div class="fgroup"><label>Task Name</label><input type="text" id="gm-task" placeholder="e.g. Study Chapter 5"/></div>
-    <div class="fgroup"><label>Day</label>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="goal-modal-title">
+    <div class="modal-hdr"><h3 id="goal-modal-title">➕ Add Task</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('goal-modal')">✕</button></div>
+    <div class="fgroup"><label for="gm-task">Task Name</label><input type="text" id="gm-task" placeholder="e.g. Study Chapter 5"/></div>
+    <div class="fgroup"><label for="gm-day">Day</label>
       <select id="gm-day">
         <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
         <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
       </select></div>
     <div class="fgroup two-col">
-      <div><label>Start Time</label><input type="time" id="gm-time" value="09:00"/></div>
-      <div><label>Duration</label>
+      <div><label for="gm-time">Start Time</label><input type="time" id="gm-time" value="09:00"/></div>
+      <div><label for="gm-dur">Duration</label>
         <select id="gm-dur">
           <option>30 min</option><option>45 min</option><option>1 hour</option>
           <option>1.5 hours</option><option>2 hours</option><option>2.5 hours</option><option>3 hours</option>
         </select></div>
     </div>
-    <div class="fgroup"><label>Type</label>
+    <div class="fgroup"><label for="gm-type">Type</label>
       <select id="gm-type">
         <option value="study">📖 Study / Homework</option>
         <option value="gym">🏋️ Gym / Sport</option>
@@ -565,7 +567,7 @@
         <option value="social">👥 Social</option>
         <option value="other">📌 Other</option>
       </select></div>
-    <div class="fgroup"><label>Class (optional)</label>
+    <div class="fgroup"><label for="gm-class">Class (optional)</label>
       <select id="gm-class"><option value=""> - No specific class - </option></select></div>
     <div class="modal-foot">
       <button class="btn-main" onclick="addGoal()">Add Task</button>
@@ -576,12 +578,12 @@
 
 <!-- CLASS MODAL -->
 <div id="class-modal" class="modal-bg hidden">
-  <div class="modal">
-    <div class="modal-hdr"><h3>➕ Create Class</h3><button class="modal-close" onclick="closeModal('class-modal')">✕</button></div>
-    <div class="fgroup"><label>Subject Name</label><input type="text" id="cm-subject" placeholder="e.g. English - Grade 10 (ENG2D)"/></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
+    <div class="modal-hdr"><h3 id="class-modal-title">➕ Create Class</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('class-modal')">✕</button></div>
+    <div class="fgroup"><label for="cm-subject">Subject Name</label><input type="text" id="cm-subject" placeholder="e.g. English - Grade 10 (ENG2D)"/></div>
     <div class="fgroup two-col">
-      <div><label>Start Time</label><input type="time" id="cm-start" value="09:00"/></div>
-      <div><label>End Time</label><input type="time" id="cm-end" value="09:45"/></div>
+      <div><label for="cm-start">Start Time</label><input type="time" id="cm-start" value="09:00"/></div>
+      <div><label for="cm-end">End Time</label><input type="time" id="cm-end" value="09:45"/></div>
     </div>
     <div class="fgroup"><label>Days</label>
       <div class="day-check-row">
@@ -595,34 +597,34 @@
     <div class="fgroup">
       <label>Class Banner Color</label>
       <div class="banner-color-row">
-        <label class="color-opt"><input type="radio" name="cm-color" value="#1d5fa6" checked/><span style="background:#1d5fa6"></span></label>
-        <label class="color-opt"><input type="radio" name="cm-color" value="#2e9e6b"/><span style="background:#2e9e6b"></span></label>
-        <label class="color-opt"><input type="radio" name="cm-color" value="#7c3aed"/><span style="background:#7c3aed"></span></label>
-        <label class="color-opt"><input type="radio" name="cm-color" value="#d97706"/><span style="background:#d97706"></span></label>
-        <label class="color-opt"><input type="radio" name="cm-color" value="#dc2626"/><span style="background:#dc2626"></span></label>
-        <label class="color-opt"><input type="radio" name="cm-color" value="#0f766e"/><span style="background:#0f766e"></span></label>
+        <label class="color-opt"><input aria-label="Blue" type="radio" name="cm-color" value="#1d5fa6" checked/><span style="background:#1d5fa6"></span></label>
+        <label class="color-opt"><input aria-label="Green" type="radio" name="cm-color" value="#2e9e6b"/><span style="background:#2e9e6b"></span></label>
+        <label class="color-opt"><input aria-label="Purple" type="radio" name="cm-color" value="#7c3aed"/><span style="background:#7c3aed"></span></label>
+        <label class="color-opt"><input aria-label="Orange" type="radio" name="cm-color" value="#d97706"/><span style="background:#d97706"></span></label>
+        <label class="color-opt"><input aria-label="Red" type="radio" name="cm-color" value="#dc2626"/><span style="background:#dc2626"></span></label>
+        <label class="color-opt"><input aria-label="Teal" type="radio" name="cm-color" value="#0f766e"/><span style="background:#0f766e"></span></label>
       </div>
     </div>
     <div class="fgroup">
       <label>Class Logo / Icon <span class="opt-label">(emoji or upload image)</span></label>
       <div class="logo-row">
-        <input type="text" id="cm-emoji" placeholder="Paste emoji e.g. 📐 🧬 📖" style="max-width:180px"/>
+        <input aria-label="Paste emoji e.g. 📐 🧬 📖" type="text" id="cm-emoji" placeholder="Paste emoji e.g. 📐 🧬 📖" style="max-width:180px"/>
         <span style="color:var(--muted);font-size:.85rem;align-self:center">or</span>
-        <label class="upload-label">Upload Image<input type="file" id="cm-logo-file" accept="image/*" onchange="previewLogo(this)" style="display:none"/></label>
+        <label class="upload-label">Upload Image<input aria-label="Upload class logo image" type="file" id="cm-logo-file" accept="image/*" onchange="previewLogo(this)" style="display:none"/></label>
       </div>
       <div id="logo-preview-wrap" class="hidden" style="margin-top:8px">
-        <img id="logo-preview-img" style="width:56px;height:56px;border-radius:var(--r-sm);object-fit:cover;border:1px solid var(--border)"/>
+        <img id="logo-preview-img" alt="Class logo preview" style="width:56px;height:56px;border-radius:var(--r-sm);object-fit:cover;border:1px solid var(--border)"/>
         <button class="btn-outline small" onclick="clearLogo()" style="margin-left:8px">Remove</button>
       </div>
     </div>
     <div class="fgroup">
       <label>Banner Message <span class="opt-label">(optional)</span></label>
-      <input type="text" id="cm-banner-msg" placeholder="e.g. This week: Macbeth Act 2"/>
+      <input aria-label="e.g. This week: Macbeth Act 2" type="text" id="cm-banner-msg" placeholder="e.g. This week: Macbeth Act 2"/>
     </div>
     <div class="fgroup">
       <label>Class Code <span class="opt-label">(students use this to join)</span></label>
       <div class="code-row">
-        <input type="text" id="cm-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
+        <input aria-label="e.g. ENG2D-2024" type="text" id="cm-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
         <button class="btn-outline small" onclick="genCode()">Generate</button>
       </div>
       <span class="field-hint">Share this code with your students</span>
@@ -636,8 +638,8 @@
 
 <!-- SOCIAL WORKER POPUP -->
 <div id="sw-popup" class="modal-bg hidden">
-  <div class="modal support-modal">
-    <div class="modal-hdr"><h3>💙 We're Here For You</h3><button class="modal-close" onclick="dismissSWPopup(false)">✕</button></div>
+  <div class="modal support-modal" role="dialog" aria-modal="true" aria-labelledby="sw-popup-title">
+    <div class="modal-hdr"><h3 id="sw-popup-title">💙 We're Here For You</h3><button class="modal-close" aria-label="Close dialog" onclick="dismissSWPopup(false)">✕</button></div>
     <p>It sounds like you might be going through something difficult. You don't have to face it alone.</p>
     <div id="sw-contact-display"></div>
     <div class="sw-actions">
@@ -652,8 +654,8 @@
 
 <!-- PRIVACY MODAL -->
 <div id="privacy-modal" class="modal-bg hidden">
-  <div class="modal" style="max-width:600px;max-height:80vh;overflow-y:auto">
-    <div class="modal-hdr"><h3>🔒 Privacy Policy</h3><button class="modal-close" onclick="closeModal('privacy-modal')">✕</button></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title" style="max-width:600px;max-height:80vh;overflow-y:auto">
+    <div class="modal-hdr"><h3 id="privacy-modal-title">🔒 Privacy Policy</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('privacy-modal')">✕</button></div>
     <p style="font-size:.78rem;color:var(--muted)">Last updated: June 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
     <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
       <p><strong>What we collect</strong><br>Name, email, grade (students) or school/province (teachers), mood check-ins, sleep logs, energy logs, goals, journal entries, and class codes. Nothing else - no location, no device ID, no browsing history.</p>
@@ -685,8 +687,8 @@
 
 <!-- COOKIE POLICY MODAL -->
 <div id="cookie-policy-modal" class="modal-bg hidden">
-  <div class="modal" style="max-width:600px;max-height:80vh;overflow-y:auto">
-    <div class="modal-hdr"><h3>🍪 Cookie Policy</h3><button class="modal-close" onclick="closeModal('cookie-policy-modal')">✕</button></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cookie-policy-modal-title" style="max-width:600px;max-height:80vh;overflow-y:auto">
+    <div class="modal-hdr"><h3 id="cookie-policy-modal-title">🍪 Cookie Policy</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('cookie-policy-modal')">✕</button></div>
     <p style="font-size:.78rem;color:var(--muted)">Last updated: July 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
     <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
       <p><strong>What cookies are</strong><br>Cookies (and similar tools like local storage) are small pieces of data a website saves in your browser so it can remember things between visits, like whether you're logged in.</p>
@@ -707,14 +709,14 @@
 
 <!-- DELETE ACCOUNT MODAL -->
 <div id="delete-modal" class="modal-bg hidden">
-  <div class="modal">
-    <div class="modal-hdr"><h3>🗑 Delete Account</h3><button class="modal-close" onclick="closeModal('delete-modal')">✕</button></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal-hdr"><h3 id="delete-modal-title">🗑 Delete Account</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('delete-modal')">✕</button></div>
     <div style="background:var(--red-lt);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:18px">
       <p style="color:var(--red);font-weight:700;margin-bottom:4px">⚠️ This cannot be undone</p>
       <p style="color:var(--red);font-size:.88rem">All your data will be permanently deleted.</p>
     </div>
-    <div class="fgroup"><label>Type DELETE to confirm</label><input type="text" id="delete-confirm-input" placeholder="Type DELETE here…"/></div>
-    <div class="fgroup"><label>Enter your password</label><input type="password" id="delete-pass-input" placeholder="••••••••"/></div>
+    <div class="fgroup"><label for="delete-confirm-input">Type DELETE to confirm</label><input type="text" id="delete-confirm-input" placeholder="Type DELETE here…"/></div>
+    <div class="fgroup"><label for="delete-pass-input">Enter your password</label><input type="password" id="delete-pass-input" placeholder="••••••••"/></div>
     <div id="delete-err" class="ferr hidden"></div>
     <div class="modal-foot">
       <button class="btn-danger" onclick="executeDeleteAccount()">Permanently Delete</button>
@@ -725,18 +727,18 @@
 
 <!-- FORGOT PASSWORD MODAL -->
 <div id="forgot-modal" class="modal-bg hidden">
-  <div class="modal">
-    <div class="modal-hdr"><h3>🔑 Reset Password</h3><button class="modal-close" onclick="closeModal('forgot-modal')">✕</button></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="forgot-modal-title">
+    <div class="modal-hdr"><h3 id="forgot-modal-title">🔑 Reset Password</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('forgot-modal')">✕</button></div>
     <div id="forgot-step-1">
       <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Enter your email address and we'll send you a reset code.</p>
-      <div class="fgroup"><label>Email Address</label><input type="email" id="forgot-email" placeholder="you@email.com"/></div>
+      <div class="fgroup"><label for="forgot-email">Email Address</label><input type="email" id="forgot-email" placeholder="you@email.com"/></div>
       <div id="forgot-err" class="ferr hidden"></div>
       <button class="btn-main" onclick="sendResetCode()">Send Reset Code</button>
     </div>
     <div id="forgot-step-2" class="hidden">
       <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="forgot-email-display"></strong>. Enter it below.</p>
-      <div class="fgroup"><label>6-digit Code</label><input type="text" id="forgot-code-input" placeholder="123456" maxlength="6"/></div>
-      <div class="fgroup"><label>New Password</label><input type="password" id="forgot-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+      <div class="fgroup"><label for="forgot-code-input">6-digit Code</label><input type="text" id="forgot-code-input" placeholder="123456" maxlength="6"/></div>
+      <div class="fgroup"><label for="forgot-new-pass">New Password</label><input type="password" id="forgot-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
       <div id="forgot-reset-err" class="ferr hidden"></div>
       <div id="forgot-reset-ok" class="success-note hidden">✓ Password reset! Redirecting…</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
@@ -749,10 +751,10 @@
 
 <!-- EMAIL VERIFY MODAL -->
 <div id="verify-modal" class="modal-bg hidden">
-  <div class="modal">
-    <div class="modal-hdr"><h3>📧 Verify Your Email</h3><button class="modal-close" onclick="closeModal('verify-modal')">✕</button></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="verify-modal-title">
+    <div class="modal-hdr"><h3 id="verify-modal-title">📧 Verify Your Email</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('verify-modal')">✕</button></div>
     <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="verify-email-display"></strong>. Enter it below to activate your account.</p>
-    <div class="fgroup"><label>6-digit Code</label><input type="text" id="verify-code-input" placeholder="123456" maxlength="6"/></div>
+    <div class="fgroup"><label for="verify-code-input">6-digit Code</label><input type="text" id="verify-code-input" placeholder="123456" maxlength="6"/></div>
     <div id="verify-err" class="ferr hidden"></div>
     <div id="verify-ok" class="success-note hidden">✓ Verified! Creating your account…</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
