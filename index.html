@@ -1,844 +1,2305 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <!--
-    Security headers achievable on static GitHub Pages hosting (no server = no
-    real HTTP headers, so this is the meta-tag equivalent, which browsers do
-    honor for CSP and Referrer-Policy specifically).
-    Honest limitation: script-src includes 'unsafe-inline' because the app
-    uses onclick="" attributes throughout script.js/index.html. That means
-    this CSP does NOT stop inline-script based XSS - only the earlier
-    escapeHtml() fixes do that. What this DOES still block: loading any
-    script from a domain that isn't explicitly allow-listed below, which
-    stops a large class of data-exfiltration and third-party-script attacks.
-    X-Frame-Options, X-Content-Type-Options, and HSTS have no meta-tag
-    equivalent - those require a real HTTP header, which means either a
-    server or a CDN like Cloudflare in front of GitHub Pages.
-  -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://api.emailjs.com; frame-src 'self' https://*.firebaseapp.com; base-uri 'self'; form-action 'self';">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>WellSpace - Student Wellness & Productivity</title>
-  <meta name="description" content="WellSpace is a free wellness platform for high school students and teachers. Students track mood, sleep, energy, goals, and journal entries privately; teachers see classroom wellness trends and get alerts when a student may need support. Built for schools, not advertisers."/>
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "WellSpace",
-    "url": "https://wellspaceapp.github.io/WellSpace/",
-    "description": "WellSpace is a free wellness platform for high school students and teachers. Students track mood, sleep, energy, goals, and journal entries privately; teachers see classroom wellness trends and get alerts when a student may need support.",
-    "applicationCategory": "EducationApplication",
-    "operatingSystem": "Any (web browser)",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    },
-    "audience": [
-      { "@type": "EducationalAudience", "educationalRole": "student" },
-      { "@type": "EducationalAudience", "educationalRole": "teacher" }
+/* ═══════════════════════════════════════════════
+   WellSpace v2 - script.js
+   Full application logic
+═══════════════════════════════════════════════ */
+
+// ─────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// XSS PREVENTION - escape any user-supplied text before it goes into
+// innerHTML. Use this on every field a student/teacher typed themselves
+// (names, class subjects, task/goal text, journal entries, banner
+// messages, responsibilities, etc). Never needed for values you fully
+// control (hardcoded strings, computed dates, enum labels like mood names).
+// ─────────────────────────────────────────────
+function escapeHtml(str){
+  if(str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+const NEGATIVE_MOODS = ['Sad','Frustrated','Tired','Confused'];
+const MOOD_CFG = {
+  Happy:     {icon:'😊', msg:"You're radiating good energy today! Keep it up 🌟"},
+  Energized: {icon:'⚡', msg:"Amazing - channel that energy into something great!"},
+  Sad:       {icon:'😢', msg:"It's okay to feel sad. Be kind to yourself today 💙"},
+  Frustrated:{icon:'😤', msg:"Take a breath. This feeling is temporary. You've got this 💪"},
+  Tired:     {icon:'😴', msg:"Rest is productive too. Small breaks help a lot 🌙"},
+  Confused:  {icon:'🤔', msg:"Confusion is the beginning of learning. Ask for help!"},
+};
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const PROVINCES = ['Ontario','British Columbia','Alberta','Quebec','Nova Scotia','New Brunswick','Manitoba','Saskatchewan','PEI','Newfoundland & Labrador','Northwest Territories','Nunavut','Yukon'];
+
+// Helpline data by province
+const HELPLINES = {
+  Ontario: {
+    phone:[
+      {name:"Kids Help Phone",desc:"Free support for young people (24/7, confidential)",url:"https://www.kidshelpphone.ca",contact:"📞 1-800-668-6868 | Text CONNECT to 686868"},
+      {name:"Good2Talk",desc:"Counselling & referrals for post-secondary students",url:"https://www.good2talk.ca",contact:"📞 1-866-925-5454 | Online chat 24/7"},
+      {name:"ConnexOntario",desc:"Mental health, addiction & crisis services info/referral",url:"https://www.connexontario.ca",contact:"📞 1-866-531-2600"},
+      {name:"One Stop Talk",desc:"Free therapy sessions for youth ages 6-18",url:"https://onestoptalk.ca",contact:"📞 1-855-416-8255"},
+      {name:"Canada Suicide Prevention Service",desc:"English/French, 24/7",url:"https://www.crisisservicescanada.ca",contact:"📞 1-833-456-4566"},
+      {name:"Hope for Wellness Help Line",desc:"24/7 counselling for Indigenous Peoples",url:"https://hopeforwellness.ca/home.html",contact:"📞 1-855-242-3310"},
     ],
-    "publisher": {
-      "@type": "Organization",
-      "name": "WellSpace",
-      "url": "https://wellspaceapp.github.io/WellSpace/",
-      "email": "wellspacewebsite@gmail.com"
+    online:[
+      {name:"Youth Wellness Hubs Ontario",desc:"In-person supports ages 12-25",url:"https://youthhubs.ca/en/"},
+      {name:"Ontario Mental Health Support Directory",desc:"Government directory of local supports",url:"https://www.ontario.ca/page/find-mental-health-support"},
+      {name:"School Mental Health Ontario - Helpline Hub",desc:"Crisis & wellness info for students",url:"https://smho-smso.ca/students/helpline-hub/"},
+      {name:"Be There",desc:"Tips on supporting friends & yourself",url:"https://bethere.org/Home"},
+      {name:"Mind Your Mind",desc:"Youth mental health tools & info",url:"https://mindyourmind.ca"},
+    ]
+  },
+  "British Columbia":{
+    phone:[
+      {name:"Kids Help Phone",url:"https://www.kidshelpphone.ca",contact:"📞 1-800-668-6868 | Text CONNECT to 686868",desc:"24/7 free support"},
+      {name:"BC Crisis Line",url:"https://www.crisiscentre.bc.ca",contact:"📞 1-866-661-3311",desc:"24/7 emotional support"},
+      {name:"YouthSpace BC",url:"https://www.youthspace.ca",contact:"Text 778-783-0177",desc:"Youth crisis chat & text"},
+    ],
+    online:[
+      {name:"Here2Talk BC",desc:"Free counselling for post-secondary students",url:"https://here2talk.ca"},
+      {name:"BC Mental Health & Substance Use",desc:"Provincial resources & directory",url:"https://www.bcmhsus.ca"},
+    ]
+  },
+  Alberta:{
+    phone:[
+      {name:"Kids Help Phone",url:"https://www.kidshelpphone.ca",contact:"📞 1-800-668-6868",desc:"24/7 free support"},
+      {name:"Distress Centre Calgary",url:"https://www.distresscentre.com",contact:"📞 403-266-HELP (4357)",desc:"24/7 crisis & mental health"},
+      {name:"211 Alberta",url:"https://ab.211.ca",contact:"📞 2-1-1",desc:"Connect to social & mental health services"},
+    ],
+    online:[
+      {name:"Alberta Health Services-Mental Health",desc:"Provincial mental health services",url:"https://www.albertahealthservices.ca/findhealth/service.aspx?id=6810&serviceAtFacilityID=1047652"},
+    ]
+  },
+  default:{
+    phone:[
+      {name:"Kids Help Phone",desc:"Free support for young people across Canada (24/7)",url:"https://www.kidshelpphone.ca",contact:"📞 1-800-668-6868 | Text CONNECT to 686868"},
+      {name:"Canada Suicide Prevention Service",desc:"English/French, 24/7",url:"https://www.crisisservicescanada.ca",contact:"📞 1-833-456-4566"},
+      {name:"Hope for Wellness Help Line",desc:"24/7 counselling for Indigenous Peoples",url:"https://hopeforwellness.ca",contact:"📞 1-855-242-3310"},
+    ],
+    online:[
+      {name:"Be There",desc:"Supporting yourself and friends",url:"https://bethere.org/Home"},
+    ]
+  }
+};
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let CU = null;
+let authRole = null;
+let pendingMoodSel = null;
+let periodOrder = [];
+
+// ─────────────────────────────────────────────
+// FIREBASE CONFIG
+// ─────────────────────────────────────────────
+const FB_CFG = {
+  apiKey: "AIzaSyCpUsu0Y2zbd7PH6a8b-NP6B7yEB7UL9Go",
+  authDomain: "wellspace-71c0c.firebaseapp.com",
+  projectId: "wellspace-71c0c",
+};
+
+let fbDb   = null;
+let fbAuth = null;
+
+function initFirebase(){
+  try {
+    if(!firebase.apps.length) firebase.initializeApp(FB_CFG);
+    fbDb   = firebase.firestore();
+    fbAuth = firebase.auth();
+  } catch(e){ fbDb = null; fbAuth = null; }
+}
+
+// ─────────────────────────────────────────────
+// GLOBAL SAFETY NET - catches anything that slips
+// past a local try/catch, plus offline/online state
+// ─────────────────────────────────────────────
+window.addEventListener('error', function(e){
+  console.error('Uncaught error:', e.error || e.message);
+  toast('⚠️ Something went wrong. Try refreshing the page.');
+});
+
+window.addEventListener('unhandledrejection', function(e){
+  console.error('Unhandled promise rejection:', e.reason);
+  toast('⚠️ Something went wrong. Try refreshing the page.');
+});
+
+window.addEventListener('offline', function(){
+  toast('📡 You\'re offline — changes will save once you\'re back online.');
+});
+
+window.addEventListener('online', function(){
+  toast('✅ Back online.');
+});
+
+// ─────────────────────────────────────────────
+// FIRESTORE HELPERS - per-user + shared
+// ─────────────────────────────────────────────
+
+// Save a key to the current user's private Firestore doc
+async function fsSet(key, value){
+  if(!fbDb || !fbAuth?.currentUser) return;
+  try {
+    await fbDb.collection('users').doc(fbAuth.currentUser.uid)
+      .set({ [key]: JSON.stringify(value) }, { merge: true });
+  } catch(e){
+    console.error('fsSet failed for key', key, e);
+    toast('⚠️ Could not save - check your connection and try again.');
+  }
+}
+
+// Read a key from the current user's private Firestore doc
+async function fsGet(key, def=null){
+  if(!fbDb || !fbAuth?.currentUser) return def;
+  try {
+    const doc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    if(!doc.exists) return def;
+    const val = doc.data()[key];
+    return val ? JSON.parse(val) : def;
+  } catch(e){ return def; }
+}
+
+// Save to shared collection (class codes, classes list - readable by all authenticated users)
+async function fsSetShared(key, value){
+  if(!fbDb) return;
+  try {
+    await fbDb.collection('shared').doc('data')
+      .set({ [key]: JSON.stringify(value) }, { merge: true });
+  } catch(e){
+    console.error('fsSetShared failed for key', key, e);
+    toast('⚠️ Could not save - check your connection and try again.');
+  }
+}
+
+// Read from shared collection
+async function fsGetShared(key, def=null){
+  if(!fbDb) return def;
+  try {
+    const doc = await fbDb.collection('shared').doc('data').get();
+    if(!doc.exists) return def;
+    const val = doc.data()?.[key];
+    return val ? JSON.parse(val) : def;
+  } catch(e){ return def; }
+}
+
+// ─────────────────────────────────────────────
+// LOCAL CACHE - fast reads, Firestore is source of truth
+// ─────────────────────────────────────────────
+const cache = {};
+
+function cSet(k, v){ cache[k] = v; }
+function cGet(k, def=null){ return k in cache ? cache[k] : def; }
+
+// Keys that are shared across all users (classes, class codes)
+const SHARED_KEYS = ['classes'];
+// Keys that belong to all users but need to be read by teachers (moods, wellness, goals, responsibilities)
+// These are stored per-user but teachers read their students' docs
+const CROSS_KEYS  = ['moods','goals','wellness','responsibilities','journals','messages'];
+// Keys private to one user
+const PRIVATE_KEYS= ['students','teachers'];
+
+// ─────────────────────────────────────────────
+// UNIFIED S - same API as before, now Firestore-backed
+// ─────────────────────────────────────────────
+const S = {
+  get(k, def=null){
+    // Return from cache first for speed
+    return cGet(k, def);
+  },
+  set(k, v){
+    cSet(k, v);
+    // Persist to correct Firestore location
+    if(SHARED_KEYS.includes(k)){
+      fsSetShared(k, v);
+    } else {
+      fsSet(k, v);
+    }
+  },
+};
+
+// Shortcuts - same as original
+const gs  = ()=> S.get('students',[]);
+const gt  = ()=> S.get('teachers',[]);
+const gc  = ()=> S.get('classes',[]);
+const gm  = ()=> S.get('moods',[]);
+const ggo = ()=> S.get('goals',[]);
+const gw  = ()=> S.get('wellness',[]);
+const gmsg= ()=> S.get('messages',[]);
+const gj  = ()=> S.get('journals',[]);
+
+// ─────────────────────────────────────────────
+// LOAD USER DATA FROM FIRESTORE INTO CACHE
+// (single, de-duplicated version - also loads profile + per-doc classes)
+// ─────────────────────────────────────────────
+async function loadUserData(){
+  if(!fbDb || !fbAuth?.currentUser) return;
+  try {
+    // Load user's private data from /users/{uid}
+    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    if(userDoc.exists){
+      const data = userDoc.data();
+      Object.entries(data).forEach(([k,v])=>{
+        try{ cSet(k, JSON.parse(v)); }catch{}
+      });
+    }
+
+    // ALSO load profile data (classIds, name, etc.) from /profiles/{uid}
+    const profileDoc = await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).get();
+    if(profileDoc.exists){
+      const pdata = profileDoc.data();
+      if(CU){
+        if(pdata.classIds) CU.classIds = pdata.classIds;
+        if(pdata.name) CU.name = pdata.name;
+        if(pdata.grade) CU.grade = pdata.grade;
+        if(pdata.periodOrder) CU.periodOrder = pdata.periodOrder;
+      }
+    }
+
+    // Load shared data (classes) - legacy blob, for backwards compatibility
+    const sharedDoc = await fbDb.collection('shared').doc('data').get();
+    if(sharedDoc.exists){
+      const data = sharedDoc.data();
+      ['classes'].forEach(k=>{
+        if(data[k]){ try{ cSet(k, JSON.parse(data[k])); }catch{} }
+      });
+    }
+
+    // Load from new per-doc classes collection (this is the source of truth going forward)
+    const classes = await fsGetAllClasses();
+    if(classes.length) cSet('classes', classes);
+
+  } catch(e){ console.error('loadUserData error', e); }
+}
+
+// ─────────────────────────────────────────────
+// STUDENT-TEACHER LINK - store uid mapping
+// ─────────────────────────────────────────────
+// When a user signs up we store their profile in /profiles/{uid}
+// So teachers can look up student uids to read their data
+async function saveProfile(uid, profile){
+  if(!fbDb) return;
+  try {
+    await fbDb.collection('profiles').doc(uid).set(profile, { merge: true });
+  } catch(e){
+    console.error('saveProfile failed', e);
+    toast('⚠️ Could not save your profile - check your connection and try again.');
+  }
+}
+
+async function getProfile(uid){
+  if(!fbDb) return null;
+  try {
+    const doc = await fbDb.collection('profiles').doc(uid).get();
+    return doc.exists ? doc.data() : null;
+  } catch(e){ return null; }
+}
+
+// Get all student uids in a teacher's classes - batched to respect Firebase's
+// 10-value limit on array-contains-any, so this still works with 10+ classes.
+async function getStudentUids(classIds){
+  if(!fbDb || !classIds?.length) return [];
+
+  const chunks = [];
+  for (let i = 0; i < classIds.length; i += 10) {
+    chunks.push(classIds.slice(i, i + 10));
+  }
+
+  const results = [];
+  const seen = new Set();
+
+  for (const chunk of chunks) {
+    try {
+      const snap = await fbDb.collection('profiles')
+        .where('role','==','student')
+        .where('classIds','array-contains-any', chunk)
+        .get();
+      snap.docs.forEach(d=>{
+        if(!seen.has(d.id)){
+          seen.add(d.id);
+          results.push({ uid: d.id, ...d.data() });
+        }
+      });
+    } catch(e){ console.error('getStudentUids chunk error', e); }
+  }
+
+  return results;
+}
+
+// Load a single student's full data doc (used by the teacher dashboard)
+async function loadStudentData(uid){
+  if(!fbDb) return {};
+  try {
+    const doc = await fbDb.collection('users').doc(uid).get();
+    if(!doc.exists) return {};
+    const raw = doc.data();
+    const parsed = {};
+    Object.entries(raw).forEach(([k,v])=>{
+      try{ parsed[k] = JSON.parse(v); }catch{ parsed[k] = v; }
+    });
+    // Ensure a 'students' entry always exists, built from the profile if missing,
+    // so the teacher dashboard can always render a row for this student.
+    if(!parsed.students){
+      const profile = await getProfile(uid);
+      if(profile){
+        parsed.students = [{
+          id: profile.localId || uid,
+          name: profile.name,
+          email: profile.email,
+          grade: profile.grade,
+          classIds: profile.classIds || [],
+          periodOrder: profile.periodOrder || [],
+          joined: profile.joined,
+        }];
+      }
+    }
+    return parsed;
+  } catch(e){ console.error('loadStudentData error', e); return {}; }
+}
+
+// Merge an array of records into another array by a unique key (studentId + extra fields),
+// replacing any existing record for that student/date/type combo so re-fetches don't duplicate.
+function mergeInto(target, incoming, keyField){
+  incoming.forEach(item=>{
+    const idx = target.findIndex(t => t.id && item.id && t.id === item.id);
+    if(idx >= 0) target[idx] = item;
+    else target.push(item);
+  });
+}
+
+// ─────────────────────────────────────────────
+// VALIDATION
+// ─────────────────────────────────────────────
+function validEmail(e){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e.trim());
+}
+function validPw(p){
+  return p.length>=8 && /[A-Z]/.test(p) && /[0-9]/.test(p) && /[!@#$%^&*(),.?":{}|<>]/.test(p);
+}
+function checkPwStrength(v){
+  const rules = {
+    'r-len':   v.length>=8,
+    'r-upper': /[A-Z]/.test(v),
+    'r-num':   /[0-9]/.test(v),
+    'r-special':/[!@#$%^&*(),.?":{}|<>]/.test(v),
+  };
+  let score = Object.values(rules).filter(Boolean).length;
+  const fill = document.getElementById('pw-strength-fill');
+  const colors = ['','#ef4444','#f59e0b','#3b82f6','#22c55e'];
+  if(fill){ fill.style.width=(score*25)+'%'; fill.style.background=colors[score]||''; }
+  Object.entries(rules).forEach(([id,ok])=>{
+    const el=document.getElementById(id);
+    if(el){ el.classList.toggle('ok',ok); }
+  });
+}
+function togglePw(id,btn){
+  const inp=document.getElementById(id);
+  if(!inp)return;
+  if(inp.type==='password'){ inp.type='text'; btn.textContent='🙈'; }
+  else{ inp.type='password'; btn.textContent='👁'; }
+}
+
+// ─────────────────────────────────────────────
+// SCREEN NAVIGATION
+// ─────────────────────────────────────────────
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>{
+    s.classList.remove('active','fade');
+    s.style.display='none';
+    s.style.flexDirection='';
+  });
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.style.display='flex';
+  if(id==='screen-student'||id==='screen-teacher') el.style.flexDirection='column';
+  el.classList.add('active','fade');
+}
+
+function gotoAuth(role){
+  authRole=role;
+  const brand=document.getElementById('auth-brand-label');
+  brand.textContent = role==='student' ? '🎒 Student Login' : '📋 Teacher Login';
+  document.getElementById('su-student-fields').classList.toggle('hidden', role!=='student');
+  document.getElementById('su-teacher-fields').classList.toggle('hidden', role!=='teacher');
+  authTab('login');
+  showScreen('screen-auth');
+}
+
+function authTab(tab){
+  document.getElementById('form-login').classList.toggle('hidden', tab!=='login');
+  document.getElementById('form-signup').classList.toggle('hidden', tab!=='signup');
+  document.getElementById('atab-login').classList.toggle('active', tab==='login');
+  document.getElementById('atab-signup').classList.toggle('active', tab!=='login');
+}
+
+// ─────────────────────────────────────────────
+// COOKIE CONSENT - synced to the account, not just the browser
+// So the consent question only ever gets asked once per account,
+// even if the student logs in on a different device later.
+// ─────────────────────────────────────────────
+async function saveCookieConsentToAccount(accepted){
+  if(!fbAuth?.currentUser) return; // not logged in yet, localStorage handles it for now
+  try {
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).set(
+      { cookieConsent: accepted, cookieConsentDate: today() },
+      { merge: true }
+    );
+  } catch(e){ console.error('saveCookieConsentToAccount failed', e); }
+}
+window.saveCookieConsentToAccount = saveCookieConsentToAccount;
+
+async function syncCookieConsentAfterLogin(uid){
+  try {
+    const profile = await getProfile(uid);
+    const banner = document.getElementById('cookie-banner');
+    if(profile && typeof profile.cookieConsent === 'boolean'){
+      // Account already answered before (maybe on another device) - use that,
+      // don't ask again.
+      localStorage.setItem('wellspace_cookie_consent', profile.cookieConsent ? 'accepted' : 'declined');
+      if(banner) banner.classList.add('hidden');
+      if(profile.cookieConsent && typeof loadGoogleAnalytics==='function') loadGoogleAnalytics();
+    } else {
+      // Account has no answer yet. If this browser already answered
+      // (e.g. they chose on the entry screen before logging in), save
+      // that answer to the account now so it's remembered going forward.
+      const local = localStorage.getItem('wellspace_cookie_consent');
+      if(local === 'accepted' || local === 'declined'){
+        await saveCookieConsentToAccount(local === 'accepted');
+      }
+    }
+  } catch(e){ console.error('syncCookieConsentAfterLogin failed', e); }
+}
+
+// ─────────────────────────────────────────────
+// AUTH - LOGIN (Firebase Auth)
+// ─────────────────────────────────────────────
+async function doLogin(){
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-err');
+
+  if(!email||!pass) return showErr(errEl,'Please enter your email and password.');
+  if(!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
+
+  try {
+    showErr(errEl,''); // clear error
+    const cred = await fbAuth.signInWithEmailAndPassword(email, pass);
+    const uid  = cred.user.uid;
+
+    // Load profile
+    const profile = await getProfile(uid);
+    if(!profile) return showErr(errEl,'Account not found. Please sign up.');
+
+    // Check role matches
+    if(profile.role !== authRole) return showErr(errEl, `This is a ${profile.role} account. Please use the ${profile.role} login.`);
+
+    CU = { ...profile, id: profile.localId || uid, uid };
+    await loadUserData();
+    syncCookieConsentAfterLogin(uid);
+
+    toast(`Welcome back, ${CU.name}! 👋`);
+    if(authRole==='student') loadStudentDash();
+    else { await loadTeacherStudents(); loadTeacherDash(); }
+
+  } catch(e){
+    if(e.code==='auth/wrong-password'||e.code==='auth/user-not-found'||e.code==='auth/invalid-credential'){
+      showErr(errEl,'Email or password incorrect. Check your details.');
+    } else {
+      showErr(errEl,'Login failed. Please try again.');
     }
   }
-  </script>
-  <link rel="manifest" href="manifest.json"/>
-  <meta name="theme-color" content="#0f2942"/>
-  <meta property="og:type" content="website" />
-<meta property="og:url" content="https://wellspaceapp.github.io/WellSpace/" />
-<meta property="og:title" content="WellSpace - Student Wellness Web App" />
-<meta property="og:description" content="Free wellness platform for high school students and educators. Private mood check-ins, goal tracking, and teacher dashboards. No download required." />
-<meta property="og:image" content="https://wellspaceapp.github.io/WellSpace/og-image.png" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="WellSpace - Student Wellness Web App" />
-<meta name="twitter:description" content="Free wellness platform for high school students and educators. Private mood check-ins, goal tracking, and teacher dashboards." />
-<meta name="twitter:image" content="https://wellspaceapp.github.io/WellSpace/og-image.png" />
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="WellSpace"/>
-  <link rel="apple-touch-icon" href="icon-192.png"/>
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"/>
-  <link rel="stylesheet" href="style.css"/>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:wght@600;700&display=swap" rel="stylesheet"/>
-  <style>:root{--font:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;--font-d:'Fraunces',Georgia,'Times New Roman',serif}</style>
-</head>
-<body>
+}
 
-<a href="#" class="skip-link" onclick="event.preventDefault(); const m = document.getElementById('s-main').offsetParent ? 's-main' : (document.getElementById('t-main').offsetParent ? 't-main' : null); if(m){ const el=document.getElementById(m); el.setAttribute('tabindex','-1'); el.focus(); }">Skip to main content</a>
+// ─────────────────────────────────────────────
+// AUTH - SIGNUP (Firebase Auth)
+// ─────────────────────────────────────────────
+async function doSignup(){
+  const name  = document.getElementById('su-name').value.trim();
+  const email = document.getElementById('su-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('su-pass').value;
+  const privacyOk = document.getElementById('su-privacy').checked;
+  const errEl = document.getElementById('signup-err');
 
-<!-- COOKIE CONSENT BANNER -->
-<div id="cookie-banner" class="cookie-banner hidden">
-  <div class="cookie-banner-inner">
-    <p class="cookie-text">
-      🍪 We use a small amount of website analytics (Google Analytics) to see how many people visit WellSpace and which pages are useful - never your mood check-ins, journal entries, or any personal info. Read our <a href="#" onclick="openModal('cookie-policy-modal');return false;">Cookie Policy</a>.
-    </p>
-    <div class="cookie-actions">
-      <button class="btn-outline small" onclick="setCookieConsent(false)">Decline</button>
-      <button class="btn-main small" onclick="setCookieConsent(true)">Accept</button>
-    </div>
-  </div>
-</div>
+  if(!name||!email||!pass) return showErr(errEl,'Please fill in all required fields.');
+  if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address.');
+  if(!validPw(pass))       return showErr(errEl,'Password must be 8+ chars with uppercase, number & special character.');
+  if(!privacyOk)           return showErr(errEl,'Please accept the privacy policy to continue.');
 
-<!-- ENTRY SCREEN -->
-<div id="screen-entry" class="screen active">
-  <div class="entry-bg">
-    <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
-  </div>
-  <div class="entry-glass">
-    <div class="entry-brand"><span class="brand-leaf">🌿</span><span class="brand-name">WellSpace</span></div>
-    <p class="entry-sub">Wellness · Productivity · Balance</p>
-    <div class="entry-cards">
-      <button class="role-card student-card" onclick="gotoAuth('student')">
-        <div class="role-icon">🎒</div>
-        <div class="role-text">
-          <div class="role-label">I'm a Student</div>
-          <div class="role-desc">Track moods, goals & stay on track</div>
+  try {
+    if(authRole==='student'){
+      const grade = document.getElementById('su-grade').value;
+      const code  = document.getElementById('su-code').value.trim().toUpperCase();
+      if(!grade) return showErr(errEl,'Please select your grade.');
+
+      // Look up class code in the per-doc classes collection (source of truth)
+      const classes = await fsGetAllClasses();
+      cSet('classes', classes);
+
+      let classIds = [];
+      if(code){
+        const cls = classes.find(c=>c.code===code);
+        if(!cls) return showErr(errEl,`Class code "${code}" not found. Ask your teacher for the correct code.`);
+        classIds = [cls.id];
+      }
+
+      // Create Firebase Auth account
+      const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+      const uid  = cred.user.uid;
+      const localId = 's'+uid8();
+
+      const profile = { role:'student', name, email, grade, classIds, periodOrder:[], joined:today(), localId, uid };
+
+      // Save profile to shared profiles collection (this is what teachers query)
+      await saveProfile(uid, profile);
+
+      // Save student list entry to user's own doc
+      const studentEntry = { id:localId, name, email, grade, classIds, periodOrder:[], joined:today() };
+      cSet('students', [studentEntry]);
+      await fsSet('students', [studentEntry]);
+
+      CU = { ...profile, id: localId };
+      await loadUserData();
+      toast(`Account created! Welcome, ${name} 🎉`);
+      loadStudentDash();
+
+    } else {
+      const province = document.getElementById('su-province').value;
+      const school   = document.getElementById('su-school').value.trim();
+      if(!province) return showErr(errEl,'Please select your province.');
+
+      const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+      const uid  = cred.user.uid;
+      const localId = 't'+uid8();
+
+      const profile = { role:'teacher', name, email, province, school, socialWorker:null, joined:today(), localId, uid };
+      await saveProfile(uid, profile);
+
+      const teacherEntry = { id:localId, name, email, province, school, socialWorker:null, joined:today() };
+      cSet('teachers', [teacherEntry]);
+      await fsSet('teachers', [teacherEntry]);
+
+      CU = { ...profile, id: localId };
+      await loadUserData();
+      toast(`Account created! Welcome, ${name} 📋`);
+      loadTeacherDash();
+    }
+  } catch(e){
+    if(e.code==='auth/email-already-in-use'){
+      showErr(errEl,'An account with this email already exists.');
+    } else {
+      showErr(errEl,'Could not create account. Please try again.');
+      console.error(e);
+    }
+  }
+}
+
+function logout(){
+  CU=null; authRole=null;
+  pendingMoodSel=null;
+  Object.keys(cache).forEach(k=>delete cache[k]);
+  invalidateTeacherCache();
+  if(fbAuth) fbAuth.signOut().catch(()=>{});
+  showScreen('screen-entry');
+}
+
+// ─────────────────────────────────────────────
+// TEACHER - load students across Firestore docs
+// Cached for 60s so the dashboard doesn't re-read everything on every click.
+// ─────────────────────────────────────────────
+let _teacherStudentCache = null;
+let _teacherStudentCacheTime = 0;
+const TEACHER_CACHE_TTL = 60 * 1000; // 60 seconds
+
+async function loadTeacherStudents(){
+  const now = Date.now();
+
+  // Serve from cache if fresh
+  if (_teacherStudentCache && (now - _teacherStudentCacheTime) < TEACHER_CACHE_TTL) {
+    Object.entries(_teacherStudentCache).forEach(([k, v]) => cSet(k, v));
+    return;
+  }
+
+  const myClasses  = gc().filter(c => c.teacherId === CU.id);
+  const myClassIds = myClasses.map(c => c.id);
+  if (!myClassIds.length) {
+    // No classes yet - clear any stale student data and bail
+    cSet('students', []);
+    return;
+  }
+
+  try {
+    // Batched query - works for any number of classes, not just <=10
+    const studentProfiles = await getStudentUids(myClassIds);
+
+    const allStudents = [];
+    const allMoods    = cGet('moods', []);
+    const allGoals    = cGet('goals', []);
+    const allWellness = cGet('wellness', []);
+    const allResps    = cGet('responsibilities', []);
+
+    for (const sp of studentProfiles) {
+      const data = await loadStudentData(sp.uid);
+
+      if (data.students) {
+        // Only add students who are actually in one of this teacher's classes
+        const myStudents = data.students.filter(s =>
+          s.classIds && s.classIds.some(id => myClassIds.includes(id))
+        );
+        allStudents.push(...myStudents);
+      }
+
+      if (data.moods)            mergeInto(allMoods,    data.moods,            'studentId');
+      if (data.goals)            mergeInto(allGoals,    data.goals,            'studentId');
+      if (data.wellness)         mergeInto(allWellness, data.wellness,         'studentId');
+      if (data.responsibilities) mergeInto(allResps,    data.responsibilities, 'studentId');
+    }
+
+    cSet('students',         allStudents);
+    cSet('moods',            allMoods);
+    cSet('goals',            allGoals);
+    cSet('wellness',         allWellness);
+    cSet('responsibilities', allResps);
+
+    _teacherStudentCache = {
+      students: allStudents,
+      moods: [...allMoods],
+      goals: [...allGoals],
+      wellness: [...allWellness],
+      responsibilities: [...allResps],
+    };
+    _teacherStudentCacheTime = now;
+
+  } catch (e) { console.error('loadTeacherStudents error', e); }
+}
+
+// Call this after any action that changes student/class data, so the next
+// dashboard read pulls fresh data instead of serving the 60s cache.
+function invalidateTeacherCache(){
+  _teacherStudentCache = null;
+  _teacherStudentCacheTime = 0;
+}
+
+// ─────────────────────────────────────────────
+// STUDENT DASHBOARD
+// ─────────────────────────────────────────────
+function loadStudentDash(){
+  showScreen('screen-student');
+  const el=document.getElementById('screen-student');
+  el.style.display='flex'; el.classList.add('active');
+
+  const h=new Date().getHours();
+  const gr=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  document.getElementById('s-greet').textContent=`${gr}, ${CU.name}! 👋`;
+  document.getElementById('s-date').textContent=new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric'});
+  document.getElementById('s-av').textContent=CU.name[0].toUpperCase();
+
+  updateStudentNav();
+  sSection('home');
+}
+
+function hasClasses(){
+  return CU.classIds && CU.classIds.length > 0;
+}
+
+function updateStudentNav(){
+  const navItems = document.querySelectorAll('#s-sidebar .sn');
+  if(navItems[8]) navItems[8].style.display = '';
+}
+
+function sSection(name){
+  document.querySelectorAll('#s-sidebar .sn').forEach(n=>n.classList.remove('active'));
+  const navMap=['home','mood','goals','calendar','stats','wellness','help','classes','profile'];
+  const idx=navMap.indexOf(name);
+  const navItems=document.querySelectorAll('#s-sidebar .sn');
+  if(navItems[idx]) navItems[idx].classList.add('active');
+
+  document.querySelectorAll('#s-main .dsec').forEach(s=>s.classList.remove('active'));
+  const sec=document.getElementById('s-sec-'+name);
+  if(sec) sec.classList.add('active');
+
+  if(name==='home')     renderHome();
+  if(name==='mood')     renderMoodCheck();
+  if(name==='goals')    renderGoalsSection();
+  if(name==='calendar') renderCalendar();
+  if(name==='stats')    renderStats();
+  if(name==='wellness') renderWellnessSection();
+  if(name==='help')     renderHelpSection();
+  if(name==='classes')  renderClassesSection();
+  if(name==='profile')  renderStudentProfile();
+}
+
+// HOME
+function renderHome(){
+  const hour=new Date().getHours();
+  const bannerEl=document.getElementById('s-home-banner');
+  const msgs=[
+    [5,11,"Morning, {n}! 🌅 Start your day with intention."],
+    [11,14,"Hey {n}! 🌤 It's the middle of the day - how are you feeling?"],
+    [14,18,"Afternoon, {n}! 📚 Great time to focus on your most important tasks."],
+    [18,21,"Evening, {n}! 🌙 Wind down your work and get ready for tomorrow."],
+    [21,24,"Late night, {n}! 😴 Remember - sleep is the best productivity tool."],
+    [0,5,"Very late, {n}! 🌙 You need rest. Your goals will be here tomorrow."],
+  ];
+  const [, , msg] = msgs.find(([s,e])=>hour>=s&&hour<e)||msgs[0];
+  bannerEl.innerHTML=`<strong>${msg.replace('{n}',escapeHtml(CU.name))}</strong><p>${new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</p>`;
+
+  const goals=ggo().filter(g=>g.studentId===CU.id&&!g.done).slice(0,4);
+  const todayDay=new Date().toLocaleDateString('en-CA',{weekday:'long'});
+  const todayGoals=goals.filter(g=>g.day===todayDay);
+  const prevEl=document.getElementById('s-home-goals-preview');
+  if(todayGoals.length>0){
+    prevEl.innerHTML=`
+      <div class="sub-hdr" style="margin-top:0">Today's Tasks (${todayDay})</div>
+      ${todayGoals.map(g=>`
+        <div class="goal-row" style="margin-bottom:8px">
+          <div class="gcheck ${g.done?'checked':''}" onclick="quickToggleGoal('${g.id}');">${g.done?'✓':''}</div>
+          <div class="ginfo"><h5>${escapeHtml(g.task)}</h5><span class="gmeta">🕐 ${escapeHtml(g.time)} · ${escapeHtml(g.duration)}</span></div>
+          <span class="gtype-badge gtype-${g.type||'study'}">${typeLabel(g.type)}</span>
         </div>
-        <span class="role-arrow">→</span>
-      </button>
-      <button class="role-card teacher-card" onclick="gotoAuth('teacher')">
-        <div class="role-icon">📋</div>
-        <div class="role-text">
-          <div class="role-label">I'm a Teacher</div>
-          <div class="role-desc">Manage classes & support students</div>
+      `).join('')}
+    `;
+  } else {
+    prevEl.innerHTML=`<div class="ai-nudge" style="margin-top:16px"><div class="ai-nudge-icon">🎯</div><div><strong>No tasks for today yet</strong><p>Head to Goals to plan your day!</p></div></div>`;
+  }
+}
+
+// MOOD CHECK
+function renderMoodCheck(){
+  const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
+  const todayMoods = gm().filter(m => m.studentId === CU.id && m.date === today());
+  const container = document.getElementById('s-mood-list');
+  const hasTeacher = hasClasses();
+
+  const items = [
+    ...(hasTeacher ? myClasses.map(c => ({id:c.id, label:c.subject, time:`${c.startTime} - ${c.endTime}`, isClass:true})) : []),
+    {id:'general', label:'How are you feeling today?', time:'', isClass:false},
+  ];
+
+  const sub = document.querySelector('#s-sec-mood .sec-hdr p');
+  if(sub) sub.textContent = hasTeacher ? 'How are you feeling in each period today?' : 'Check in with yourself - just for you 🌱';
+
+  container.innerHTML = items.map(item => {
+    const existing = todayMoods.find(m => m.classId === item.id);
+    const shareButtons = hasTeacher
+      ? `<button class="btn-green" onclick="saveMood(true)">Share with Teacher</button>
+         <button class="btn-outline" onclick="saveMood(false)">Keep Private</button>`
+      : `<button class="btn-green" onclick="saveMood(false)">Save</button>`;
+
+    return `
+      <div class="mood-card">
+        <div class="mood-card-hdr">
+          <h4>${item.isClass ? '📚 ' : ''}${escapeHtml(item.label)}</h4>
+          ${item.time ? `<span class="cls-time">${escapeHtml(item.time)}</span>` : ''}
         </div>
-        <span class="role-arrow">→</span>
-      </button>
-    </div>
-    <p class="entry-help-note">Need mental health support right now? <a href="#" onclick="showHelplines()">Click here</a> - no account needed.</p>
-  </div>
-</div>
-
-<!-- QUICK HELPLINES -->
-<div id="quick-helplines" class="screen">
-  <div class="helpline-full">
-    <button class="back-link" onclick="showScreen('screen-entry')">← Back</button>
-    <div id="quick-helpline-content"></div>
-  </div>
-</div>
-
-<!-- AUTH SCREEN -->
-<div id="screen-auth" class="screen">
-  <div class="auth-bg"></div>
-  <div class="auth-container">
-    <button class="back-link" onclick="showScreen('screen-entry')">← Back</button>
-    <div class="auth-card" id="auth-card">
-      <div class="auth-brand" id="auth-brand-label"></div>
-      <div class="auth-tabs">
-        <button class="atab active" id="atab-login" onclick="authTab('login')">Log In</button>
-        <button class="atab" id="atab-signup" onclick="authTab('signup')">Sign Up</button>
+        <div class="mood-btns">
+          ${Object.keys(MOOD_CFG).map(mood=>`
+            <button class="mood-btn ${existing?.mood===mood?'sel':''}" data-m="${mood}"
+              onclick="selectMood('${item.id}','${escQ(item.label)}','${mood}')">
+              ${MOOD_CFG[mood].icon} ${mood}
+            </button>
+          `).join('')}
+        </div>
+        ${existing ? `<div class="mood-done">✓ Mood logged${hasTeacher && existing.shared ? ' · Shared with teacher' : ' · Private'}</div>` : ''}
       </div>
-      <div id="form-login">
-        <div class="fgroup">
-          <label for="login-email">Email Address</label>
-          <input type="email" id="login-email" placeholder="you@email.com" autocomplete="email"/>
+      <div id="mood-support-popup-${item.id}" class="support-popup hidden">
+        <div class="sp-inner">
+          <div id="sp-icon-${item.id}" class="sp-icon"></div>
+          <p id="sp-msg-${item.id}"></p>
+          <div class="sp-actions">${shareButtons}</div>
         </div>
-        <div class="fgroup">
-          <label for="login-pass">Password</label>
-          <div class="pw-wrap">
-            <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/>
-            <button class="pw-toggle" onclick="togglePw('login-pass',this)">👁</button>
-          </div>
-        </div>
-        <div id="login-err" class="ferr hidden"></div>
-        <button class="btn-main" onclick="doLogin()">Log In</button>
-        <p style="text-align:center;margin-top:12px;font-size:.85rem">
-          <a href="#" onclick="openModal('forgot-modal')" style="color:var(--blue)">Forgot your password? 🔑 Reset Password</a>
-        </p>
       </div>
-      <div id="form-signup" class="hidden">
-        <div class="fgroup">
-          <label for="su-name">Full Name</label>
-          <input type="text" id="su-name" placeholder="Your full name"/>
+    `;
+  }).join('');
+}
+
+function escQ(s){ return s.replace(/'/g,"\\'"); }
+
+function selectMood(classId, classLabel, mood){
+  document.querySelectorAll('.support-popup').forEach(p => p.classList.add('hidden'));
+  pendingMoodSel = {classId, classLabel, mood};
+  const cfg = MOOD_CFG[mood];
+  const popup  = document.getElementById(`mood-support-popup-${classId}`);
+  const iconEl = document.getElementById(`sp-icon-${classId}`);
+  const msgEl  = document.getElementById(`sp-msg-${classId}`);
+  if(popup && iconEl && msgEl){
+    iconEl.textContent = cfg.icon;
+    msgEl.textContent  = cfg.msg;
+    popup.classList.remove('hidden');
+  }
+  if(NEGATIVE_MOODS.includes(mood)){
+    if(!S.get('sw_dismissed_' + CU.id)){
+      setTimeout(() => showSWPopup(mood), 1500);
+    }
+  }
+}
+
+function saveMood(shared){
+  if(!pendingMoodSel) return;
+  const moods = gm().filter(m => !(m.studentId===CU.id && m.classId===pendingMoodSel.classId && m.date===today()));
+  moods.push({studentId:CU.id, classId:pendingMoodSel.classId, classLabel:pendingMoodSel.classLabel, mood:pendingMoodSel.mood, date:today(), shared});
+  S.set('moods', moods);
+  pendingMoodSel = null;
+  document.querySelectorAll('.support-popup').forEach(p => p.classList.add('hidden'));
+  toast('Mood saved! ' + (shared && hasClasses() ? 'Shared with teacher.' : 'Saved privately.'));
+  renderMoodCheck();
+}
+
+function showSWPopup(mood){
+  if(sessionStorage.getItem('sw_popup_shown')) return;
+  let swInfo = null;
+  if(hasClasses()){
+    const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
+    if(myClasses.length > 0){
+      const teacher = gt().find(t => t.id === myClasses[0].teacherId);
+      if(teacher?.socialWorker) swInfo = teacher.socialWorker;
+    }
+  }
+  const contactEl = document.getElementById('sw-contact-display');
+  if(swInfo){
+    contactEl.innerHTML = `
+      <div class="sw-contact-box">
+        <strong>Your School Social Worker</strong>
+        <div>${escapeHtml(swInfo.name)}</div>
+        <div><a href="mailto:${escapeHtml(swInfo.email)}">${escapeHtml(swInfo.email)}</a></div>
+        <p style="font-size:.78rem;color:var(--muted);margin-top:6px">They won't be notified automatically - this is just their contact info.</p>
+      </div>`;
+  } else {
+    contactEl.innerHTML = `<div class="sw-contact-box"><strong>💙 Help is available</strong><p style="font-size:.88rem;margin-top:4px">Head to Help & Crisis for 24/7 support lines.</p></div>`;
+  }
+  document.getElementById('sw-popup').classList.remove('hidden');
+  sessionStorage.setItem('sw_popup_shown', '1');
+}
+
+function dismissSWPopup(dontShowAgain){
+  closeModal('sw-popup');
+  if(dontShowAgain){
+    S.set('sw_dismissed_' + CU.id, true);
+    toast("Got it - we won't show this again 👍");
+  }
+}
+
+// GOALS
+function renderGoalsSection(){
+  const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
+  const sel = document.getElementById('goal-cls-sel');
+  if(hasClasses()){
+    sel.style.display = '';
+    sel.innerHTML = `<option value="">All Tasks</option>` + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
+  } else {
+    sel.style.display = 'none';
+  }
+  renderGoals();
+  renderAINudge();
+}
+
+function renderGoals(){
+  const classFilter=document.getElementById('goal-cls-sel')?.value||'';
+  let goals=ggo().filter(g=>g.studentId===CU.id);
+  if(classFilter) goals=goals.filter(g=>g.classId===classFilter);
+
+  const container=document.getElementById('goals-container');
+  if(goals.length===0){
+    container.innerHTML=`<div class="ai-nudge"><div class="ai-nudge-icon">🎯</div><div><strong>No tasks yet</strong><p>Add your first task above!</p></div></div>`;
+    return;
+  }
+  container.innerHTML='';
+  DAYS.forEach(day=>{
+    const dg=goals.filter(g=>g.day===day);
+    if(!dg.length)return;
+    const dl=document.createElement('div');
+    dl.className='day-label'; dl.textContent=day;
+    container.appendChild(dl);
+    dg.sort((a,b)=>a.time.localeCompare(b.time)).forEach(g=>{
+      const row=document.createElement('div');
+      row.className='goal-row'+(g.done?' done':'');
+      row.innerHTML=`
+        <div class="gcheck ${g.done?'checked':''}" onclick="toggleGoal('${g.id}')">${g.done?'✓':''}</div>
+        <div class="ginfo">
+          <h5 style="${g.done?'text-decoration:line-through':''}">${escapeHtml(g.task)}</h5>
+          <span class="gmeta">🕐 ${escapeHtml(g.time)} · ⏱ ${escapeHtml(g.duration)}</span>
         </div>
-        <div class="fgroup">
-          <label for="su-email">Email Address</label>
-          <input type="email" id="su-email" placeholder="you@school.ca"/>
-          <span class="field-hint">Must be a valid email (e.g. name@school.ca)</span>
+        <span class="gtype-badge gtype-${g.type||'study'}">${typeLabel(g.type)}</span>
+        <button class="gdel" onclick="deleteGoal('${g.id}')">🗑</button>
+      `;
+      container.appendChild(row);
+    });
+  });
+}
+
+function renderAINudge(){
+  const goals=ggo().filter(g=>g.studentId===CU.id);
+  const gymGoals=goals.filter(g=>g.type==='gym');
+  let tip='Add your tasks above and I\'ll generate scheduling tips!';
+  if(gymGoals.length>0){
+    const gymDays=[...new Set(gymGoals.map(g=>g.day))].join(', ');
+    tip=`🏋️ Gym on ${gymDays}! After your workout, wait 30-45 min before intense studying - your focus peaks around then. I'd move lighter review sessions right after gym.`;
+  } else if(goals.length>5){
+    tip=`📊 You have ${goals.length} tasks this week! Make sure you have at least one break day.`;
+  }
+  const el=document.getElementById('goals-ai-nudge');
+  el.innerHTML=`<div class="ai-nudge-icon">🤖</div><div><strong>AI Tip</strong><p>${tip}</p></div>`;
+}
+
+function openGoalModal(){
+  const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
+  const sel = document.getElementById('gm-class');
+  const clsGroup = sel?.closest('.fgroup');
+  if(hasClasses()){
+    if(clsGroup) clsGroup.style.display = '';
+    sel.innerHTML = `<option value=""> - No specific class - </option>` + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
+  } else {
+    if(clsGroup) clsGroup.style.display = 'none';
+    sel.innerHTML = '';
+  }
+  openModal('goal-modal');
+}
+
+function addGoal(){
+  const task=document.getElementById('gm-task').value.trim();
+  const day =document.getElementById('gm-day').value;
+  const time=document.getElementById('gm-time').value;
+  const dur =document.getElementById('gm-dur').value;
+  const type=document.getElementById('gm-type').value;
+  const cls =document.getElementById('gm-class').value;
+  if(!task)return toast('Please enter a task name.');
+  const goals=ggo();
+  goals.push({id:'g'+uid8(),studentId:CU.id,classId:cls,task,day,time,duration:dur,type,done:false,created:today()});
+  S.set('goals',goals);
+  closeModal('goal-modal');
+  document.getElementById('gm-task').value='';
+  toast('Task added! 🎯');
+  renderGoals();
+  renderAINudge();
+}
+
+function toggleGoal(id){
+  const goals=ggo(); const g=goals.find(x=>x.id===id); if(g)g.done=!g.done;
+  S.set('goals',goals); renderGoals();
+}
+function quickToggleGoal(id){ toggleGoal(id); renderHome(); }
+function deleteGoal(id){ S.set('goals',ggo().filter(g=>g.id!==id)); toast('Task removed.'); renderGoals(); }
+
+function typeLabel(type){
+  return {study:'📖 Study',gym:'🏋️ Gym',rest:'😴 Rest',personal:'🏠 Personal',social:'👥 Social',other:'📌 Other'}[type]||'📖 Study';
+}
+
+// CALENDAR
+function renderCalendar(){
+  const goals=ggo().filter(g=>g.studentId===CU.id);
+  const myClasses=gc().filter(c=>CU.classIds&&CU.classIds.includes(c.id));
+  const todayDay=new Date().toLocaleDateString('en-CA',{weekday:'long'});
+  const wrap=document.getElementById('cal-wrap');
+
+  const grid=document.createElement('div'); grid.className='cal-grid';
+  DAYS.forEach(day=>{
+    const col=document.createElement('div'); col.className='cal-col';
+    const isToday=day===todayDay;
+    col.innerHTML=`<div class="cal-day-hdr ${isToday?'today':''}">${day.slice(0,3)}${isToday?' · Today':''}</div>`;
+
+    myClasses.filter(c=>c.days?.includes(day)).forEach(c=>{
+      const ev=document.createElement('div'); ev.className='cal-event';
+      ev.textContent=`${c.startTime} ${c.subject}`;
+      col.appendChild(ev);
+    });
+
+    goals.filter(g=>g.day===day).sort((a,b)=>a.time.localeCompare(b.time)).forEach(g=>{
+      const ev=document.createElement('div'); ev.className=`cal-event ${g.type||'study'}`;
+      ev.textContent=`${g.time} ${g.task}`;
+      col.appendChild(ev);
+    });
+
+    if(!col.querySelector('.cal-event')){
+      const emp=document.createElement('div'); emp.className='cal-empty'; emp.textContent='Free day';
+      col.appendChild(emp);
+    }
+    grid.appendChild(col);
+  });
+  wrap.innerHTML=''; wrap.appendChild(grid);
+}
+
+// STATS
+function renderStats(){
+  const myMoods=gm().filter(m=>m.studentId===CU.id);
+  const myGoals=ggo().filter(g=>g.studentId===CU.id);
+  const completed=myGoals.filter(g=>g.done).length;
+  const shared=myMoods.filter(m=>m.shared).length;
+  document.getElementById('stats-cards').innerHTML=`
+    <div class="stat-card"><div class="stat-n">${myMoods.length}</div><div class="stat-l">Mood Check-ins</div></div>
+    <div class="stat-card"><div class="stat-n">${myGoals.length}</div><div class="stat-l">Total Tasks</div></div>
+    <div class="stat-card"><div class="stat-n">${completed}</div><div class="stat-l">Completed</div></div>
+    <div class="stat-card"><div class="stat-n">${shared}</div><div class="stat-l">Moods Shared</div></div>
+  `;
+  const classes=gc();
+  const hist=document.getElementById('mood-history');
+  hist.innerHTML=[...myMoods].reverse().slice(0,20).map(m=>{
+    const cls=classes.find(c=>c.id===m.classId);
+    return `<div class="mood-hist-item">
+      <span class="mtag ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)}</span>
+      <span>${escapeHtml(cls?.subject||m.classLabel||'General')}</span>
+      <span style="margin-left:auto;color:var(--muted);font-size:.78rem">${m.date}</span>
+    </div>`;
+  }).join('')||'<p style="color:var(--muted);padding:16px 0">No mood history yet.</p>';
+}
+
+// WELLNESS
+function renderWellnessSection(){
+  const logs = gw().filter(w => w.studentId === CU.id);
+  const sleepLogs = logs.filter(l => l.type==='sleep').slice(-5).reverse();
+  document.getElementById('sleep-log-display').innerHTML = sleepLogs.map(l=>`
+    <div class="wlog-entry">
+      <span>${escapeHtml(l.date)} · ${escapeHtml(l.hours)}h · ${escapeHtml(l.quality)}</span>
+      <span style="color:var(--muted);font-size:.75rem">${l.sharedWith ? '📤 Sent to teacher' : '🔒 Private'}</span>
+    </div>`).join('');
+
+  const respLogs = logs.filter(l => l.type==='resp').slice(-5).reverse();
+  document.getElementById('resp-log-display').innerHTML = respLogs.map(l=>`
+    <div class="wlog-entry"><span>${escapeHtml(l.text)}</span><span>${escapeHtml(l.date)}</span></div>`).join('');
+
+  const myClasses = gc().filter(c => CU.classIds?.includes(c.id));
+  const shareRows = ['sleep-share-row','resp-share-row','energy-share-row'];
+  shareRows.forEach(id => {
+    const row = document.getElementById(id);
+    if(row) row.style.display = hasClasses() ? '' : 'none';
+  });
+
+  if(hasClasses()){
+    const teacherOpts = myClasses.map(c => {
+      const teacher = gt().find(t => t.id === c.teacherId);
+      return `<option value="${c.teacherId}|${c.id}">${c.subject} (${teacher?.name || 'Teacher'})</option>`;
+    }).join('');
+    const optHtml = `<option value="">Pick a period…</option>` + teacherOpts;
+    ['sleep-teacher-sel','resp-teacher-sel','energy-teacher-sel'].forEach(id => {
+      const sel = document.getElementById(id);
+      if(sel) sel.innerHTML = optHtml;
+    });
+    ['sleep','resp','energy'].forEach(type => {
+      const cb  = document.getElementById(`share-${type}`);
+      const sel = document.getElementById(`${type}-teacher-sel`);
+      if(cb && sel){
+        cb.onchange = () => sel.classList.toggle('hidden', !cb.checked);
+      }
+    });
+  }
+}
+
+function logWellness(type){
+  const logs = gw();
+
+  function getShareTarget(checkboxId, selId){
+    const cb = document.getElementById(checkboxId);
+    if(!cb?.checked) return { shared: false, sharedWith: null };
+    const sel = document.getElementById(selId);
+    const val = sel?.value || '';
+    const [teacherId, classId] = val.split('|');
+    return { shared: true, sharedWith: { teacherId, classId } };
+  }
+
+  if(type === 'sleep'){
+    const hours   = document.getElementById('w-sleep').value;
+    const quality = document.getElementById('w-sleep-quality').value;
+    if(!hours || !quality) return toast('Please fill in sleep hours and quality.');
+    const { shared, sharedWith } = getShareTarget('share-sleep','sleep-teacher-sel');
+    if(shared && !sharedWith?.teacherId) return toast('Please pick which teacher to send this to.');
+    logs.push({ id:'w'+uid8(), studentId:CU.id, type:'sleep', hours, quality, shared, sharedWith, date:today() });
+    toast(shared ? `Sleep sent to ${getTeacherName(sharedWith.teacherId)} 📤` : 'Sleep logged privately 😴');
+  } else if(type === 'resp'){
+    const text = document.getElementById('w-resp').value.trim();
+    if(!text) return toast('Please describe your responsibility.');
+    const { shared, sharedWith } = getShareTarget('share-resp','resp-teacher-sel');
+    if(shared && !sharedWith?.teacherId) return toast('Please pick which teacher to send this to.');
+    logs.push({ id:'w'+uid8(), studentId:CU.id, type:'resp', text, shared, sharedWith, date:today() });
+    document.getElementById('w-resp').value = '';
+    toast(shared ? `Responsibility sent to ${getTeacherName(sharedWith.teacherId)} 📤` : 'Responsibility logged.');
+  } else if(type === 'energy'){
+    const energy = document.getElementById('w-energy').value;
+    const water  = document.getElementById('w-water').value;
+    const { shared, sharedWith } = getShareTarget('share-energy','energy-teacher-sel');
+    if(shared && !sharedWith?.teacherId) return toast('Please pick which teacher to send this to.');
+    logs.push({ id:'w'+uid8(), studentId:CU.id, type:'energy', energy, water, shared, sharedWith, date:today() });
+    toast(shared ? `Energy data sent to ${getTeacherName(sharedWith.teacherId)} 📤` : 'Logged! ⚡');
+  }
+  S.set('wellness', logs);
+  renderWellnessSection();
+}
+
+function getTeacherName(teacherId){
+  const t = gt().find(x => x.id === teacherId);
+  return t ? t.name : 'your teacher';
+}
+
+function saveJournal(){
+  const text=document.getElementById('w-journal').value.trim();
+  if(!text)return;
+  const journals=gj();
+  journals.push({studentId:CU.id,text,date:today(),time:new Date().toLocaleTimeString()});
+  S.set('journals',journals);
+  document.getElementById('journal-saved').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('journal-saved').classList.add('hidden'),3000);
+}
+
+// HELP
+function renderHelpSection(){
+  let province = 'Ontario';
+  if(hasClasses()){
+    const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
+    if(myClasses.length > 0){
+      const teacher = gt().find(t => t.id === myClasses[0].teacherId);
+      if(teacher?.province) province = teacher.province;
+    }
+  }
+  const el = document.getElementById('help-content');
+  el.innerHTML = buildHelplinesHTML(province, !hasClasses());
+}
+
+function buildHelplinesHTML(province, hideProvinceLabel=false){
+  const data = HELPLINES[province] || HELPLINES.default;
+  const provinceNote = hideProvinceLabel ? '' : `<p style="font-size:.85rem;color:var(--muted);margin-bottom:20px">Showing resources for: <strong>${province}</strong></p>`;
+  return `
+    <div class="emergency-banner">🚨 If someone is in immediate danger, call 911 now.</div>
+    ${provinceNote}
+    <div class="helpline-section">
+      <h3>📞 Phone & Text Support</h3>
+      ${data.phone.map(h=>`
+        <div class="helpline-card">
+          <h4>${h.name}</h4>
+          <p style="font-size:.85rem;color:var(--text-2);margin-bottom:6px">${h.desc}</p>
+          <div class="contact-row">${h.contact||''}</div>
+          <div class="contact-row" style="margin-top:4px"><a href="${h.url}" target="_blank">🌐 ${h.url}</a></div>
         </div>
-        <div class="fgroup">
-          <label for="su-pass">Password</label>
-          <div class="pw-wrap">
-            <input type="password" id="su-pass" placeholder="Create password" oninput="checkPwStrength(this.value)"/>
-            <button class="pw-toggle" onclick="togglePw('su-pass',this)">👁</button>
+      `).join('')}
+    </div>
+    ${data.online?`
+    <div class="helpline-section">
+      <h3>🌐 Online Resources & Websites</h3>
+      ${data.online.map(h=>`
+        <div class="helpline-card">
+          <h4>${h.name}</h4>
+          <p style="font-size:.85rem;color:var(--text-2);margin-bottom:6px">${h.desc}</p>
+          <a href="${h.url}" target="_blank">🌐 ${h.url}</a>
+        </div>
+      `).join('')}
+    </div>`:''}
+  `;
+}
+
+function showHelplines(){
+  document.getElementById('quick-helpline-content').innerHTML=buildHelplinesHTML('Ontario');
+  showScreen('quick-helplines');
+}
+
+function buildClassBannerHTML(c, isTeacher=false){
+  const color    = c.color || '#1d5fa6';
+  const textColor = getContrastColor(color);
+  if(c.logo || c.emoji){
+    return `<div class="cls-banner-header" style="background:${color};color:${textColor}">
+      ${c.logo
+        ? `<img class="cls-banner-logo" src="${escapeHtml(c.logo)}" alt="logo"/>`
+        : `<span class="cls-banner-emoji">${escapeHtml(c.emoji)}</span>`}
+      <div class="cls-banner-text"><h4 style="color:${textColor}">${escapeHtml(c.subject)}</h4></div>
+    </div>`;
+  }
+  return `<div class="cls-banner" style="background:${color}"></div>`;
+}
+
+function getContrastColor(hex){
+  const c = hex.replace('#','');
+  const r = parseInt(c.substring(0,2),16);
+  const g = parseInt(c.substring(2,4),16);
+  const b = parseInt(c.substring(4,6),16);
+  const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
+  return luminance > 0.55 ? '#1e293b' : '#ffffff';
+}
+
+// CLASSES (student)
+function renderClassesSection(){
+  const myClasses=gc().filter(c=>CU.classIds&&CU.classIds.includes(c.id));
+  const list=document.getElementById('s-classes-list');
+  if(myClasses.length===0){
+    list.innerHTML=`<p style="color:var(--muted);padding:20px 0">No classes joined yet. Enter a class code above from your teacher.</p>`;
+  } else {
+    const order = CU.periodOrder?.length ? CU.periodOrder : myClasses.map(c=>c.id);
+    const ordered = order.map(id=>myClasses.find(c=>c.id===id)).filter(Boolean);
+    myClasses.forEach(c=>{ if(!ordered.find(x=>x.id===c.id)) ordered.push(c); });
+    list.innerHTML=ordered.map((c,i)=>{
+      const bannerHtml = buildClassBannerHTML(c, false);
+      return `
+        <div class="s-class-card">
+          ${bannerHtml}
+          <div class="s-class-card-body">
+            <div class="s-class-meta">Period ${i+1} · ${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)} · ${escapeHtml(c.days?.join(', ')||'-')}</div>
+            <span class="cls-code-badge">${escapeHtml(c.code)}</span>
+            ${c.bannerMsg?`<div class="cls-banner-msg" style="margin-top:10px">${escapeHtml(c.bannerMsg)}</div>`:''}
           </div>
-          <div id="pw-strength-bar"><div id="pw-strength-fill"></div></div>
-          <ul class="pw-rules" id="pw-rules">
-            <li id="r-len">At least 8 characters</li>
-            <li id="r-upper">One uppercase letter</li>
-            <li id="r-num">One number</li>
-            <li id="r-special">One special character (!@#$...)</li>
-          </ul>
+        </div>`;
+    }).join('');
+  }
+  if(myClasses.length>1){
+    document.getElementById('period-order-wrap').classList.remove('hidden');
+    const order=CU.periodOrder?.length?CU.periodOrder:myClasses.map(c=>c.id);
+    const orderedClasses=order.map(id=>myClasses.find(c=>c.id===id)).filter(Boolean);
+    myClasses.forEach(c=>{ if(!orderedClasses.find(x=>x.id===c.id)) orderedClasses.push(c); });
+    periodOrder=[...orderedClasses.map(c=>c.id)];
+    document.getElementById('period-order-list').innerHTML=orderedClasses.map((c,i)=>`
+      <div class="period-row" id="pr-${c.id}" data-id="${c.id}">
+        <span class="period-handle">⠿</span>
+        <span style="flex:1">${i+1}. ${escapeHtml(c.subject)} <span style="color:var(--muted);font-size:.8rem">${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)}</span></span>
+        <div class="period-arrows">
+          <button onclick="movePeriod('${c.id}',-1)" title="Move up">▲</button>
+          <button onclick="movePeriod('${c.id}',1)" title="Move down">▼</button>
         </div>
-        <div id="su-student-fields">
-          <div class="fgroup">
-            <label for="su-grade">Grade</label>
-            <select id="su-grade">
-              <option value="">Select grade…</option>
-              <option>Grade 9</option><option>Grade 10</option>
-              <option>Grade 11</option><option>Grade 12</option>
-              <option>University Year 1</option><option>University Year 2</option>
-              <option>University Year 3</option><option>University Year 4</option>
-            </select>
-          </div>
-          <div class="fgroup">
-            <label>Class Code <span class="opt-label">(optional - from your teacher)</span></label>
-            <input aria-label="e.g. ENG2D-2024" type="text" id="su-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
-            <span class="field-hint">You can join a class later too</span>
-          </div>
-        </div>
-        <div id="su-teacher-fields" class="hidden">
-          <div class="fgroup">
-            <label for="su-province">Province / Territory</label>
-            <select id="su-province">
-              <option value="">Select province…</option>
-              <option>Ontario</option><option>British Columbia</option>
-              <option>Alberta</option><option>Quebec</option>
-              <option>Nova Scotia</option><option>New Brunswick</option>
-              <option>Manitoba</option><option>Saskatchewan</option>
-              <option>PEI</option><option>Newfoundland & Labrador</option>
-              <option>Northwest Territories</option><option>Nunavut</option><option>Yukon</option>
-            </select>
-          </div>
-          <div class="fgroup">
-            <label for="su-school">School Name</label>
-            <input type="text" id="su-school" placeholder="e.g. Westview Secondary School"/>
-          </div>
-        </div>
-        <div class="privacy-check">
-          <input type="checkbox" id="su-privacy"/>
-          <label for="su-privacy">I agree to the <a href="./privacy.html" target="_blank">Privacy Policy</a> - my data is private and never shared without consent</label>
-        </div>
-        <div id="signup-err" class="ferr hidden"></div>
-        <button class="btn-main" onclick="startSignupVerification()">Create Account</button>
       </div>
-    </div>
-  </div>
-</div>
+    `).join('');
+  } else {
+    document.getElementById('period-order-wrap').classList.add('hidden');
+  }
+}
 
-<!-- STUDENT DASHBOARD -->
-<div id="screen-student" class="screen">
-  <div class="app-layout">
-    <aside class="sidebar" id="s-sidebar">
-      <div class="sb-brand"><span>🌿</span> WellSpace</div>
-      <nav class="sb-nav">
-        <a class="sn active" onclick="sSection('home')"    ><i>🏠</i> Home</a>
-        <a class="sn"        onclick="sSection('mood')"    ><i>😊</i> Mood Check</a>
-        <a class="sn"        onclick="sSection('goals')"   ><i>🎯</i> Goals</a>
-        <a class="sn"        onclick="sSection('calendar')"><i>📅</i> Calendar</a>
-        <a class="sn"        onclick="sSection('stats')"   ><i>📊</i> My Stats</a>
-        <a class="sn"        onclick="sSection('wellness')"><i>🌱</i> Wellness</a>
-        <a class="sn"        onclick="sSection('help')"    ><i>💙</i> Help & Crisis</a>
-        <a class="sn"        onclick="sSection('classes')" ><i>🏫</i> My Classes</a>
-        <a class="sn"        onclick="sSection('profile')" ><i>👤</i> My Profile</a>
-      </nav>
-      <div class="sb-foot">
-        <button class="sb-logout" onclick="logout()">Log Out</button>
-      </div>
-    </aside>
-    <main class="app-main" id="s-main">
-      <header class="app-header">
-        <button class="ham" onclick="toggleSB('s-sidebar')">☰</button>
-        <div class="hdr-info"><h2 id="s-greet"></h2><p id="s-date"></p></div>
-        <div class="hdr-av" id="s-av">S</div>
-      </header>
+function movePeriod(id,dir){
+  const idx=periodOrder.indexOf(id);
+  if(idx<0)return;
+  const newIdx=idx+dir;
+  if(newIdx<0||newIdx>=periodOrder.length)return;
+  [periodOrder[idx],periodOrder[newIdx]]=[periodOrder[newIdx],periodOrder[idx]];
+  const students=gs(); const s=students.find(x=>x.id===CU.id);
+  if(s){ s.periodOrder=periodOrder; S.set('students',students); CU.periodOrder=periodOrder; }
+  renderClassesSection();
+}
 
-      <!-- HOME -->
-      <section class="dsec active" id="s-sec-home">
-        <div class="home-banner" id="s-home-banner"></div>
-        <div class="home-grid">
-          <div class="home-quick-card" onclick="sSection('mood')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('mood')}"><span>😊</span><strong>Check Mood</strong><p>Log today's feelings</p></div>
-          <div class="home-quick-card" onclick="sSection('goals')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('goals')}"><span>🎯</span><strong>Goals</strong><p>View & add tasks</p></div>
-          <div class="home-quick-card" onclick="sSection('wellness')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('wellness')}"><span>🌱</span><strong>Wellness</strong><p>Sleep, habits & more</p></div>
-        </div>
-        <div class="join-class-row" style="margin-top:20px">
-          <input aria-label="Have a class code? Enter it here" type="text" id="home-join-code" placeholder="Have a class code? Enter it here…" style="text-transform:uppercase"/>
-          <button class="btn-main small" onclick="homeJoinClass()">Join Class</button>
-        </div>
-        <div id="s-home-goals-preview"></div>
-      </section>
+function savePeriodOrder(){
+  const students=gs(); const s=students.find(x=>x.id===CU.id);
+  if(s){ s.periodOrder=periodOrder; S.set('students',students); CU.periodOrder=periodOrder; }
+  toast('Period order saved! ✓');
+}
 
-      <!-- MOOD CHECK -->
-      <section class="dsec" id="s-sec-mood">
-        <div class="sec-hdr"><h3>Daily Mood Check</h3><p>How are you feeling in each period today?</p></div>
-        <div id="s-mood-list"></div>
-      </section>
+// ─────────────────────────────────────────────
+// CLASSES (student) - JOIN A CLASS BY CODE
+// Single, correct version. Updates:
+//   - student's local 'students' cache entry
+//   - /profiles/{uid}  (so teacher queries find this student)
+//   - /users/{uid}     (so loadStudentData can rebuild the student row)
+// Then invalidates the teacher cache so the teacher sees it on next load.
+// ─────────────────────────────────────────────
+async function joinClass(){
+  const inp  = document.getElementById('join-code');
+  const code = (inp?.value || '').trim().toUpperCase();
+  if(!code) return toast('Please enter a class code.');
 
-      <!-- GOALS -->
-      <section class="dsec" id="s-sec-goals">
-        <div class="sec-hdr"><h3>Weekly Goals & Planner</h3><p>Stay on track - one task at a time</p></div>
-        <div class="goals-toolbar">
-          <select id="goal-cls-sel" class="sel" onchange="renderGoals()" aria-label="Filter tasks by class"></select>
-          <button class="btn-main small" onclick="openGoalModal()">+ Add Task</button>
-        </div>
-        <div id="goals-container"></div>
-      </section>
+  const classes = await fsGetAllClasses();
+  cSet('classes', classes);
+  const cls = classes.find(c => c.code === code);
+  if(!cls) return toast(`Class code "${code}" not found. Double-check with your teacher.`);
+  if(CU.classIds?.includes(cls.id)) return toast("You're already in this class!");
 
-      <!-- CALENDAR -->
-      <section class="dsec" id="s-sec-calendar">
-        <div class="sec-hdr"><h3>Weekly Calendar</h3><p>Your full week at a glance</p></div>
-        <div id="cal-wrap" class="cal-wrap"></div>
-      </section>
+  // Update local student list entry
+  const students = gs();
+  const s = students.find(x => x.id === CU.id);
+  if(s){
+    s.classIds = [...(s.classIds || []), cls.id];
+    S.set('students', students);
+    CU.classIds = s.classIds;
+  } else {
+    CU.classIds = [...(CU.classIds || []), cls.id];
+  }
 
-      <!-- STATS -->
-      <section class="dsec" id="s-sec-stats">
-        <div class="sec-hdr"><h3>My Stats</h3><p>Your progress over time</p></div>
-        <div id="stats-cards" class="stats-grid"></div>
-        <h4 class="sub-hdr">Mood History</h4>
-        <div id="mood-history"></div>
-      </section>
+  // Track which teacher(s) this student is now connected to, as a plain
+  // array of teacher UIDs on their own profile. Security rules can check
+  // this single, direct field to grant a teacher read access to this
+  // student's private /users/{uid} doc - far simpler than cross-referencing
+  // classIds arrays across two different documents inside a rule.
+  const existingTeacherUids = new Set(CU.teacherUids || []);
+  existingTeacherUids.add(cls.teacherUid || cls.teacherId); // teacherUid is the auth uid; fall back if not present
+  CU.teacherUids = [...existingTeacherUids];
 
-      <!-- WELLNESS -->
-      <section class="dsec" id="s-sec-wellness">
-        <div class="sec-hdr"><h3>🌱 Wellness Tracker</h3><p>Private - only visible to you (unless you choose to share)</p></div>
-        <div class="wellness-grid">
-          <div class="wcard">
-            <h4>😴 Hours Slept Last Night</h4>
-            <div class="sleep-input-row">
-              <input aria-label="e.g. 7.5" type="number" id="w-sleep" min="0" max="24" step="0.5" placeholder="e.g. 7.5"/>
-              <select id="w-sleep-quality" aria-label="Sleep quality">
-                <option value="">Sleep quality…</option>
-                <option>Great</option><option>Okay</option><option>Poor</option>
-              </select>
-            </div>
-            <div class="share-toggle" id="sleep-share-row">
-              <input type="checkbox" id="share-sleep"/>
-              <label for="share-sleep">Send to a teacher</label>
-              <select id="sleep-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share sleep log with"></select>
-            </div>
-            <button class="btn-main small" onclick="logWellness('sleep')">Log Sleep</button>
-            <div id="sleep-log-display" class="wlog-display"></div>
+  if(fbAuth?.currentUser){
+    // Update /profiles/{uid} - this is what the teacher's query reads,
+    // and now also carries teacherUids for the security rule check.
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ classIds: CU.classIds, teacherUids: CU.teacherUids }, { merge: true });
+
+    // Update /users/{uid} so loadStudentData() can find/rebuild this student's row
+    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    let existingStudents = [];
+    if(userDoc.exists){
+      try{ existingStudents = JSON.parse(userDoc.data().students || '[]'); }catch{}
+    }
+    let myEntry = existingStudents.find(x => x.id === CU.id);
+    if(!myEntry){
+      myEntry = {
+        id: CU.id, name: CU.name, email: CU.email, grade: CU.grade,
+        periodOrder: CU.periodOrder || [], joined: CU.joined || today()
+      };
+      existingStudents.push(myEntry);
+    }
+    myEntry.classIds = CU.classIds;
+    await fbDb.collection('users').doc(fbAuth.currentUser.uid).set({
+      students: JSON.stringify(existingStudents)
+    }, { merge: true });
+  }
+
+  if(inp) inp.value = '';
+  toast(`Joined ${cls.subject}! 🎉`);
+  updateStudentNav();
+
+  // Refresh whichever screen is visible
+  if(document.getElementById('s-sec-classes')?.classList.contains('active')) renderClassesSection();
+  else renderHome();
+
+  // So the teacher's next dashboard load picks up the new student immediately
+  invalidateTeacherCache();
+}
+
+// ─────────────────────────────────────────────
+// TEACHER DASHBOARD
+// ─────────────────────────────────────────────
+function loadTeacherDash(){
+  showScreen('screen-teacher');
+  const el=document.getElementById('screen-teacher');
+  el.style.display='flex'; el.classList.add('active');
+  document.getElementById('t-greet').textContent=`Welcome, ${CU.name}! 📋`;
+  document.getElementById('t-date').textContent=new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric'});
+  document.getElementById('t-av').textContent=CU.name[0].toUpperCase();
+  // Load student data in background
+  loadTeacherStudents().then(()=>{ if(document.getElementById('t-sec-students')?.classList.contains('active')) renderStudentTable(); });
+  tSection('overview');
+}
+
+function tSection(name){
+  document.querySelectorAll('#t-sidebar .sn').forEach(n=>n.classList.remove('active'));
+  const navMap=['overview','classes','students','moods','wellness','goals','alerts','help','settings','profile'];
+  const idx=navMap.indexOf(name);
+  const navItems=document.querySelectorAll('#t-sidebar .sn');
+  if(navItems[idx]) navItems[idx].classList.add('active');
+  document.querySelectorAll('#t-main .dsec').forEach(s=>s.classList.remove('active'));
+  const sec=document.getElementById('t-sec-'+name);
+  if(sec) sec.classList.add('active');
+
+  if(name==='overview')  { loadTeacherStudents().then(renderTeacherOverview); }
+  if(name==='classes')   renderTeacherClasses();
+  if(name==='students')  { loadTeacherStudents().then(renderStudentTable); }
+  if(name==='moods')     { loadTeacherStudents().then(renderMoodReports); }
+  if(name==='wellness')  { loadTeacherStudents().then(renderWellnessTable); }
+  if(name==='goals')     { loadTeacherStudents().then(renderTeacherGoals); }
+  if(name==='alerts')    { loadTeacherStudents().then(renderAlerts); }
+  if(name==='help')      renderTeacherHelp();
+  if(name==='settings')  renderSettings();
+  if(name==='profile')   renderTeacherProfile();
+}
+
+function getMyClasses(){ return gc().filter(c=>c.teacherId===CU.id); }
+function getMyStudents(){
+  const myIds = getMyClasses().map(c=>c.id);
+  if(!myIds.length) return [];
+
+  const cached = gs().filter(s=>s.classIds?.some(id=>myIds.includes(id)));
+
+  if(cached.length === 0 && myIds.length > 0){
+    console.warn('⚠️ getMyStudents: Cache is empty but teacher has classes. Data may not be loaded yet.');
+  }
+
+  return cached;
+}
+
+// OVERVIEW
+function renderTeacherOverview(){
+  const students=getMyStudents();
+  const classes=getMyClasses();
+  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);
+  const alerts=moods.filter(m=>NEGATIVE_MOODS.includes(m.mood));
+  document.getElementById('t-stats-row').innerHTML=`
+    <div class="tstat blue"><div class="tstat-n">${students.length}</div><div class="tstat-l">Students</div></div>
+    <div class="tstat green"><div class="tstat-n">${classes.length}</div><div class="tstat-l">Classes</div></div>
+    <div class="tstat amber"><div class="tstat-n">${moods.length}</div><div class="tstat-l">Mood Check-ins</div></div>
+    <div class="tstat red"><div class="tstat-n">${alerts.length}</div><div class="tstat-l">Need Support</div></div>
+  `;
+  document.getElementById('t-alert-badge').textContent=alerts.length;
+  const prev=document.getElementById('t-alerts-preview');
+  if(alerts.length===0){ prev.innerHTML=''; return; }
+  prev.innerHTML=`
+    <div style="background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--r-md);padding:16px 20px;margin-top:4px">
+      <h4 style="color:var(--red);margin-bottom:10px">⚠️ ${alerts.length} student${alerts.length>1?'s need':'needs'} support today</h4>
+      ${alerts.slice(0,4).map(a=>{ const s=students.find(x=>x.id===a.studentId); return `<p style="font-size:.88rem;margin-bottom:4px">• <strong>${escapeHtml(s?.name||'Student')}</strong> - feeling <em>${escapeHtml(a.mood)}</em></p>`; }).join('')}
+    </div>`;
+}
+
+function renderTeacherClasses(){
+  const classes = getMyClasses();
+  const students = getMyStudents();
+  const grid = document.getElementById('t-classes-grid');
+  if(classes.length === 0){
+    grid.innerHTML = '<p style="color:var(--muted);padding:20px 0">No classes yet. Create one above!</p>'; return;
+  }
+  grid.innerHTML = classes.map(c => {
+    const count = students.filter(s => s.classIds?.includes(c.id)).length;
+    const bannerHtml = buildClassBannerHTML(c, true);
+    return `
+      <div class="t-class-card">
+        ${bannerHtml}
+        <div class="t-class-card-body">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="cls-code-badge">${escapeHtml(c.code)}</span>
+            <span style="font-size:.8rem;color:var(--muted)">${count} student${count!==1?'s':''}</span>
           </div>
-          <div class="wcard">
-            <h4>📋 Today's Responsibilities</h4>
-            <div class="resp-input-row">
-              <input aria-label="e.g. babysit sibling, part-time job" type="text" id="w-resp" placeholder="e.g. babysit sibling, part-time job…"/>
-            </div>
-            <div class="share-toggle" id="resp-share-row">
-              <input type="checkbox" id="share-resp"/>
-              <label for="share-resp">Send to a teacher</label>
-              <select id="resp-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share responsibilities with"></select>
-            </div>
-            <button class="btn-main small" onclick="logWellness('resp')">Add</button>
-            <div id="resp-log-display" class="wlog-display"></div>
-          </div>
-          <div class="wcard">
-            <h4>⚡ Energy & Hydration</h4>
-            <div class="fgroup">
-              <label for="w-energy">Energy Level (1-10)</label>
-              <input type="range" id="w-energy" min="1" max="10" value="5" oninput="document.getElementById('energy-val').textContent=this.value"/>
-              <span id="energy-val">5</span>
-            </div>
-            <div class="fgroup">
-              <label for="w-water">Glasses of water today</label>
-              <input type="number" id="w-water" min="0" max="20" placeholder="8"/>
-            </div>
-            <div class="share-toggle" id="energy-share-row">
-              <input type="checkbox" id="share-energy"/>
-              <label for="share-energy">Send to a teacher</label>
-              <select id="energy-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share energy log with"></select>
-            </div>
-            <button class="btn-main small" onclick="logWellness('energy')">Log</button>
-          </div>
-          <div class="wcard">
-            <h4>📝 Private Journal Note</h4>
-            <textarea id="w-journal" rows="4" placeholder="Write anything - thoughts, worries, wins…"></textarea>
-            <p class="privacy-note">🔒 This is always private. Never shared with anyone.</p>
-            <button class="btn-main small" onclick="saveJournal()">Save Note</button>
-            <div id="journal-saved" class="hidden" style="color:var(--green);font-size:.85rem;margin-top:6px">✓ Saved privately</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- HELP & CRISIS -->
-      <section class="dsec" id="s-sec-help">
-        <div class="sec-hdr"><h3>💙 Help & Crisis Support</h3><p>You're not alone - real people are available 24/7</p></div>
-        <div id="help-content"></div>
-      </section>
-
-      <!-- MY CLASSES -->
-      <section class="dsec" id="s-sec-classes">
-        <div class="sec-hdr"><h3>🏫 My Classes</h3><p>Classes you've joined via teacher codes</p></div>
-        <div class="join-class-row">
-          <input aria-label="Enter class code from your teacher" type="text" id="join-code" placeholder="Enter class code from your teacher…" style="text-transform:uppercase"/>
-          <button class="btn-main small" onclick="joinClass()">Join Class</button>
-        </div>
-        <div id="s-classes-list"></div>
-        <div id="period-order-wrap" class="hidden">
-          <h4 style="margin:20px 0 6px;color:var(--navy)">Arrange Your Periods in Order</h4>
-          <p class="field-hint">Use the arrows to reorder</p>
-          <div id="period-order-list" class="period-order-list"></div>
-          <button class="btn-main small" onclick="savePeriodOrder()">Save Order</button>
-        </div>
-      </section>
-
-      <!-- MY PROFILE -->
-      <section class="dsec" id="s-sec-profile">
-        <div class="sec-hdr"><h3>👤 My Profile</h3><p>Manage your account and responsibilities</p></div>
-        <div class="profile-grid">
-          <div class="profile-card">
-            <div class="profile-avatar-row">
-              <div class="profile-big-av" id="s-profile-av">A</div>
-              <div>
-                <h3 id="s-profile-name"></h3>
-                <p id="s-profile-email" style="color:var(--muted);font-size:.88rem"></p>
-                <span id="s-profile-grade" class="cls-code-badge" style="margin-top:6px;display:inline-block"></span>
-              </div>
-            </div>
-            <div class="profile-section-title">Edit Name</div>
-            <div class="fgroup"><label for="s-edit-name">Full Name</label><input type="text" id="s-edit-name" placeholder="Your name"/></div>
-            <div class="profile-section-title">Change Password</div>
-            <div class="fgroup"><label for="s-old-pass">Current Password</label><input type="password" id="s-old-pass" placeholder="••••••••"/></div>
-            <div class="fgroup"><label for="s-new-pass">New Password</label><input type="password" id="s-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
-            <div id="s-profile-err" class="ferr hidden"></div>
-            <div id="s-profile-ok" class="success-note hidden">✓ Profile updated!</div>
-            <button class="btn-main small" onclick="saveStudentProfile()">Save Changes</button>
-          </div>
-          <div class="profile-card">
-            <h4 style="color:var(--navy);margin-bottom:4px">📋 My Responsibilities</h4>
-            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Add things outside of school - work, family, sports, etc.</p>
-            <div class="fgroup"><label for="resp-text">Responsibility</label><input type="text" id="resp-text" placeholder="e.g. Part-time job, babysit siblings…"/></div>
-            <div class="fgroup"><label for="resp-when">Days / When</label><input type="text" id="resp-when" placeholder="e.g. Mon-Wed 4-8pm"/></div>
-            <div class="fgroup"><label for="resp-hours">Hours per week (approx)</label><input type="number" id="resp-hours" min="0" max="80" placeholder="e.g. 15"/></div>
-            <div class="share-toggle" style="margin-bottom:14px">
-              <input type="checkbox" id="resp-share"/>
-              <label for="resp-share">Share this with my teacher so they understand my workload</label>
-            </div>
-            <button class="btn-main small" onclick="addResponsibility()">Add Responsibility</button>
-            <div id="resp-list" style="margin-top:16px;display:flex;flex-direction:column;gap:8px"></div>
-          </div>
-          <div class="profile-card danger-card">
-            <h4>⚠️ Account Actions</h4>
-            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">These actions are permanent and cannot be undone.</p>
-            <button class="btn-outline" onclick="showPrivacy()" style="margin-bottom:12px">🔒 View Privacy Policy</button>
-            <button class="btn-outline" onclick="showCookiePolicy()" style="margin-bottom:12px">🍪 View Cookie Policy</button>
-            <button class="btn-outline" onclick="toggleCookieConsent()" style="margin-bottom:12px" id="s-cookie-toggle-btn">🍪 Manage Cookie Preference</button>
-            <button class="btn-danger" onclick="confirmDeleteAccount('student')">🗑 Delete My Account</button>
+          <span class="cls-time">🕐 ${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)} · ${escapeHtml(c.days?.join(', ')||'-')}</span>
+          ${c.bannerMsg ? `<div class="cls-banner-msg">${escapeHtml(c.bannerMsg)}</div>` : ''}
+          <div class="t-class-actions">
+            <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
+            <button class="btn-outline small" onclick="deleteClass('${c.id}')" style="padding:7px 10px">🗑</button>
           </div>
         </div>
-      </section>
-    </main>
-  </div>
-</div>
+      </div>`;
+  }).join('');
+}
 
-<!-- TEACHER DASHBOARD -->
-<div id="screen-teacher" class="screen">
-  <div class="app-layout">
-    <aside class="sidebar teacher-sb" id="t-sidebar">
-      <div class="sb-brand"><span>📋</span> WellSpace</div>
-      <nav class="sb-nav">
-        <a class="sn active" onclick="tSection('overview')"><i>🏠</i> Overview</a>
-        <a class="sn"        onclick="tSection('classes')" ><i>📚</i> Classes</a>
-        <a class="sn"        onclick="tSection('students')"><i>👥</i> Students</a>
-        <a class="sn"        onclick="tSection('moods')"   ><i>😊</i> Mood Reports</a>
-        <a class="sn"        onclick="tSection('wellness')"><i>🌱</i> Wellness Data</a>
-        <a class="sn"        onclick="tSection('goals')"   ><i>🎯</i> Goals</a>
-        <a class="sn"        onclick="tSection('alerts')"  ><i>⚠️</i> Alerts <span class="nbadge" id="t-alert-badge">0</span></a>
-        <a class="sn"        onclick="tSection('help')"    ><i>💙</i> Help Resources</a>
-        <a class="sn"        onclick="tSection('settings')"><i>⚙️</i> Settings</a>
-        <a class="sn"        onclick="tSection('profile')" ><i>👤</i> My Profile</a>
-      </nav>
-      <div class="sb-foot"><button class="sb-logout" onclick="logout()">Log Out</button></div>
-    </aside>
-    <main class="app-main" id="t-main">
-      <header class="app-header teacher-hdr">
-        <button class="ham" onclick="toggleSB('t-sidebar')">☰</button>
-        <div class="hdr-info"><h2 id="t-greet"></h2><p id="t-date"></p></div>
-        <div class="hdr-av teacher-av" id="t-av">T</div>
-      </header>
-      <section class="dsec active" id="t-sec-overview">
-        <div id="t-stats-row" class="t-stats-row"></div>
-        <div id="t-alerts-preview"></div>
-      </section>
-      <section class="dsec" id="t-sec-classes">
-        <div class="sec-hdr"><h3>📚 My Classes</h3><p>Create classes and share codes with students</p></div>
-        <button class="btn-main" onclick="openClassModal()">+ Create Class</button>
-        <div id="t-classes-grid" class="t-classes-grid"></div>
-      </section>
-      <section class="dsec" id="t-sec-students">
-        <div class="sec-hdr"><h3>👥 My Students</h3></div>
-        <div class="t-filter-row">
-          <input aria-label="Search students" type="text" id="t-search" class="search-inp" placeholder="Search students…" oninput="renderStudentTable()"/>
-          <select id="t-cls-filter" class="sel" onchange="renderStudentTable()" aria-label="Filter students by class"><option value="">All Classes</option></select>
-        </div>
-        <div id="t-student-table"></div>
-      </section>
-      <section class="dsec" id="t-sec-moods">
-        <div class="sec-hdr"><h3>😊 Mood Reports</h3><p>Shared moods from your students</p></div>
-        <div id="t-mood-grid" class="t-mood-grid"></div>
-      </section>
-      <section class="dsec" id="t-sec-wellness">
-        <div class="sec-hdr"><h3>🌱 Student Wellness Data</h3><p>Only data students chose to share</p></div>
-        <div id="t-wellness-table"></div>
-      </section>
-      <section class="dsec" id="t-sec-goals">
-        <div class="sec-hdr"><h3>🎯 Student Goals</h3></div>
-        <div id="t-goals-list"></div>
-      </section>
-      <section class="dsec" id="t-sec-alerts">
-        <div class="sec-hdr"><h3>⚠️ Students Needing Support</h3><p>Based on shared mood check-ins</p></div>
-        <div id="t-alerts-list"></div>
-      </section>
-      <section class="dsec" id="t-sec-help">
-        <div class="sec-hdr"><h3>💙 Wellness Resources</h3></div>
-        <div id="t-help-content"></div>
-      </section>
-      <section class="dsec" id="t-sec-settings">
-        <div class="sec-hdr"><h3>⚙️ Account Settings</h3></div>
-        <div class="settings-grid">
-          <div class="settings-card">
-            <h4>School Social Worker</h4>
-            <p class="field-hint">Students who need help will see this contact info</p>
-            <div class="fgroup"><label for="sw-name">Social Worker Name</label><input type="text" id="sw-name" placeholder="e.g. Ms. Thompson"/></div>
-            <div class="fgroup"><label for="sw-email">Social Worker Email</label><input type="email" id="sw-email" placeholder="mthompson@school.ca"/></div>
-            <button class="btn-main small" onclick="saveSocialWorker()">Save Contact</button>
-            <div id="sw-saved" class="hidden success-note">✓ Saved</div>
-          </div>
-          <div class="settings-card">
-            <h4>Province / Territory</h4>
-            <select id="t-province-setting" class="sel" aria-label="Province or territory"></select>
-            <button class="btn-main small" onclick="saveProvince()" style="margin-top:10px">Update Province</button>
-          </div>
-          <div class="settings-card">
-            <h4>Account Info</h4>
-            <div id="t-account-info"></div>
-          </div>
-        </div>
-      </section>
-      <section class="dsec" id="t-sec-profile">
-        <div class="sec-hdr"><h3>👤 My Profile</h3></div>
-        <div class="profile-grid">
-          <div class="profile-card">
-            <div class="profile-avatar-row">
-              <div class="profile-big-av teacher-av" id="t-profile-av">T</div>
-              <div>
-                <h3 id="t-profile-name"></h3>
-                <p id="t-profile-email" style="color:var(--muted);font-size:.88rem"></p>
-                <p id="t-profile-school" style="color:var(--muted);font-size:.82rem;margin-top:2px"></p>
-              </div>
-            </div>
-            <div class="profile-section-title">Edit Details</div>
-            <div class="fgroup"><label for="t-edit-name">Full Name</label><input type="text" id="t-edit-name" placeholder="Your name"/></div>
-            <div class="fgroup"><label for="t-edit-school">School Name</label><input type="text" id="t-edit-school" placeholder="Your school"/></div>
-            <div class="profile-section-title">Change Password</div>
-            <div class="fgroup"><label for="t-old-pass">Current Password</label><input type="password" id="t-old-pass" placeholder="••••••••"/></div>
-            <div class="fgroup"><label for="t-new-pass">New Password</label><input type="password" id="t-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
-            <div id="t-profile-err" class="ferr hidden"></div>
-            <div id="t-profile-ok" class="success-note hidden">✓ Profile updated!</div>
-            <button class="btn-main small" onclick="saveTeacherProfile()">Save Changes</button>
-          </div>
-          <div class="profile-card">
-            <h4 style="color:var(--navy);margin-bottom:4px">📋 Student Responsibilities (Shared)</h4>
-            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Responsibilities students chose to share with you</p>
-            <div id="t-resp-view"></div>
-          </div>
-          <div class="profile-card danger-card">
-            <h4>⚠️ Account Actions</h4>
-            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">Deleting your account will remove all your classes and student associations.</p>
-         <button class="btn-outline" onclick="showPrivacy()" style="margin-bottom:12px">🔒 View Privacy Policy</button>
-            <button class="btn-outline" onclick="showCookiePolicy()" style="margin-bottom:12px">🍪 View Cookie Policy</button>
-            <button class="btn-outline" onclick="toggleCookieConsent()" style="margin-bottom:12px" id="t-cookie-toggle-btn">🍪 Manage Cookie Preference</button>
-            <button class="btn-danger" onclick="confirmDeleteAccount('teacher')">🗑 Delete My Account</button>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
-</div>
+// STUDENTS TABLE
+function renderStudentTable(){
+  const myClasses = getMyClasses();
+  const students  = getMyStudents();
+  const filterSel = document.getElementById('t-cls-filter');
+  filterSel.innerHTML = '<option value="">All Classes</option>' + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
 
-<!-- MODALS -->
+  const search    = (document.getElementById('t-search')?.value||'').toLowerCase();
+  const clsFilter = document.getElementById('t-cls-filter')?.value||'';
+  let filtered    = students;
+  if(clsFilter) filtered = filtered.filter(s=>s.classIds?.includes(clsFilter));
+  if(search)    filtered = filtered.filter(s=>s.name.toLowerCase().includes(search)||s.email.includes(search));
 
-<!-- GOAL MODAL -->
-<div id="goal-modal" class="modal-bg hidden">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="goal-modal-title">
-    <div class="modal-hdr"><h3 id="goal-modal-title">➕ Add Task</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('goal-modal')">✕</button></div>
-    <div class="fgroup"><label for="gm-task">Task Name</label><input type="text" id="gm-task" placeholder="e.g. Study Chapter 5"/></div>
-    <div class="fgroup"><label for="gm-day">Day</label>
-      <select id="gm-day">
-        <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
-        <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
-      </select></div>
-    <div class="fgroup two-col">
-      <div><label for="gm-time">Start Time</label><input type="time" id="gm-time" value="09:00"/></div>
-      <div><label for="gm-dur">Duration</label>
-        <select id="gm-dur">
-          <option>30 min</option><option>45 min</option><option>1 hour</option>
-          <option>1.5 hours</option><option>2 hours</option><option>2.5 hours</option><option>3 hours</option>
-        </select></div>
-    </div>
-    <div class="fgroup"><label for="gm-type">Type</label>
-      <select id="gm-type">
-        <option value="study">📖 Study / Homework</option>
-        <option value="gym">🏋️ Gym / Sport</option>
-        <option value="rest">😴 Rest / Break</option>
-        <option value="personal">🏠 Personal / Chores</option>
-        <option value="social">👥 Social</option>
-        <option value="other">📌 Other</option>
-      </select></div>
-    <div class="fgroup"><label for="gm-class">Class (optional)</label>
-      <select id="gm-class"><option value=""> - No specific class - </option></select></div>
-    <div class="modal-foot">
-      <button class="btn-main" onclick="addGoal()">Add Task</button>
-      <button class="btn-outline" onclick="closeModal('goal-modal')">Cancel</button>
-    </div>
-  </div>
-</div>
+  const moods = gm().filter(m=>m.shared);
+  const wrap  = document.getElementById('t-student-table');
+  if(filtered.length===0){ wrap.innerHTML='<p style="color:var(--muted);padding:24px 0">No students found.</p>'; return; }
 
-<!-- CLASS MODAL -->
-<div id="class-modal" class="modal-bg hidden">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
-    <div class="modal-hdr"><h3 id="class-modal-title">➕ Create Class</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('class-modal')">✕</button></div>
-    <div class="fgroup"><label for="cm-subject">Subject Name</label><input type="text" id="cm-subject" placeholder="e.g. English - Grade 10 (ENG2D)"/></div>
-    <div class="fgroup two-col">
-      <div><label for="cm-start">Start Time</label><input type="time" id="cm-start" value="09:00"/></div>
-      <div><label for="cm-end">End Time</label><input type="time" id="cm-end" value="09:45"/></div>
-    </div>
-    <div class="fgroup"><label>Days</label>
-      <div class="day-check-row">
-        <label><input type="checkbox" name="cm-day" value="Monday"/> Mon</label>
-        <label><input type="checkbox" name="cm-day" value="Tuesday"/> Tue</label>
-        <label><input type="checkbox" name="cm-day" value="Wednesday"/> Wed</label>
-        <label><input type="checkbox" name="cm-day" value="Thursday"/> Thu</label>
-        <label><input type="checkbox" name="cm-day" value="Friday"/> Fri</label>
-      </div>
-    </div>
-    <div class="fgroup">
-      <label>Class Banner Color</label>
-      <div class="banner-color-row">
-        <label class="color-opt"><input aria-label="Blue" type="radio" name="cm-color" value="#1d5fa6" checked/><span style="background:#1d5fa6"></span></label>
-        <label class="color-opt"><input aria-label="Green" type="radio" name="cm-color" value="#2e9e6b"/><span style="background:#2e9e6b"></span></label>
-        <label class="color-opt"><input aria-label="Purple" type="radio" name="cm-color" value="#7c3aed"/><span style="background:#7c3aed"></span></label>
-        <label class="color-opt"><input aria-label="Orange" type="radio" name="cm-color" value="#d97706"/><span style="background:#d97706"></span></label>
-        <label class="color-opt"><input aria-label="Red" type="radio" name="cm-color" value="#dc2626"/><span style="background:#dc2626"></span></label>
-        <label class="color-opt"><input aria-label="Teal" type="radio" name="cm-color" value="#0f766e"/><span style="background:#0f766e"></span></label>
-      </div>
-    </div>
-    <div class="fgroup">
-      <label>Class Logo / Icon <span class="opt-label">(emoji or upload image)</span></label>
-      <div class="logo-row">
-        <input aria-label="Paste emoji e.g. 📐 🧬 📖" type="text" id="cm-emoji" placeholder="Paste emoji e.g. 📐 🧬 📖" style="max-width:180px"/>
-        <span style="color:var(--muted);font-size:.85rem;align-self:center">or</span>
-        <label class="upload-label">Upload Image<input aria-label="Upload class logo image" type="file" id="cm-logo-file" accept="image/*" onchange="previewLogo(this)" style="display:none"/></label>
-      </div>
-      <div id="logo-preview-wrap" class="hidden" style="margin-top:8px">
-        <img id="logo-preview-img" alt="Class logo preview" style="width:56px;height:56px;border-radius:var(--r-sm);object-fit:cover;border:1px solid var(--border)"/>
-        <button class="btn-outline small" onclick="clearLogo()" style="margin-left:8px">Remove</button>
-      </div>
-    </div>
-    <div class="fgroup">
-      <label>Banner Message <span class="opt-label">(optional)</span></label>
-      <input aria-label="e.g. This week: Macbeth Act 2" type="text" id="cm-banner-msg" placeholder="e.g. This week: Macbeth Act 2"/>
-    </div>
-    <div class="fgroup">
-      <label>Class Code <span class="opt-label">(students use this to join)</span></label>
-      <div class="code-row">
-        <input aria-label="e.g. ENG2D-2024" type="text" id="cm-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
-        <button class="btn-outline small" onclick="genCode()">Generate</button>
-      </div>
-      <span class="field-hint">Share this code with your students</span>
-    </div>
-    <div class="modal-foot">
-      <button class="btn-main" onclick="createClass()">Create Class</button>
-      <button class="btn-outline" onclick="closeModal('class-modal')">Cancel</button>
-    </div>
-  </div>
-</div>
+  wrap.innerHTML = `<div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>Name</th><th>Grade</th><th>Classes</th>
+        <th>Today's Mood</th><th>Sleep</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${filtered.map(s=>{
+          const todayMoods = moods.filter(m=>m.studentId===s.id&&m.date===today());
+          const isAlert    = todayMoods.some(m=>NEGATIVE_MOODS.includes(m.mood));
+          const cls        = myClasses.filter(c=>s.classIds?.includes(c.id));
+          const sleepLog   = gw().filter(w=>w.studentId===s.id&&w.type==='sleep'&&w.shared&&w.date===today())[0];
+          const moodDisplay= todayMoods.length
+            ? todayMoods.map(m=>`<span class="mood-tag-sm ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)}</span>`).join('')
+            : '<span style="color:var(--muted);font-size:.82rem">Not logged</span>';
+          const clsNames   = cls.map(c=>{
+            const short = c.subject.length > 20 ? c.subject.slice(0,18)+'…' : c.subject;
+            return `<span title="${escapeHtml(c.subject)}" style="display:inline-block;background:var(--blue-pale);color:var(--blue);border-radius:5px;padding:1px 6px;font-size:.72rem;font-weight:700;margin:1px">${escapeHtml(short)}</span>`;
+          }).join('');
+          return `<tr class="${isAlert?'alert-row':''}">
+            <td><strong>${escapeHtml(s.name)}</strong><br><span style="font-size:.75rem;color:var(--muted)">${escapeHtml(s.email)}</span></td>
+            <td style="white-space:nowrap">${escapeHtml(s.grade||'-')}</td>
+            <td>${clsNames||'-'}</td>
+            <td style="min-width:120px">${moodDisplay}</td>
+            <td style="white-space:nowrap">${sleepLog?`<strong>${escapeHtml(sleepLog.hours)}h</strong> · ${escapeHtml(sleepLog.quality)}`:'<span style="color:var(--muted)"> - </span>'}</td>
+            <td style="white-space:nowrap">${isAlert?'<span style="color:var(--red);font-weight:700;font-size:.85rem">⚠️ Needs support</span>':'<span style="color:var(--green);font-size:.85rem">✅ OK</span>'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
 
-<!-- SOCIAL WORKER POPUP -->
-<div id="sw-popup" class="modal-bg hidden">
-  <div class="modal support-modal" role="dialog" aria-modal="true" aria-labelledby="sw-popup-title">
-    <div class="modal-hdr"><h3 id="sw-popup-title">💙 We're Here For You</h3><button class="modal-close" aria-label="Close dialog" onclick="dismissSWPopup(false)">✕</button></div>
-    <p>It sounds like you might be going through something difficult. You don't have to face it alone.</p>
-    <div id="sw-contact-display"></div>
-    <div class="sw-actions">
-      <button class="btn-outline" onclick="dismissSWPopup(false);sSection('help')">See All Support Lines</button>
-      <button class="btn-green" onclick="dismissSWPopup(false)">I'm okay for now</button>
-    </div>
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);text-align:center">
-      <button onclick="dismissSWPopup(true)" style="background:none;border:none;color:var(--muted);font-size:.8rem;cursor:pointer;font-family:var(--font);text-decoration:underline">Don't show this again</button>
-    </div>
-  </div>
-</div>
+// MOOD REPORTS
+function renderMoodReports(){
+  const students=getMyStudents();
+  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);
+  const grid=document.getElementById('t-mood-grid');
+  if(students.length===0){ grid.innerHTML='<p style="color:var(--muted)">No students yet.</p>'; return; }
+  grid.innerHTML=students.map(s=>{
+    const sm=moods.filter(m=>m.studentId===s.id);
+    const counts={};
+    sm.forEach(m=>{ counts[m.mood]=(counts[m.mood]||0)+1; });
+    const total=sm.length||1;
+    const isAlert=sm.some(m=>NEGATIVE_MOODS.includes(m.mood)&&m.date===today());
+    return `
+      <div class="t-mood-card" ${isAlert?'style="border:2px solid var(--red)"':''}>
+        <h4>${escapeHtml(s.name)} ${isAlert?'⚠️':''}</h4>
+        ${Object.entries(counts).map(([mood,n])=>`
+          <div class="mbar-row">
+            <span style="width:80px;font-size:.78rem">${MOOD_CFG[mood]?.icon} ${escapeHtml(mood)}</span>
+            <div class="mbar-track"><div class="mbar-fill" style="width:${(n/total*100).toFixed(0)}%;background:${NEGATIVE_MOODS.includes(mood)?'var(--red)':'var(--blue)'}"></div></div>
+            <span style="font-size:.78rem">${n}</span>
+          </div>`).join('')||'<p style="color:var(--muted);font-size:.82rem">No shared moods yet</p>'}
+      </div>`;
+  }).join('');
+}
 
-<!-- PRIVACY MODAL -->
-<div id="privacy-modal" class="modal-bg hidden">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title" style="max-width:600px;max-height:80vh;overflow-y:auto">
-    <div class="modal-hdr"><h3 id="privacy-modal-title">🔒 Privacy Policy</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('privacy-modal')">✕</button></div>
-    <p style="font-size:.78rem;color:var(--muted)">Last updated: June 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
-    <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
-      <p><strong>What we collect</strong><br>Name, email, grade (students) or school/province (teachers), mood check-ins, sleep logs, energy logs, goals, journal entries, and class codes. Nothing else - no location, no device ID, no browsing history.</p>
-      <p><strong>Student data is private by default</strong><br>Every entry you make is private. Data is only visible to your teacher when YOU actively click "Share with Teacher." Teachers never see anything you haven't explicitly shared. Your journal is always 100% private - no one can ever see it.</p>
-      <p><strong>Who sees your data</strong><br>
-        • You - always see your own data<br>
-        • Your teacher - only data you've shared with them<br>
-        • Other teachers - nothing<br>
-        • Other students - nothing<br>
-        • WellSpace - nothing beyond what's needed to run the app
-      </p>
-      <p><strong>How we store it</strong><br>All data is stored on Google Firebase with encrypted HTTPS connections and strict per-user Firestore security rules. Each user's data is stored in their own private document - no shared blobs, no cross-user access. Passwords are never stored by us - Firebase Authentication handles them entirely with industry-standard encryption.</p>
-      <p><strong>We never</strong><br>
-        • Sell your data to anyone<br>
-        • Use your data for advertising<br>
-        • Share your data with third parties<br>
-        • Store passwords in plain text<br>
-        • Access your data without your action
-      </p>
-      <p><strong>PIPEDA Compliance</strong><br>We comply with Canada's Personal Information Protection and Electronic Documents Act (PIPEDA). We collect only the minimum data necessary to operate WellSpace.</p>
-      <p><strong>Deleting your account</strong><br>Delete your account anytime in Profile settings. Your Firebase Auth account, Firestore data, and profile are all permanently deleted immediately. No data is retained after deletion.</p>
-      <p><strong>Third-party services</strong><br>Google Firebase (database & auth), EmailJS (verification emails), GitHub Pages (hosting), Google Analytics (basic website usage stats).</p>
-      <p><strong>Google Analytics - what it does and does not see</strong><br>We use Google Analytics (GA4) only to understand general site usage - things like how many people visit, which pages are viewed, and device/browser type. GA never receives your name, email, mood check-ins, sleep or energy logs, goals, journal entries, or any other health-related data - that information stays only in our encrypted Firebase database and is never sent to Google. See our full <a href="#" onclick="closeModal('privacy-modal');openModal('cookie-policy-modal');return false;">Cookie Policy</a> for details.</p>
-      <p style="font-size:.78rem;color:var(--muted)">Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
-    </div>
-    <button class="btn-main small" onclick="closeModal('privacy-modal')" style="margin-top:8px">Got It</button>
-  </div>
-</div>
+// WELLNESS TABLE
+function renderWellnessTable(){
+  const students = getMyStudents();
+  const myClassIds = getMyClasses().map(c => c.id);
+  const allW = gw().filter(w =>
+    w.shared &&
+    students.some(s => s.id === w.studentId) &&
+    (w.sharedWith?.teacherId === CU.id || myClassIds.includes(w.sharedWith?.classId))
+  );
+  const allR = S.get('responsibilities',[]).filter(r =>
+    r.shared &&
+    students.some(s => s.id === r.studentId) &&
+    (r.sharedWith?.teacherId === CU.id || myClassIds.includes(r.sharedWith?.classId) || !r.sharedWith)
+  );
+  const wrap = document.getElementById('t-wellness-table');
+  const classes = getMyClasses();
+  let html = '';
+  if(allR.length > 0){
+    const grouped = {};
+    allR.forEach(r => { if(!grouped[r.studentId]) grouped[r.studentId]=[]; grouped[r.studentId].push(r); });
+    html += `<h4 style="color:var(--navy);margin-bottom:14px">📋 Student Responsibilities (Shared)</h4>`;
+    html += Object.entries(grouped).map(([sid,resps]) => {
+      const s = students.find(x => x.id === sid);
+      const totalHours = resps.reduce((acc,r) => acc+(parseFloat(r.hours)||0), 0);
+      return `<div class="t-goals-student" style="margin-bottom:12px">
+        <h4>${escapeHtml(s?.name||'Student')} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${totalHours>0?'~'+totalHours+'h/week outside school':''}</span></h4>
+        ${resps.map(r=>`<div class="t-goal-row">
+          <span>📌</span>
+          <div><strong>${escapeHtml(r.text)}</strong>${r.when?` <span style="color:var(--muted)">(${escapeHtml(r.when)})</span>`:''}</div>
+          ${r.hours?`<span style="margin-left:auto;color:var(--muted);font-size:.8rem">~${escapeHtml(r.hours)}h/wk</span>`:''}
+        </div>`).join('')}
+      </div>`;
+    }).join('');
+  }
+  if(allW.length > 0){
+    html += `<h4 style="color:var(--navy);margin:22px 0 14px">🌱 Wellness Logs Sent to You</h4>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Student</th><th>Type</th><th>Data</th><th>Period</th><th>Date</th></tr></thead>
+      <tbody>
+        ${allW.map(w => {
+          const s = students.find(x => x.id === w.studentId);
+          const cls = classes.find(c => c.id === w.sharedWith?.classId);
+          const data = w.type==='sleep' ? `${escapeHtml(w.hours)}h · ${escapeHtml(w.quality)}`
+                     : w.type==='energy' ? `Energy: ${escapeHtml(w.energy)}/10 · 💧${escapeHtml(w.water)} glasses`
+                     : escapeHtml(w.text||'-');
+          return `<tr>
+            <td><strong>${escapeHtml(s?.name||'-')}</strong></td>
+            <td style="text-transform:capitalize">${escapeHtml(w.type)}</td>
+            <td>${data}</td>
+            <td style="font-size:.82rem;color:var(--muted)">${escapeHtml(cls?.subject||'-')}</td>
+            <td>${escapeHtml(w.date)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>`;
+  }
+  if(!html) html = '<p style="color:var(--muted);padding:20px 0">No shared wellness data yet.</p>';
+  wrap.innerHTML = html;
+}
 
-<!-- COOKIE POLICY MODAL -->
-<div id="cookie-policy-modal" class="modal-bg hidden">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cookie-policy-modal-title" style="max-width:600px;max-height:80vh;overflow-y:auto">
-    <div class="modal-hdr"><h3 id="cookie-policy-modal-title">🍪 Cookie Policy</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('cookie-policy-modal')">✕</button></div>
-    <p style="font-size:.78rem;color:var(--muted)">Last updated: July 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
-    <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
-      <p><strong>What cookies are</strong><br>Cookies (and similar tools like local storage) are small pieces of data a website saves in your browser so it can remember things between visits, like whether you're logged in.</p>
-      <p><strong>Cookies WellSpace uses</strong><br>
-        • Login session - keeps you signed in to your account (required for the app to work)<br>
-        • Cookie preference - remembers whether you accepted or declined analytics cookies, so we don't ask you every time<br>
-        • Google Analytics (only if you accept) - basic, anonymized website usage stats
-      </p>
-      <p><strong>We ask once, not every visit</strong><br>When you accept or decline analytics cookies, that choice is saved to your account, not just your browser. So once you've answered, on any device you log in on we already know your answer and won't ask again. You can still change your mind anytime from Profile settings or by clearing your browser data.</p>
-      <p><strong>What Google Analytics does and does not see</strong><br>If you accept, Google Analytics receives basic technical info like page views and device type. It never receives your name, email, mood check-ins, journal entries, or any health-related data - that stays only in our encrypted database. We don't use Google Signals or ad personalization, and IP addresses are anonymized.</p>
-      <p><strong>No advertising cookies</strong><br>WellSpace has no ad trackers and does not use cookies for advertising or to build a profile of you for marketing.</p>
-      <p><strong>Managing cookies</strong><br>You can decline analytics cookies anytime in the banner or by emailing us, and you can always clear cookies through your browser settings. Declining does not affect your ability to use WellSpace - only the login session cookie is required.</p>
-      <p style="font-size:.78rem;color:var(--muted)">This Cookie Policy works alongside our <a href="#" onclick="closeModal('cookie-policy-modal');openModal('privacy-modal');return false;">Privacy Policy</a>. Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
-    </div>
-    <button class="btn-main small" onclick="closeModal('cookie-policy-modal')" style="margin-top:8px">Got It</button>
-  </div>
-</div>
+// GOALS
+function renderTeacherGoals(){
+  const students=getMyStudents();
+  const el=document.getElementById('t-goals-list');
+  el.innerHTML=students.map(s=>{
+    const gs_=ggo().filter(g=>g.studentId===s.id);
+    return `<div class="t-goals-student">
+      <h4>${escapeHtml(s.name)} <span style="font-weight:400;color:var(--muted);font-size:.82rem">${gs_.length} task${gs_.length!==1?'s':''}</span></h4>
+      ${gs_.slice(0,6).map(g=>`
+        <div class="t-goal-row">${g.done?'✅':'⬜'} <strong>${escapeHtml(g.day)}</strong> ${escapeHtml(g.time)} - ${escapeHtml(g.task)} (${escapeHtml(g.duration)})</div>`).join('')
+      || '<p style="font-size:.82rem;color:var(--muted)">No goals entered yet.</p>'}
+      ${gs_.length>6?`<p style="font-size:.78rem;color:var(--muted);margin-top:4px">+${gs_.length-6} more</p>`:''}
+    </div>`;
+  }).join('')||'<p style="color:var(--muted)">No students yet.</p>';
+}
 
-<!-- DELETE ACCOUNT MODAL -->
-<div id="delete-modal" class="modal-bg hidden">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
-    <div class="modal-hdr"><h3 id="delete-modal-title">🗑 Delete Account</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('delete-modal')">✕</button></div>
-    <div style="background:var(--red-lt);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:18px">
-      <p style="color:var(--red);font-weight:700;margin-bottom:4px">⚠️ This cannot be undone</p>
-      <p style="color:var(--red);font-size:.88rem">All your data will be permanently deleted.</p>
-    </div>
-    <div class="fgroup"><label for="delete-confirm-input">Type DELETE to confirm</label><input type="text" id="delete-confirm-input" placeholder="Type DELETE here…"/></div>
-    <div class="fgroup"><label for="delete-pass-input">Enter your password</label><input type="password" id="delete-pass-input" placeholder="••••••••"/></div>
-    <div id="delete-err" class="ferr hidden"></div>
-    <div class="modal-foot">
-      <button class="btn-danger" onclick="executeDeleteAccount()">Permanently Delete</button>
-      <button class="btn-outline" onclick="closeModal('delete-modal')">Cancel</button>
-    </div>
-  </div>
-</div>
+// ALERTS
+function renderAlerts(){
+  const students=getMyStudents();
+  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&NEGATIVE_MOODS.includes(m.mood));
+  const el=document.getElementById('t-alerts-list');
+  if(moods.length===0){ el.innerHTML='<p style="color:var(--muted);text-align:center;padding:40px 0">🎉 No alerts - all students seem to be doing well!</p>'; return; }
+  const grouped={};
+  moods.forEach(m=>{ if(!grouped[m.studentId])grouped[m.studentId]=[]; grouped[m.studentId].push(m); });
+  el.innerHTML=Object.entries(grouped).map(([sid,ms])=>{
+    const s=students.find(x=>x.id===sid);
+    const recent=ms.sort((a,b)=>b.date.localeCompare(a.date))[0];
+    const cls=gc().find(c=>c.id===recent.classId);
+    return `<div class="alert-card-t">
+      <span style="font-size:1.5rem">⚠️</span>
+      <div><h5>${escapeHtml(s?.name||'Student')}</h5>
+      <p style="font-size:.85rem;color:var(--text-2)">Feeling <strong>${escapeHtml(recent.mood)}</strong> in ${escapeHtml(cls?.subject||recent.classLabel||'class')} on ${escapeHtml(recent.date)}</p></div>
+      <span class="alert-abadge">${ms.length} alert${ms.length>1?'s':''}</span>
+    </div>`;
+  }).join('');
+}
 
-<!-- FORGOT PASSWORD MODAL -->
-<div id="forgot-modal" class="modal-bg hidden">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="forgot-modal-title">
-    <div class="modal-hdr"><h3 id="forgot-modal-title">🔑 Reset Password</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('forgot-modal')">✕</button></div>
-    <div id="forgot-step-1">
-      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Enter your email address and we'll send you a reset code.</p>
-      <div class="fgroup"><label for="forgot-email">Email Address</label><input type="email" id="forgot-email" placeholder="you@email.com"/></div>
-      <div id="forgot-err" class="ferr hidden"></div>
-      <button class="btn-main" onclick="sendResetCode()">Send Reset Code</button>
-    </div>
-    <div id="forgot-step-2" class="hidden">
-      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="forgot-email-display"></strong>. Enter it below.</p>
-      <div class="fgroup"><label for="forgot-code-input">6-digit Code</label><input type="text" id="forgot-code-input" placeholder="123456" maxlength="6"/></div>
-      <div class="fgroup"><label for="forgot-new-pass">New Password</label><input type="password" id="forgot-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
-      <div id="forgot-reset-err" class="ferr hidden"></div>
-      <div id="forgot-reset-ok" class="success-note hidden">✓ Password reset! Redirecting…</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
-        <button class="btn-main" onclick="confirmResetPassword()">Reset Password</button>
-        <button class="btn-outline small" onclick="resendResetCode()">Resend Code</button>
-      </div>
-    </div>
-  </div>
-</div>
+// TEACHER HELP
+function renderTeacherHelp(){
+  const province=CU.province||'Ontario';
+  document.getElementById('t-help-content').innerHTML=buildHelplinesHTML(province);
+}
 
-<!-- EMAIL VERIFY MODAL -->
-<div id="verify-modal" class="modal-bg hidden">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="verify-modal-title">
-    <div class="modal-hdr"><h3 id="verify-modal-title">📧 Verify Your Email</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('verify-modal')">✕</button></div>
-    <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="verify-email-display"></strong>. Enter it below to activate your account.</p>
-    <div class="fgroup"><label for="verify-code-input">6-digit Code</label><input type="text" id="verify-code-input" placeholder="123456" maxlength="6"/></div>
-    <div id="verify-err" class="ferr hidden"></div>
-    <div id="verify-ok" class="success-note hidden">✓ Verified! Creating your account…</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
-      <button class="btn-main" onclick="confirmVerifyCode()">Verify</button>
-      <button class="btn-outline small" onclick="resendVerifyCode()">Resend Code</button>
-    </div>
-  </div>
-</div>
+// SETTINGS
+function renderSettings(){
+  const sel=document.getElementById('t-province-setting');
+  sel.innerHTML=PROVINCES.map(p=>`<option ${p===CU.province?'selected':''}>${p}</option>`).join('');
+  if(CU.socialWorker){
+    document.getElementById('sw-name').value=CU.socialWorker.name||'';
+    document.getElementById('sw-email').value=CU.socialWorker.email||'';
+  }
+  document.getElementById('t-account-info').innerHTML=`
+    <p><strong>Name:</strong> ${escapeHtml(CU.name)}</p>
+    <p><strong>Email:</strong> ${escapeHtml(CU.email)}</p>
+    <p><strong>School:</strong> ${escapeHtml(CU.school||'-')}</p>
+    <p><strong>Province:</strong> ${escapeHtml(CU.province||'-')}</p>
+    <p><strong>Joined:</strong> ${escapeHtml(CU.joined||'-')}</p>
+  `;
+}
 
-<!-- TOAST -->
-<div id="toast" class="toast hidden"></div>
+function saveSocialWorker(){
+  const name=document.getElementById('sw-name').value.trim();
+  const email=document.getElementById('sw-email').value.trim();
+  if(!name||!email)return toast('Please fill in name and email.');
+  if(!validEmail(email))return toast('Please enter a valid email address.');
+  const teachers=gt(); const t=teachers.find(x=>x.id===CU.id);
+  if(t){ t.socialWorker={name,email}; S.set('teachers',teachers); CU.socialWorker={name,email}; }
+  document.getElementById('sw-saved').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('sw-saved').classList.add('hidden'),3000);
+  toast('Social worker contact saved! ✓');
+}
 
-<!-- FIREBASE - must load BEFORE script.js -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<!-- EMAILJS -->
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script>
-  if(typeof emailjs !== 'undefined') emailjs.init('hgQbp6YnQ4Y8QabYh');
-</script>
-<!-- GOOGLE ANALYTICS (privacy-safe, loads only after cookie consent) -->
-<script>
-  window.WELLSPACE_GA_ID = 'G-ZE25K1RHBZ';
+function saveProvince(){
+  const p=document.getElementById('t-province-setting').value;
+  const teachers=gt(); const t=teachers.find(x=>x.id===CU.id);
+  if(t){ t.province=p; S.set('teachers',teachers); CU.province=p; }
+  toast(`Province updated to ${p}`);
+}
 
-  function loadGoogleAnalytics(){
-    if(window.__gaLoaded) return;
-    window.__gaLoaded = true;
-    var s = document.createElement('script');
-    s.async = true;
-    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.WELLSPACE_GA_ID;
-    document.head.appendChild(s);
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){ dataLayer.push(arguments); }
-    window.gtag = gtag;
-    gtag('js', new Date());
-    // Privacy-safe config: no ad personalization, no Google Signals,
-    // IP anonymization (default in GA4), and no automatic PII collection.
-    gtag('config', window.WELLSPACE_GA_ID, {
-      anonymize_ip: true,
-      allow_google_signals: false,
-      allow_ad_personalization_signals: false
+// CLASS CRUD
+function openClassModal(){ openModal('class-modal'); }
+
+function genCode(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code=''; for(let i=0;i<8;i++) code+=chars[Math.floor(Math.random()*chars.length)];
+  document.getElementById('cm-code').value=code;
+}
+
+let pendingLogoDataUrl = null;
+
+function previewLogo(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingLogoDataUrl = e.target.result;
+    document.getElementById('logo-preview-img').src = pendingLogoDataUrl;
+    document.getElementById('logo-preview-wrap').classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearLogo(){
+  pendingLogoDataUrl = null;
+  document.getElementById('logo-preview-wrap').classList.add('hidden');
+  document.getElementById('cm-logo-file').value = '';
+}
+
+// ─────────────────────────────────────────────
+// CLASSES (teacher) - CREATE / DELETE
+// Classes are stored as individual Firestore docs in 'shared_classes'
+// (one doc per class) so this scales past the old single-blob approach.
+// ─────────────────────────────────────────────
+async function fsSetClass(cls){
+  if(!fbDb) return;
+  try {
+    await fbDb.collection('shared_classes').doc(cls.id).set(cls);
+  } catch(e){ console.error('fsSetClass', e); }
+}
+
+async function fsDeleteClass(classId){
+  if(!fbDb) return;
+  try {
+    await fbDb.collection('shared_classes').doc(classId).delete();
+  } catch(e){
+    console.error('fsDeleteClass failed', e);
+    toast('⚠️ Could not delete class - check your connection and try again.');
+  }
+}
+
+async function fsGetAllClasses(){
+  if(!fbDb) return [];
+  try {
+    const snap = await fbDb.collection('shared_classes').get();
+    return snap.docs.map(d => d.data());
+  } catch(e){ return []; }
+}
+
+async function createClass(){
+  const subject  = document.getElementById('cm-subject').value.trim();
+  const start    = document.getElementById('cm-start').value;
+  const end      = document.getElementById('cm-end').value;
+  const code     = document.getElementById('cm-code').value.trim().toUpperCase();
+  const days     = [...document.querySelectorAll('input[name="cm-day"]:checked')].map(x=>x.value);
+  const color    = document.querySelector('input[name="cm-color"]:checked')?.value||'#1d5fa6';
+  const emoji    = document.getElementById('cm-emoji').value.trim();
+  const bannerMsg= document.getElementById('cm-banner-msg').value.trim();
+  const logo     = pendingLogoDataUrl||null;
+
+  if(!subject||!code)return toast('Please fill in subject and code.');
+  if(!/^[A-Z0-9]{3,12}$/.test(code)) return toast('Class code must be 3-12 letters/numbers only.');
+
+  // Check code uniqueness across all class docs
+  const existingClasses = await fsGetAllClasses();
+  if(existingClasses.find(c=>c.code===code)) return toast('That code already exists - try generating a new one.');
+
+  // teacherId is the short display id (used everywhere else in the UI).
+  // teacherUid is the real Firebase Auth uid - needed so students who join
+  // can record which teacher's auth uid to grant read-access to, since
+  // security rules can only check request.auth.uid, not the short id.
+  const newClass = {id:'c'+uid8(),teacherId:CU.id,teacherUid:CU.uid,subject,startTime:start,endTime:end,days,code,color,emoji,logo,bannerMsg};
+
+  await fsSetClass(newClass);
+
+  const updated = [...existingClasses, newClass];
+  cSet('classes', updated);
+
+  closeModal('class-modal');
+  document.getElementById('cm-subject').value='';
+  document.getElementById('cm-start').value='09:00';
+  document.getElementById('cm-end').value='09:45';
+  document.getElementById('cm-code').value='';
+  document.getElementById('cm-emoji').value='';
+  document.getElementById('cm-banner-msg').value='';
+  document.querySelectorAll('input[name="cm-day"]').forEach(x=>x.checked=false);
+  clearLogo();
+  pendingLogoDataUrl=null;
+  toast('Class created! 🎉');
+  renderTeacherClasses();
+  invalidateTeacherCache();
+}
+
+async function deleteClass(id){
+  if(!confirm('Delete this class? Students will lose access.'))return;
+  await fsDeleteClass(id);
+  const updated = cGet('classes', []).filter(c=>c.id!==id);
+  cSet('classes', updated);
+  toast('Class deleted.');
+  renderTeacherClasses();
+  invalidateTeacherCache();
+}
+
+function copyCode(code){
+  navigator.clipboard?.writeText(code).catch(()=>{});
+  toast(`Code "${code}" copied to clipboard!`);
+}
+
+// ─────────────────────────────────────────────
+// UTILITIES
+// ─────────────────────────────────────────────
+function openModal(id){
+  const el = document.getElementById(id);
+  el.classList.remove('hidden');
+  // Accessibility: move focus into the dialog and let Escape close it.
+  el._lastFocused = document.activeElement;
+  const dialog = el.querySelector('[role="dialog"]') || el;
+  const focusable = dialog.querySelector('input, select, textarea, button, a[href]');
+  (focusable || dialog).focus?.();
+  el._escHandler = (e) => { if(e.key === 'Escape') closeModal(id); };
+  document.addEventListener('keydown', el._escHandler);
+}
+function closeModal(id){
+  const el = document.getElementById(id);
+  el.classList.add('hidden');
+  if(el._escHandler){ document.removeEventListener('keydown', el._escHandler); el._escHandler = null; }
+  if(el._lastFocused){ el._lastFocused.focus?.(); el._lastFocused = null; }
+}
+function showErr(el,msg){ if(!el)return toast(msg); el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),5000); }
+function showPrivacy(){ openModal('privacy-modal'); }
+function showCookiePolicy(){ openModal('cookie-policy-modal'); }
+
+function toggleCookieConsent(){
+  const current = localStorage.getItem('wellspace_cookie_consent');
+  const wasAccepted = current === 'accepted';
+  const newValue = !wasAccepted;
+  if(typeof window.setCookieConsent === 'function') window.setCookieConsent(newValue);
+  if(wasAccepted && !newValue){
+    toast('Analytics cookies declined - reloading to apply');
+    setTimeout(()=>location.reload(), 900);
+  } else {
+    toast(newValue ? 'Analytics cookies accepted 🍪' : 'Analytics cookies declined');
+  }
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.remove('hidden');
+  clearTimeout(t._to); t._to=setTimeout(()=>t.classList.add('hidden'),3000);
+}
+
+function toggleSB(id){
+  document.getElementById(id)?.classList.toggle('open');
+}
+
+function today(){ return new Date().toISOString().split('T')[0]; }
+function uid8(){ return Math.random().toString(36).substr(2,8); }
+// keep old uid name working too
+function uid(){ return uid8(); }
+
+document.addEventListener('click',e=>{
+  ['s-sidebar','t-sidebar'].forEach(id=>{
+    const sb=document.getElementById(id);
+    if(sb&&sb.classList.contains('open')&&!sb.contains(e.target)&&!e.target.classList.contains('ham'))
+      sb.classList.remove('open');
+  });
+});
+
+// ─────────────────────────────────────────────
+// STUDENT PROFILE
+// ─────────────────────────────────────────────
+function renderStudentProfile(){
+  document.getElementById('s-profile-av').textContent = CU.name[0].toUpperCase();
+  document.getElementById('s-profile-name').textContent = CU.name;
+  document.getElementById('s-profile-email').textContent = CU.email;
+  document.getElementById('s-profile-grade').textContent = CU.grade || 'No grade set';
+  document.getElementById('s-edit-name').value = CU.name;
+  const respShareRow = document.querySelector('label[for="resp-share"]')?.closest('.share-toggle');
+  if(respShareRow) respShareRow.style.display = hasClasses() ? '' : 'none';
+  renderRespList();
+}
+
+function saveStudentProfile(){
+  const name    = document.getElementById('s-edit-name').value.trim();
+  const oldPass = document.getElementById('s-old-pass').value;
+  const newPass = document.getElementById('s-new-pass').value;
+  const errEl   = document.getElementById('s-profile-err');
+  const okEl    = document.getElementById('s-profile-ok');
+
+  if(!name) return showErr(errEl, 'Name cannot be empty.');
+
+  const students = gs();
+  const s = students.find(x => x.id === CU.id);
+  if(!s) return;
+
+  if(oldPass || newPass){
+    if(!oldPass) return showErr(errEl, 'Enter your current password to change it.');
+    if(!validPw(newPass)) return showErr(errEl, 'New password needs 8+ chars, uppercase, number & special character.');
+    // Update Firebase Auth password
+    fbAuth.currentUser?.updatePassword(newPass).catch(e=>{
+      showErr(errEl, 'Could not update password. Please log out and back in first.');
     });
   }
 
-  function setCookieConsent(accepted){
-    localStorage.setItem('wellspace_cookie_consent', accepted ? 'accepted' : 'declined');
-    document.getElementById('cookie-banner').classList.add('hidden');
-    if(accepted) loadGoogleAnalytics();
-    // If someone is logged in, save the choice to their account too,
-    // so it's remembered on any device, not just this browser.
-    if(typeof window.saveCookieConsentToAccount === 'function'){
-      window.saveCookieConsentToAccount(accepted);
-    }
+  s.name = name;
+  CU.name = name;
+  S.set('students', students);
+  // Update profile
+  if(fbAuth?.currentUser) saveProfile(fbAuth.currentUser.uid, { name });
+
+  document.getElementById('s-greet').textContent = `${getGreeting()}, ${CU.name}! 👋`;
+  document.getElementById('s-av').textContent = CU.name[0].toUpperCase();
+  document.getElementById('s-profile-av').textContent = CU.name[0].toUpperCase();
+  document.getElementById('s-profile-name').textContent = CU.name;
+
+  errEl.classList.add('hidden');
+  okEl.classList.remove('hidden');
+  setTimeout(() => okEl.classList.add('hidden'), 3000);
+  document.getElementById('s-old-pass').value = '';
+  document.getElementById('s-new-pass').value = '';
+  toast('Profile updated! ✓');
+}
+
+function getGreeting(){
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
+
+// ─────────────────────────────────────────────
+// RESPONSIBILITIES
+// ─────────────────────────────────────────────
+function addResponsibility(){
+  const text  = document.getElementById('resp-text').value.trim();
+  const when  = document.getElementById('resp-when').value.trim();
+  const hours = document.getElementById('resp-hours').value;
+  const shared= document.getElementById('resp-share').checked;
+
+  if(!text) return toast('Please describe the responsibility.');
+
+  const all = S.get('responsibilities', []);
+  all.push({ id: 'r'+uid8(), studentId: CU.id, text, when, hours, shared, date: today() });
+  S.set('responsibilities', all);
+
+  document.getElementById('resp-text').value = '';
+  document.getElementById('resp-when').value = '';
+  document.getElementById('resp-hours').value = '';
+  document.getElementById('resp-share').checked = false;
+  toast('Responsibility added!');
+  renderRespList();
+}
+
+function renderRespList(){
+  const all = S.get('responsibilities', []).filter(r => r.studentId === CU.id);
+  const el  = document.getElementById('resp-list');
+  if(!el) return;
+  if(all.length === 0){
+    el.innerHTML = '<p style="color:var(--muted);font-size:.85rem">No responsibilities added yet.</p>';
+    return;
+  }
+  el.innerHTML = all.map(r => `
+    <div class="resp-item">
+      <div class="resp-item-info">
+        <strong>${escapeHtml(r.text)}</strong>
+        <span>${r.when ? '🕐 '+escapeHtml(r.when) : ''} ${r.hours ? '· ~'+escapeHtml(r.hours)+'h/week' : ''}</span>
+      </div>
+      <span class="${r.shared ? 'resp-shared-badge' : 'resp-private-badge'}">${r.shared ? '👁 Shared' : '🔒 Private'}</span>
+      <button onclick="deleteResp('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:.9rem;padding:2px 6px;transition:color var(--t)" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">✕</button>
+    </div>
+  `).join('');
+}
+
+function deleteResp(id){
+  S.set('responsibilities', S.get('responsibilities',[]).filter(r => r.id !== id));
+  toast('Removed.');
+  renderRespList();
+}
+
+// ─────────────────────────────────────────────
+// TEACHER PROFILE
+// ─────────────────────────────────────────────
+function renderTeacherProfile(){
+  document.getElementById('t-profile-av').textContent = CU.name[0].toUpperCase();
+  document.getElementById('t-profile-name').textContent = CU.name;
+  document.getElementById('t-profile-email').textContent = CU.email;
+  document.getElementById('t-profile-school').textContent = CU.school || '';
+  document.getElementById('t-edit-name').value = CU.name;
+  document.getElementById('t-edit-school').value = CU.school || '';
+
+  const myStudents = getMyStudents();
+  const allResp = S.get('responsibilities', []).filter(r =>
+    r.shared && myStudents.some(s => s.id === r.studentId)
+  );
+  const el = document.getElementById('t-resp-view');
+  if(allResp.length === 0){
+    el.innerHTML = '<p style="color:var(--muted);font-size:.85rem">No students have shared responsibilities yet.</p>';
+    return;
+  }
+  const grouped = {};
+  allResp.forEach(r => {
+    if(!grouped[r.studentId]) grouped[r.studentId] = [];
+    grouped[r.studentId].push(r);
+  });
+  el.innerHTML = Object.entries(grouped).map(([sid, resps]) => {
+    const student = myStudents.find(s => s.id === sid);
+    return `
+      <div style="margin-bottom:14px">
+        <p style="font-weight:700;font-size:.9rem;color:var(--navy);margin-bottom:6px">${escapeHtml(student?.name || 'Student')}</p>
+        ${resps.map(r => `
+          <div class="resp-item" style="margin-bottom:6px">
+            <div class="resp-item-info">
+              <strong>${escapeHtml(r.text)}</strong>
+              <span>${r.when ? '🕐 '+escapeHtml(r.when) : ''} ${r.hours ? '· ~'+escapeHtml(r.hours)+'h/week' : ''}</span>
+            </div>
+          </div>`).join('')}
+      </div>`;
+  }).join('');
+}
+
+function saveTeacherProfile(){
+  const name   = document.getElementById('t-edit-name').value.trim();
+  const school = document.getElementById('t-edit-school').value.trim();
+  const oldPass= document.getElementById('t-old-pass').value;
+  const newPass= document.getElementById('t-new-pass').value;
+  const errEl  = document.getElementById('t-profile-err');
+  const okEl   = document.getElementById('t-profile-ok');
+
+  if(!name) return showErr(errEl, 'Name cannot be empty.');
+
+  const teachers = gt();
+  const t = teachers.find(x => x.id === CU.id);
+  if(!t) return;
+
+  if(oldPass || newPass){
+    if(!oldPass) return showErr(errEl, 'Enter your current password to change it.');
+    if(!validPw(newPass)) return showErr(errEl, 'New password needs 8+ chars, uppercase, number & special character.');
+    fbAuth.currentUser?.updatePassword(newPass).catch(()=>{
+      showErr(errEl, 'Could not update password. Please log out and back in first.');
+    });
   }
 
-  (function initCookieConsent(){
-    var consent = localStorage.getItem('wellspace_cookie_consent');
-    if(consent === 'accepted'){
-      loadGoogleAnalytics();
-    } else if(consent !== 'declined'){
-      document.addEventListener('DOMContentLoaded', function(){
-        document.getElementById('cookie-banner').classList.remove('hidden');
-      });
+  t.name   = name;
+  t.school = school;
+  CU.name  = name;
+  CU.school= school;
+  S.set('teachers', teachers);
+  if(fbAuth?.currentUser) saveProfile(fbAuth.currentUser.uid, { name, school });
+
+  document.getElementById('t-greet').textContent  = `Welcome, ${CU.name}! 📋`;
+  document.getElementById('t-av').textContent      = CU.name[0].toUpperCase();
+  document.getElementById('t-profile-av').textContent = CU.name[0].toUpperCase();
+  document.getElementById('t-profile-name').textContent = CU.name;
+  document.getElementById('t-profile-school').textContent = CU.school;
+
+  errEl.classList.add('hidden');
+  okEl.classList.remove('hidden');
+  setTimeout(() => okEl.classList.add('hidden'), 3000);
+  document.getElementById('t-old-pass').value = '';
+  document.getElementById('t-new-pass').value = '';
+  toast('Profile updated! ✓');
+}
+
+// ─────────────────────────────────────────────
+// DELETE ACCOUNT
+// ─────────────────────────────────────────────
+let deleteRole = null;
+
+function confirmDeleteAccount(role){
+  deleteRole = role;
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-pass-input').value = '';
+  document.getElementById('delete-err').classList.add('hidden');
+  openModal('delete-modal');
+}
+
+async function executeDeleteAccount(){
+  const confirm = document.getElementById('delete-confirm-input').value.trim();
+  const pass    = document.getElementById('delete-pass-input').value;
+  const errEl   = document.getElementById('delete-err');
+
+  if(confirm !== 'DELETE') return showErr(errEl, 'Please type DELETE exactly to confirm.');
+
+  try {
+    // Re-authenticate then delete
+    const cred = firebase.auth.EmailAuthProvider.credential(CU.email, pass);
+    await fbAuth.currentUser.reauthenticateWithCredential(cred);
+
+    // Delete Firestore data
+    if(fbDb && fbAuth.currentUser){
+      await fbDb.collection('users').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
+      await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
     }
-  })();
-</script>
-<!-- APP -->
-<script src="script.js"></script>
-</body>
-</html>
+
+    await fbAuth.currentUser.delete();
+    closeModal('delete-modal');
+    CU = null;
+    toast('Account deleted. Goodbye 👋');
+    setTimeout(() => showScreen('screen-entry'), 1500);
+  } catch(e){
+    showErr(errEl, 'Incorrect password or session expired. Please log out and back in.');
+  }
+}
+
+// ─────────────────────────────────────────────
+// EMAIL VERIFICATION & FORGOT PASSWORD
+// ─────────────────────────────────────────────
+const EMAILJS_SERVICE  = 'service_jm737lr';
+const EMAILJS_TEMPLATE = 'template_6w1574v';
+
+let pendingVerify = null;
+let pendingReset  = null;
+
+function generateCode(){
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function startSignupVerification(){
+  const name      = document.getElementById('su-name').value.trim();
+  const email     = document.getElementById('su-email').value.trim().toLowerCase();
+  const pass      = document.getElementById('su-pass').value;
+  const privacyOk = document.getElementById('su-privacy').checked;
+  const errEl     = document.getElementById('signup-err');
+
+  if(!name||!email||!pass) return showErr(errEl,'Please fill in all required fields.');
+  if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address.');
+  if(!validPw(pass))       return showErr(errEl,'Password must be 8+ chars with uppercase, number & special character.');
+  if(!privacyOk)           return showErr(errEl,'Please accept the privacy policy to continue.');
+
+  if(authRole==='student'){
+    const grade = document.getElementById('su-grade').value;
+    const classCode = document.getElementById('su-code').value.trim().toUpperCase();
+    if(!grade) return showErr(errEl,'Please select your grade.');
+    pendingVerify = { name, email, pass, grade, code_class: classCode, role:'student' };
+  } else {
+    const province = document.getElementById('su-province').value;
+    const school   = document.getElementById('su-school').value.trim();
+    if(!province) return showErr(errEl,'Please select your province.');
+    pendingVerify = { name, email, pass, province, school, role:'teacher' };
+  }
+
+  const verifyCode = generateCode();
+  pendingVerify.code    = verifyCode;
+  pendingVerify.expires = Date.now() + 10*60*1000;
+
+  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+    to_name:  name,
+    to_email: email,
+    code:     verifyCode,
+  }).then(()=>{
+    document.getElementById('verify-email-display').textContent = email;
+    document.getElementById('verify-code-input').value = '';
+    document.getElementById('verify-err').classList.add('hidden');
+    document.getElementById('verify-ok').classList.add('hidden');
+    openModal('verify-modal');
+    toast('Verification code sent to your email! 📧');
+  }).catch(err=>{
+    console.error('EmailJS error:', err);
+    showErr(errEl, 'Could not send verification email. Please check your email address and try again.');
+  });
+}
+
+async function confirmVerifyCode(){
+  const input = document.getElementById('verify-code-input').value.trim();
+  const errEl = document.getElementById('verify-err');
+  const okEl  = document.getElementById('verify-ok');
+
+  if(!pendingVerify) return showErr(errEl,'Something went wrong. Please try signing up again.');
+  if(Date.now() > pendingVerify.expires) return showErr(errEl,'Code expired. Please request a new one.');
+  if(input !== pendingVerify.code) return showErr(errEl,'Incorrect code. Please check your email and try again.');
+
+  okEl.classList.remove('hidden');
+
+  setTimeout(async ()=>{
+    // Now create the Firebase Auth account
+    const { name, email, pass, role } = pendingVerify;
+    try {
+      if(role === 'student'){
+        const grade = pendingVerify.grade;
+        const classCode = pendingVerify.code_class || '';
+        const classes = await fsGetAllClasses();
+        cSet('classes', classes);
+        let classIds = [];
+        if(classCode){
+          const cls = classes.find(c=>c.code===classCode);
+          if(cls) classIds = [cls.id];
+        }
+        const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+        const uid  = cred.user.uid;
+        const localId = 's'+uid8();
+        const profile = { role:'student', name, email, grade, classIds, periodOrder:[], joined:today(), localId, uid };
+        await saveProfile(uid, profile);
+        const studentEntry = { id:localId, name, email, grade, classIds, periodOrder:[], joined:today() };
+        cSet('students', [studentEntry]);
+        await fsSet('students', [studentEntry]);
+        CU = { ...profile, id: localId };
+      } else {
+        const { province, school } = pendingVerify;
+        const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+        const uid  = cred.user.uid;
+        const localId = 't'+uid8();
+        const profile = { role:'teacher', name, email, province, school, socialWorker:null, joined:today(), localId, uid };
+        await saveProfile(uid, profile);
+        const teacherEntry = { id:localId, name, email, province, school, socialWorker:null, joined:today() };
+        cSet('teachers', [teacherEntry]);
+        await fsSet('teachers', [teacherEntry]);
+        CU = { ...profile, id: localId };
+      }
+      pendingVerify = null;
+      closeModal('verify-modal');
+      toast(`Account created! Welcome, ${name} 🎉`);
+      syncCookieConsentAfterLogin(CU.uid);
+      if(CU.role==='student') loadStudentDash(); else loadTeacherDash();
+    } catch(e){
+      showErr(errEl, e.code==='auth/email-already-in-use'
+        ? 'An account with this email already exists.'
+        : 'Could not create account. Please try again.');
+    }
+  }, 1200);
+}
+
+// ─────────────────────────────────────────────
+// Simple client-side cooldown to stop spam-clicking "Resend" from
+// burning through the EmailJS free-tier quota or being used to
+// email-bomb someone else's address. This is a UX-level speed bump,
+// not a real security boundary - the actual fix is restricting
+// allowed origins + enabling rate limiting in the EmailJS dashboard,
+// since a determined attacker can call emailjs.send() directly from
+// the browser console and skip the UI/button entirely.
+// ─────────────────────────────────────────────
+const _emailCooldowns = {};
+function emailOnCooldown(key, seconds, btnEl){
+  const now = Date.now();
+  if(_emailCooldowns[key] && now < _emailCooldowns[key]) return true;
+  _emailCooldowns[key] = now + seconds*1000;
+  if(btnEl){
+    const original = btnEl.textContent;
+    btnEl.disabled = true;
+    let remaining = seconds;
+    btnEl.textContent = `Wait ${remaining}s`;
+    const iv = setInterval(()=>{
+      remaining--;
+      if(remaining <= 0){
+        clearInterval(iv);
+        btnEl.disabled = false;
+        btnEl.textContent = original;
+      } else {
+        btnEl.textContent = `Wait ${remaining}s`;
+      }
+    }, 1000);
+  }
+  return false;
+}
+
+function resendVerifyCode(){
+  if(!pendingVerify) return;
+  if(emailOnCooldown('verify', 30, event?.currentTarget)) return toast('Please wait before requesting another code.');
+  const newCode = generateCode();
+  pendingVerify.code    = newCode;
+  pendingVerify.expires = Date.now() + 10*60*1000;
+  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+    to_name:  pendingVerify.name,
+    to_email: pendingVerify.email,
+    code:     newCode,
+  }).then(()=>toast('New code sent! 📧')).catch(()=>toast('Could not resend. Try again.'));
+}
+
+// FORGOT PASSWORD - sends reset email that opens on YOUR site
+function sendResetCode(){
+  const email = document.getElementById('forgot-email').value.trim().toLowerCase();
+  const errEl = document.getElementById('forgot-err');
+  if(!email||!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
+  if(emailOnCooldown('reset:'+email, 30, event?.currentTarget)) return showErr(errEl,'Please wait before requesting another email.');
+  if(!fbAuth) initFirebase();
+
+  fbAuth.sendPasswordResetEmail(email, {
+    url: window.location.origin + window.location.pathname,
+    handleCodeInApp: true
+  }).then(()=>{
+    toast('If that account exists, a reset email has been sent 📧');
+    closeModal('forgot-modal');
+  }).catch(e=>{
+    // Deliberately generic regardless of the real error (including
+    // auth/user-not-found) - confirming or denying an email exists
+    // is an account-enumeration leak, so both outcomes look the same
+    // to whoever is submitting the form.
+    toast('If that account exists, a reset email has been sent 📧');
+    closeModal('forgot-modal');
+  });
+}
+function confirmResetPassword(){ toast('Please check your email for the reset link.'); }
+function resendResetCode(){ sendResetCode(); }
+
+// ─────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async ()=>{
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
+
+  // Init Firebase
+  try { initFirebase(); } catch(e){ console.error('initFirebase failed', e); }
+
+  // Wait for Firebase Auth to restore session
+  if(fbAuth){
+    fbAuth.onAuthStateChanged(async (user)=>{
+      if(user && !CU){
+        // User was logged in - restore session
+        const profile = await getProfile(user.uid);
+        if(profile){
+          CU = { ...profile, id: profile.localId || user.uid, uid: user.uid };
+          await loadUserData();
+          syncCookieConsentAfterLogin(user.uid);
+          if(profile.role==='student') loadStudentDash();
+          else { await loadTeacherStudents(); loadTeacherDash(); }
+        } else {
+          showScreen('screen-entry');
+        }
+      } else if(!user && !CU){
+        showScreen('screen-entry');
+      }
+    });
+  } else {
+    showScreen('screen-entry');
+  }
+});
