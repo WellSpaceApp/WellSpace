@@ -2192,21 +2192,24 @@ async function confirmVerifyCode(){
     // Now create the Firebase Auth account
     const { name, email, pass, role } = pendingVerify;
     try {
-      if(role === 'student'){
+     if(role === 'student'){
         const grade = pendingVerify.grade;
         const classCode = pendingVerify.code_class || '';
         const classes = await fsGetAllClasses();
         cSet('classes', classes);
         let classIds = [];
+        let teacherUids = [];
         if(classCode){
           const cls = classes.find(c=>c.code===classCode);
-          if(cls) classIds = [cls.id];
+          if(cls){
+            classIds = [cls.id];
+            teacherUids = [cls.teacherUid || cls.teacherId];
+          }
         }
         const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
         const uid  = cred.user.uid;
         const localId = 's'+uid8();
-        const profile = { role:'student', name, email, grade, classIds, periodOrder:[], joined:today(), localId, uid };
-        await saveProfile(uid, profile);
+        const profile = { role:'student', name, email, grade, classIds, teacherUids, periodOrder:[], joined:today(), localId, uid };
         const studentEntry = { id:localId, name, email, grade, classIds, periodOrder:[], joined:today() };
         cSet('students', [studentEntry]);
         await fsSet('students', [studentEntry]);
