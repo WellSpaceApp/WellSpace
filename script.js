@@ -1404,7 +1404,7 @@ function tSection(name){
   if(sec) sec.classList.add('active');
 
   if(name==='overview')  { loadTeacherStudents().then(renderTeacherOverview); }
-  if(name==='classes')   renderTeacherClasses();
+  if(name==='classes')   { loadTeacherStudents().then(renderTeacherClasses); }
   if(name==='students')  { loadTeacherStudents().then(renderStudentTable); }
   if(name==='moods')     { loadTeacherStudents().then(renderMoodReports); }
   if(name==='wellness')  { loadTeacherStudents().then(renderWellnessTable); }
