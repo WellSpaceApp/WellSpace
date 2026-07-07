@@ -969,19 +969,6 @@ function renderGoals(){
   });
 }
 
-function renderAINudge(){
-  const goals=ggo().filter(g=>g.studentId===CU.id);
-  const gymGoals=goals.filter(g=>g.type==='gym');
-  let tip='Add your tasks above and I\'ll generate scheduling tips!';
-  if(gymGoals.length>0){
-    const gymDays=[...new Set(gymGoals.map(g=>g.day))].join(', ');
-    tip=`🏋️ Gym on ${gymDays}! After your workout, wait 30-45 min before intense studying - your focus peaks around then. I'd move lighter review sessions right after gym.`;
-  } else if(goals.length>5){
-    tip=`📊 You have ${goals.length} tasks this week! Make sure you have at least one break day.`;
-  }
-  const el=document.getElementById('goals-ai-nudge');
-  el.innerHTML=`<div class="ai-nudge-icon">🤖</div><div><strong>AI Tip</strong><p>${tip}</p></div>`;
-}
 
 function openGoalModal(){
   const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
