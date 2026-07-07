@@ -116,6 +116,28 @@ function initFirebase(){
 }
 
 // ─────────────────────────────────────────────
+// GLOBAL SAFETY NET - catches anything that slips
+// past a local try/catch, plus offline/online state
+// ─────────────────────────────────────────────
+window.addEventListener('error', function(e){
+  console.error('Uncaught error:', e.error || e.message);
+  toast('⚠️ Something went wrong. Try refreshing the page.');
+});
+
+window.addEventListener('unhandledrejection', function(e){
+  console.error('Unhandled promise rejection:', e.reason);
+  toast('⚠️ Something went wrong. Try refreshing the page.');
+});
+
+window.addEventListener('offline', function(){
+  toast('📡 You\'re offline — changes will save once you\'re back online.');
+});
+
+window.addEventListener('online', function(){
+  toast('✅ Back online.');
+});
+
+// ─────────────────────────────────────────────
 // FIRESTORE HELPERS - per-user + shared
 // ─────────────────────────────────────────────
 
@@ -275,6 +297,43 @@ async function getProfile(uid){
     const doc = await fbDb.collection('profiles').doc(uid).get();
     return doc.exists ? doc.data() : null;
   } catch(e){ return null; }
+}
+
+// ─────────────────────────────────────────────
+// TEACHER LINK BACKFILL - some student profiles may be missing
+// teacherUids because they joined a class (either via joinClass() or
+// via the signup-with-code flow) before teacherUids tracking existed,
+// or through a code path that never set it. Security rules require
+// teacherUids to grant a teacher read access to a student's data, so
+// this repairs any student profile that's missing a link for a class
+// they're already in. Safe to call on every login - it's a no-op once
+// a profile is caught up, and joinClass() already sets this correctly
+// for brand-new joins going forward.
+// ─────────────────────────────────────────────
+async function ensureTeacherLinks(){
+  if(!CU || CU.role !== 'student' || !fbAuth?.currentUser) return;
+  if(!CU.classIds?.length) return;
+
+  const classes = gc().length ? gc() : await fsGetAllClasses();
+  const existingTeacherUids = new Set(CU.teacherUids || []);
+  let changed = false;
+
+  CU.classIds.forEach(classId=>{
+    const cls = classes.find(c=>c.id===classId);
+    const teacherUid = cls?.teacherUid || cls?.teacherId;
+    if(teacherUid && !existingTeacherUids.has(teacherUid)){
+      existingTeacherUids.add(teacherUid);
+      changed = true;
+    }
+  });
+
+  if(changed){
+    CU.teacherUids = [...existingTeacherUids];
+    try {
+      await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+        .set({ teacherUids: CU.teacherUids }, { merge: true });
+    } catch(e){ console.error('ensureTeacherLinks failed', e); }
+  }
 }
 
 // Get all student uids in a teacher's classes - batched to respect Firebase's
@@ -477,6 +536,7 @@ async function doLogin(){
 
     CU = { ...profile, id: profile.localId || uid, uid };
     await loadUserData();
+    await ensureTeacherLinks();
     syncCookieConsentAfterLogin(uid);
 
     toast(`Welcome back, ${CU.name}! 👋`);
@@ -541,6 +601,7 @@ async function doSignup(){
 
       CU = { ...profile, id: localId };
       await loadUserData();
+      await ensureTeacherLinks();
       toast(`Account created! Welcome, ${name} 🎉`);
       loadStudentDash();
 
@@ -2164,6 +2225,7 @@ async function confirmVerifyCode(){
       }
       pendingVerify = null;
       closeModal('verify-modal');
+      if(CU.role==='student') await ensureTeacherLinks();
       toast(`Account created! Welcome, ${name} 🎉`);
       syncCookieConsentAfterLogin(CU.uid);
       if(CU.role==='student') loadStudentDash(); else loadTeacherDash();
@@ -2267,6 +2329,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         if(profile){
           CU = { ...profile, id: profile.localId || user.uid, uid: user.uid };
           await loadUserData();
+          if(profile.role==='student') await ensureTeacherLinks();
           syncCookieConsentAfterLogin(user.uid);
           if(profile.role==='student') loadStudentDash();
           else { await loadTeacherStudents(); loadTeacherDash(); }
