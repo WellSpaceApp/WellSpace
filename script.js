@@ -978,7 +978,6 @@ function addGoal(){
   document.getElementById('gm-task').value='';
   toast('Task added! 🎯');
   renderGoals();
-  renderAINudge();
 }
 
 function toggleGoal(id){
