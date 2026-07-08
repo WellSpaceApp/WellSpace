@@ -912,9 +912,6 @@ function renderGoalsSection(){
     sel.innerHTML = `<option value="">All Tasks</option>` + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
   } else {
     sel.style.display = 'none';
-  }
-  renderGoals();
-  renderAINudge();
 }
 
 function renderGoals(){
