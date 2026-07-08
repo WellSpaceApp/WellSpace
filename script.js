@@ -339,32 +339,14 @@ async function ensureTeacherLinks(){
 // Get all student uids in a teacher's classes - batched to respect Firebase's
 // 10-value limit on array-contains-any, so this still works with 10+ classes.
 async function getStudentUids(classIds){
-  if(!fbDb || !classIds?.length) return [];
-
-  const chunks = [];
-  for (let i = 0; i < classIds.length; i += 10) {
-    chunks.push(classIds.slice(i, i + 10));
-  }
-
-  const results = [];
-  const seen = new Set();
-
-  for (const chunk of chunks) {
-    try {
-      const snap = await fbDb.collection('profiles')
-        .where('role','==','student')
-        .where('classIds','array-contains-any', chunk)
-        .get();
-      snap.docs.forEach(d=>{
-        if(!seen.has(d.id)){
-          seen.add(d.id);
-          results.push({ uid: d.id, ...d.data() });
-        }
-      });
-    } catch(e){ console.error('getStudentUids chunk error', e); }
-  }
-
-  return results;
+  if(!fbDb || !fbAuth?.currentUser) return [];
+  try {
+    const snap = await fbDb.collection('profiles')
+      .where('role','==','student')
+      .where('teacherUids','array-contains', fbAuth.currentUser.uid)
+      .get();
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  } catch(e){ console.error('getStudentUids error', e); return []; }
 }
 
 // Load a single student's full data doc (used by the teacher dashboard)
