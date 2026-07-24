@@ -164,6 +164,30 @@ async function fsGet(key, def=null){
   } catch(e){ return def; }
 }
 
+// Save/read journal entries to their OWN collection, separate from /users/{uid}.
+// This is what keeps journals private - the Firestore rule for /journals/{uid}
+// only ever allows the owner to read/write, no teacher exception exists.
+async function fsSetJournal(entries){
+  if(!fbDb || !fbAuth?.currentUser) return;
+  try {
+    await fbDb.collection('journals').doc(fbAuth.currentUser.uid)
+      .set({ entries: JSON.stringify(entries) }, { merge: true });
+  } catch(e){
+    console.error('fsSetJournal failed', e);
+    toast('⚠️ Could not save - check your connection and try again.');
+  }
+}
+
+async function fsGetJournal(def=[]){
+  if(!fbDb || !fbAuth?.currentUser) return def;
+  try {
+    const doc = await fbDb.collection('journals').doc(fbAuth.currentUser.uid).get();
+    if(!doc.exists) return def;
+    const val = doc.data().entries;
+    return val ? JSON.parse(val) : def;
+  } catch(e){ return def; }
+}
+
 // Save to shared collection (class codes, classes list - readable by all authenticated users)
 async function fsSetShared(key, value){
   if(!fbDb) return;
@@ -199,7 +223,7 @@ function cGet(k, def=null){ return k in cache ? cache[k] : def; }
 const SHARED_KEYS = ['classes'];
 // Keys that belong to all users but need to be read by teachers (moods, wellness, goals, responsibilities)
 // These are stored per-user but teachers read their students' docs
-const CROSS_KEYS  = ['moods','goals','wellness','responsibilities','journals','messages'];
+const CROSS_KEYS  = ['moods','goals','wellness','responsibilities','messages'];
 // Keys private to one user
 const PRIVATE_KEYS= ['students','teachers'];
 
@@ -211,16 +235,17 @@ const S = {
     // Return from cache first for speed
     return cGet(k, def);
   },
-  set(k, v){
+set(k, v){
     cSet(k, v);
     // Persist to correct Firestore location
-    if(SHARED_KEYS.includes(k)){
+    if(k === 'journals'){
+      fsSetJournal(v);
+    } else if(SHARED_KEYS.includes(k)){
       fsSetShared(k, v);
     } else {
       fsSet(k, v);
     }
   },
-};
 
 // Shortcuts - same as original
 const gs  = ()=> S.get('students',[]);
@@ -247,6 +272,10 @@ async function loadUserData(){
         try{ cSet(k, JSON.parse(v)); }catch{}
       });
     }
+
+// Load journal entries from their own locked-down collection
+    const journalEntries = await fsGetJournal([]);
+    cSet('journals', journalEntries);
 
     // ALSO load profile data (classIds, name, etc.) from /profiles/{uid}
     const profileDoc = await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).get();
