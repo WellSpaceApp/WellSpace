@@ -242,10 +242,11 @@ set(k, v){
       fsSetJournal(v);
     } else if(SHARED_KEYS.includes(k)){
       fsSetShared(k, v);
-    } else {
+} else {
       fsSet(k, v);
     }
   },
+};
 
 // Shortcuts - same as original
 const gs  = ()=> S.get('students',[]);
