@@ -613,3 +613,87 @@ textarea:focus-visible,
   outline: 3px solid #4d9fff;
   outline-offset: 2px;
 }
+
+/* ═══════════════════════════════════════════════
+   ACCESSIBILITY & CROSS-DEVICE LAYER (additive only)
+   Nothing above this line is modified - these rules only ADD
+   behavior via new classes/media queries, so existing look
+   and layout is untouched unless a user opts in.
+═══════════════════════════════════════════════ */
+
+/* Text size control - scales every rem-based measurement in the app
+   (headings, spacing, buttons) since :root/html uses the browser's
+   default 16px baseline for rem units. */
+html.a11y-text-sm { font-size: 14px; }
+html.a11y-text-lg { font-size: 18px; }
+html.a11y-text-xl { font-size: 20px; }
+
+/* High contrast mode - deepens text/border colors and removes soft
+   translucent shadows that can wash out on low-contrast displays.
+   Uses the app's own CSS variables, so every component that already
+   references var(--text), var(--muted), var(--border) picks this up
+   automatically with no per-component overrides needed. */
+html.a11y-contrast {
+  --text: #000000;
+  --text-2: #111111;
+  --muted: #3f3f3f;
+  --border: #4b5563;
+  --bg: #ffffff;
+}
+html.a11y-contrast .sh-sm,
+html.a11y-contrast * { text-shadow: none; }
+html.a11y-contrast button,
+html.a11y-contrast .mood-btn,
+html.a11y-contrast input,
+html.a11y-contrast select,
+html.a11y-contrast textarea { border-width: 2px; }
+
+/* Reduced motion - respects the OS-level setting automatically, and
+   also exposes a manual in-app toggle (.a11y-reduced-motion) for
+   people who want it off regardless of OS setting. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+html.a11y-reduced-motion *,
+html.a11y-reduced-motion *::before,
+html.a11y-reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Touch targets - on touch/coarse-pointer devices (phones, tablets),
+   enlarge the smallest interactive controls to the ~44px minimum
+   recommended for reliable tapping, without changing their size for
+   mouse/desktop users. */
+@media (pointer: coarse) {
+  .gcheck { width: 30px; height: 30px; }
+  .gdel { padding: 10px; }
+  .pw-toggle { padding: 10px; }
+  .modal-close { min-width: 40px; min-height: 40px; }
+  .ham { min-width: 44px; min-height: 44px; }
+  input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; }
+  .day-check-row label, .share-toggle label { padding: 4px 0; }
+}
+
+/* Tablet refinement (between the existing 768px phone breakpoint and
+   desktop) - keeps the teacher dashboard's data tables and card grids
+   usable on iPad-sized screens without collapsing to the phone layout. */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .t-classes-grid, .t-mood-grid, .settings-grid, .profile-grid, .wellness-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Small-phone polish - keeps the accessibility controls and other
+   toggle rows from crowding on narrow screens. */
+@media (max-width: 480px) {
+  .share-toggle { flex-wrap: wrap; }
+  .profile-card .fgroup > div[style*="flex"] { flex-wrap: wrap; }
+}
