@@ -411,6 +411,26 @@
             <button class="btn-main small" onclick="addResponsibility()">Add Responsibility</button>
             <div id="resp-list" style="margin-top:16px;display:flex;flex-direction:column;gap:8px"></div>
           </div>
+          <div class="profile-card">
+            <h4 style="color:var(--navy);margin-bottom:4px">♿ Accessibility</h4>
+            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Adjust how WellSpace looks and moves. Saved to this browser, so set it up the same way on your phone and your computer.</p>
+            <div class="fgroup">
+              <label id="a11y-text-label">Text Size</label>
+              <div style="display:flex;gap:8px" role="group" aria-labelledby="a11y-text-label">
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(-1)" aria-label="Decrease text size">A−</button>
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(0)" aria-label="Reset text size to default">A</button>
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(1)" aria-label="Increase text size">A+</button>
+              </div>
+            </div>
+            <div class="share-toggle" style="margin-bottom:10px">
+              <input type="checkbox" id="a11y-contrast-toggle" onchange="toggleA11yContrast(this.checked)"/>
+              <label for="a11y-contrast-toggle">High contrast mode</label>
+            </div>
+            <div class="share-toggle">
+              <input type="checkbox" id="a11y-motion-toggle" onchange="toggleA11yReducedMotion(this.checked)"/>
+              <label for="a11y-motion-toggle">Reduce motion & animations</label>
+            </div>
+          </div>
           <div class="profile-card danger-card">
             <h4>⚠️ Account Actions</h4>
             <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">These actions are permanent and cannot be undone.</p>
@@ -506,6 +526,26 @@
           <div class="settings-card">
             <h4>Account Info</h4>
             <div id="t-account-info"></div>
+          </div>
+          <div class="settings-card">
+            <h4>♿ Accessibility</h4>
+            <p class="field-hint">Adjust how WellSpace looks and moves. Saved to this browser, so set it up the same way on your phone, tablet, and computer.</p>
+            <div class="fgroup">
+              <label id="t-a11y-text-label">Text Size</label>
+              <div style="display:flex;gap:8px" role="group" aria-labelledby="t-a11y-text-label">
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(-1)" aria-label="Decrease text size">A−</button>
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(0)" aria-label="Reset text size to default">A</button>
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(1)" aria-label="Increase text size">A+</button>
+              </div>
+            </div>
+            <div class="share-toggle" style="margin-bottom:10px">
+              <input type="checkbox" id="t-a11y-contrast-toggle" onchange="toggleA11yContrast(this.checked)"/>
+              <label for="t-a11y-contrast-toggle">High contrast mode</label>
+            </div>
+            <div class="share-toggle">
+              <input type="checkbox" id="t-a11y-motion-toggle" onchange="toggleA11yReducedMotion(this.checked)"/>
+              <label for="t-a11y-motion-toggle">Reduce motion & animations</label>
+            </div>
           </div>
         </div>
       </section>
