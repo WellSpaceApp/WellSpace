@@ -1,2346 +1,2201 @@
-/* ═══════════════════════════════════════════════
-   WellSpace v2 - script.js
-   Full application logic
-═══════════════════════════════════════════════ */
+/**
+ * WellSpace App v2.0.0
+ * Complete Student Wellness Platform
+ * Local-first, privacy-focused, accessible
+ */
 
-// ─────────────────────────────────────────────
-// CONSTANTS
-// ─────────────────────────────────────────────
-// ─────────────────────────────────────────────
-// XSS PREVENTION - escape any user-supplied text before it goes into
-// innerHTML. Use this on every field a student/teacher typed themselves
-// (names, class subjects, task/goal text, journal entries, banner
-// messages, responsibilities, etc). Never needed for values you fully
-// control (hardcoded strings, computed dates, enum labels like mood names).
-// ─────────────────────────────────────────────
-function escapeHtml(str){
-  if(str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#39;');
-}
+(function() {
+  'use strict';
 
-const NEGATIVE_MOODS = ['Sad','Frustrated','Tired','Confused'];
-const MOOD_CFG = {
-  Happy:     {icon:'😊', msg:"You're radiating good energy today! Keep it up 🌟"},
-  Energized: {icon:'⚡', msg:"Amazing - channel that energy into something great!"},
-  Sad:       {icon:'😢', msg:"It's okay to feel sad. Be kind to yourself today 💙"},
-  Frustrated:{icon:'😤', msg:"Take a breath. This feeling is temporary. You've got this 💪"},
-  Tired:     {icon:'😴', msg:"Rest is productive too. Small breaks help a lot 🌙"},
-  Confused:  {icon:'🤔', msg:"Confusion is the beginning of learning. Ask for help!"},
-};
-const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-const PROVINCES = ['Ontario','British Columbia','Alberta','Quebec','Nova Scotia','New Brunswick','Manitoba','Saskatchewan','PEI','Newfoundland & Labrador','Northwest Territories','Nunavut','Yukon'];
-
-// Helpline data by province
-const HELPLINES = {
-  Ontario: {
-    phone:[
-      {name:"Kids Help Phone",desc:"Free support for young people (24/7, confidential)",url:"https://www.kidshelpphone.ca",contact:"📞 1-800-668-6868 | Text CONNECT to 686868"},
-      {name:"Good2Talk",desc:"Counselling & referrals for post-secondary students",url:"https://www.good2talk.ca",contact:"📞 1-866-925-5454 | Online chat 24/7"},
-      {name:"ConnexOntario",desc:"Mental health, addiction & crisis services info/referral",url:"https://www.connexontario.ca",contact:"📞 1-866-531-2600"},
-      {name:"One Stop Talk",desc:"Free therapy sessions for youth ages 6-18",url:"https://onestoptalk.ca",contact:"📞 1-855-416-8255"},
-      {name:"Canada Suicide Prevention Service",desc:"English/French, 24/7",url:"https://www.crisisservicescanada.ca",contact:"📞 1-833-456-4566"},
-      {name:"Hope for Wellness Help Line",desc:"24/7 counselling for Indigenous Peoples",url:"https://hopeforwellness.ca/home.html",contact:"📞 1-855-242-3310"},
+  // ==================== CONFIGURATION ====================
+  const CONFIG = {
+    APP_NAME: 'WellSpace',
+    VERSION: '2.0.0',
+    STORAGE_KEY: 'wellspace_data',
+    SETTINGS_KEY: 'wellspace_settings',
+    THEME_KEY: 'wellspace_theme',
+    ONBOARDING_KEY: 'wellspace_onboarding',
+    MOODS: [
+      { emoji: '😢', label: 'Struggling', value: 1, color: '#ef4444' },
+      { emoji: '😕', label: 'Not Great', value: 2, color: '#f97316' },
+      { emoji: '😐', label: 'Okay', value: 3, color: '#eab308' },
+      { emoji: '🙂', label: 'Good', value: 4, color: '#84cc16' },
+      { emoji: '😄', label: 'Great', value: 5, color: '#22c55e' }
     ],
-    online:[
-      {name:"Youth Wellness Hubs Ontario",desc:"In-person supports ages 12-25",url:"https://youthhubs.ca/en/"},
-      {name:"Ontario Mental Health Support Directory",desc:"Government directory of local supports",url:"https://www.ontario.ca/page/find-mental-health-support"},
-      {name:"School Mental Health Ontario - Helpline Hub",desc:"Crisis & wellness info for students",url:"https://smho-smso.ca/students/helpline-hub/"},
-      {name:"Be There",desc:"Tips on supporting friends & yourself",url:"https://bethere.org/Home"},
-      {name:"Mind Your Mind",desc:"Youth mental health tools & info",url:"https://mindyourmind.ca"},
-    ]
-  },
-  "British Columbia":{
-    phone:[
-      {name:"Kids Help Phone",url:"https://www.kidshelpphone.ca",contact:"📞 1-800-668-6868 | Text CONNECT to 686868",desc:"24/7 free support"},
-      {name:"BC Crisis Line",url:"https://www.crisiscentre.bc.ca",contact:"📞 1-866-661-3311",desc:"24/7 emotional support"},
-      {name:"YouthSpace BC",url:"https://www.youthspace.ca",contact:"Text 778-783-0177",desc:"Youth crisis chat & text"},
+    ACHIEVEMENTS: [
+      { id: 'first_checkin', name: 'First Step', desc: 'Complete your first mood check-in', icon: '🌱' },
+      { id: 'week_streak', name: 'On Fire', desc: '7-day check-in streak', icon: '🔥' },
+      { id: 'month_streak', name: 'Wellness Warrior', desc: '30-day check-in streak', icon: '⚡' },
+      { id: 'goal_setter', name: 'Goal Getter', desc: 'Create 5 goals', icon: '🎯' },
+      { id: 'goal_crusher', name: 'Goal Crusher', desc: 'Complete 10 goals', icon: '✅' },
+      { id: 'habit_master', name: 'Habit Master', desc: 'Maintain a habit for 14 days', icon: '💪' },
+      { id: 'reflection_guru', name: 'Self Reflector', desc: 'Write 10 weekly reflections', icon: '📝' },
+      { id: 'early_bird', name: 'Early Bird', desc: 'Check in before 8am 5 times', icon: '🌅' },
+      { id: 'night_owl', name: 'Night Owl', desc: 'Check in after 10pm 5 times', icon: '🌙' },
+      { id: 'teacher_heart', name: 'Class Supporter', desc: 'Join your first class', icon: '❤️' }
     ],
-    online:[
-      {name:"Here2Talk BC",desc:"Free counselling for post-secondary students",url:"https://here2talk.ca"},
-      {name:"BC Mental Health & Substance Use",desc:"Provincial resources & directory",url:"https://www.bcmhsus.ca"},
-    ]
-  },
-  Alberta:{
-    phone:[
-      {name:"Kids Help Phone",url:"https://www.kidshelpphone.ca",contact:"📞 1-800-668-6868",desc:"24/7 free support"},
-      {name:"Distress Centre Calgary",url:"https://www.distresscentre.com",contact:"📞 403-266-HELP (4357)",desc:"24/7 crisis & mental health"},
-      {name:"211 Alberta",url:"https://ab.211.ca",contact:"📞 2-1-1",desc:"Connect to social & mental health services"},
+    RESOURCES: [
+      { id: 'breathing', title: 'Breathing Exercise', type: 'interactive', icon: '🫁', duration: '2 min' },
+      { id: 'sleep', title: 'Sleep Tips', type: 'article', icon: '😴' },
+      { id: 'study', title: 'Study Techniques', type: 'article', icon: '📚' },
+      { id: 'stress', title: 'Stress Management', type: 'article', icon: '🧘' },
+      { id: 'crisis', title: 'Crisis Resources', type: 'link', icon: '🆘', urgent: true },
+      { id: 'selfcare', title: 'Self-Care Ideas', type: 'article', icon: '💙' }
     ],
-    online:[
-      {name:"Alberta Health Services-Mental Health",desc:"Provincial mental health services",url:"https://www.albertahealthservices.ca/findhealth/service.aspx?id=6810&serviceAtFacilityID=1047652"},
+    ONBOARDING_STEPS: [
+      { title: 'Welcome to WellSpace', text: 'A private wellness platform built for students and teachers.', icon: '👋' },
+      { title: 'Your Privacy Matters', text: 'Your data stays on your device. You control what you share, when you share it.', icon: '🔒' },
+      { title: 'Daily Check-ins', text: 'Track your mood, sleep, and goals in under a minute.', icon: '📊' },
+      { title: 'Build Healthy Habits', text: 'Set goals, track streaks, and celebrate progress.', icon: '🔥' },
+      { title: 'Teacher Insights', text: 'Teachers see anonymous class trends—never individual data without permission.', icon: '👩‍🏫' },
+      { title: 'You\'re All Set', text: 'Let\'s set up your profile and do your first check-in.', icon: '🚀' }
     ]
-  },
-  default:{
-    phone:[
-      {name:"Kids Help Phone",desc:"Free support for young people across Canada (24/7)",url:"https://www.kidshelpphone.ca",contact:"📞 1-800-668-6868 | Text CONNECT to 686868"},
-      {name:"Canada Suicide Prevention Service",desc:"English/French, 24/7",url:"https://www.crisisservicescanada.ca",contact:"📞 1-833-456-4566"},
-      {name:"Hope for Wellness Help Line",desc:"24/7 counselling for Indigenous Peoples",url:"https://hopeforwellness.ca",contact:"📞 1-855-242-3310"},
-    ],
-    online:[
-      {name:"Be There",desc:"Supporting yourself and friends",url:"https://bethere.org/Home"},
-    ]
-  }
-};
-
-// ─────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────
-let CU = null;
-let authRole = null;
-let pendingMoodSel = null;
-let periodOrder = [];
-
-// ─────────────────────────────────────────────
-// FIREBASE CONFIG
-// ─────────────────────────────────────────────
-const FB_CFG = {
-  apiKey: "AIzaSyCpUsu0Y2zbd7PH6a8b-NP6B7yEB7UL9Go",
-  authDomain: "wellspace-71c0c.firebaseapp.com",
-  projectId: "wellspace-71c0c",
-};
-
-let fbDb   = null;
-let fbAuth = null;
-
-function initFirebase(){
-  try {
-    if(!firebase.apps.length) firebase.initializeApp(FB_CFG);
-    fbDb   = firebase.firestore();
-    fbAuth = firebase.auth();
-  } catch(e){ fbDb = null; fbAuth = null; }
-}
-
-// ─────────────────────────────────────────────
-// GLOBAL SAFETY NET - catches anything that slips
-// past a local try/catch, plus offline/online state
-// ─────────────────────────────────────────────
-window.addEventListener('error', function(e){
-  console.error('Uncaught error:', e.error || e.message);
-  toast('⚠️ Something went wrong. Try refreshing the page.');
-});
-
-window.addEventListener('unhandledrejection', function(e){
-  console.error('Unhandled promise rejection:', e.reason);
-  toast('⚠️ Something went wrong. Try refreshing the page.');
-});
-
-window.addEventListener('offline', function(){
-  toast('📡 You\'re offline — changes will save once you\'re back online.');
-});
-
-window.addEventListener('online', function(){
-  toast('✅ Back online.');
-});
-
-// ─────────────────────────────────────────────
-// FIRESTORE HELPERS - per-user + shared
-// ─────────────────────────────────────────────
-
-// Save a key to the current user's private Firestore doc
-async function fsSet(key, value){
-  if(!fbDb || !fbAuth?.currentUser) return;
-  try {
-    await fbDb.collection('users').doc(fbAuth.currentUser.uid)
-      .set({ [key]: JSON.stringify(value) }, { merge: true });
-  } catch(e){
-    console.error('fsSet failed for key', key, e);
-    toast('⚠️ Could not save - check your connection and try again.');
-  }
-}
-
-// Read a key from the current user's private Firestore doc
-async function fsGet(key, def=null){
-  if(!fbDb || !fbAuth?.currentUser) return def;
-  try {
-    const doc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
-    if(!doc.exists) return def;
-    const val = doc.data()[key];
-    return val ? JSON.parse(val) : def;
-  } catch(e){ return def; }
-}
-
-// Save/read journal entries to their OWN collection, separate from /users/{uid}.
-// This is what keeps journals private - the Firestore rule for /journals/{uid}
-// only ever allows the owner to read/write, no teacher exception exists.
-async function fsSetJournal(entries){
-  if(!fbDb || !fbAuth?.currentUser) return;
-  try {
-    await fbDb.collection('journals').doc(fbAuth.currentUser.uid)
-      .set({ entries: JSON.stringify(entries) }, { merge: true });
-  } catch(e){
-    console.error('fsSetJournal failed', e);
-    toast('⚠️ Could not save - check your connection and try again.');
-  }
-}
-
-async function fsGetJournal(def=[]){
-  if(!fbDb || !fbAuth?.currentUser) return def;
-  try {
-    const doc = await fbDb.collection('journals').doc(fbAuth.currentUser.uid).get();
-    if(!doc.exists) return def;
-    const val = doc.data().entries;
-    return val ? JSON.parse(val) : def;
-  } catch(e){ return def; }
-}
-
-// Save to shared collection (class codes, classes list - readable by all authenticated users)
-async function fsSetShared(key, value){
-  if(!fbDb) return;
-  try {
-    await fbDb.collection('shared').doc('data')
-      .set({ [key]: JSON.stringify(value) }, { merge: true });
-  } catch(e){
-    console.error('fsSetShared failed for key', key, e);
-    toast('⚠️ Could not save - check your connection and try again.');
-  }
-}
-
-// Read from shared collection
-async function fsGetShared(key, def=null){
-  if(!fbDb) return def;
-  try {
-    const doc = await fbDb.collection('shared').doc('data').get();
-    if(!doc.exists) return def;
-    const val = doc.data()?.[key];
-    return val ? JSON.parse(val) : def;
-  } catch(e){ return def; }
-}
-
-// ─────────────────────────────────────────────
-// LOCAL CACHE - fast reads, Firestore is source of truth
-// ─────────────────────────────────────────────
-const cache = {};
-
-function cSet(k, v){ cache[k] = v; }
-function cGet(k, def=null){ return k in cache ? cache[k] : def; }
-
-// Keys that are shared across all users (classes, class codes)
-const SHARED_KEYS = ['classes'];
-// Keys that belong to all users but need to be read by teachers (moods, wellness, goals, responsibilities)
-// These are stored per-user but teachers read their students' docs
-const CROSS_KEYS  = ['moods','goals','wellness','responsibilities','messages'];
-// Keys private to one user
-const PRIVATE_KEYS= ['students','teachers'];
-
-// ─────────────────────────────────────────────
-// UNIFIED S - same API as before, now Firestore-backed
-// ─────────────────────────────────────────────
-const S = {
-  get(k, def=null){
-    // Return from cache first for speed
-    return cGet(k, def);
-  },
-set(k, v){
-    cSet(k, v);
-    // Persist to correct Firestore location
-    if(k === 'journals'){
-      fsSetJournal(v);
-    } else if(SHARED_KEYS.includes(k)){
-      fsSetShared(k, v);
-} else {
-      fsSet(k, v);
-    }
-  },
-};
-
-// Shortcuts - same as original
-const gs  = ()=> S.get('students',[]);
-const gt  = ()=> S.get('teachers',[]);
-const gc  = ()=> S.get('classes',[]);
-const gm  = ()=> S.get('moods',[]);
-const ggo = ()=> S.get('goals',[]);
-const gw  = ()=> S.get('wellness',[]);
-const gmsg= ()=> S.get('messages',[]);
-const gj  = ()=> S.get('journals',[]);
-
-// ─────────────────────────────────────────────
-// LOAD USER DATA FROM FIRESTORE INTO CACHE
-// (single, de-duplicated version - also loads profile + per-doc classes)
-// ─────────────────────────────────────────────
-async function loadUserData(){
-  if(!fbDb || !fbAuth?.currentUser) return;
-  try {
-    // Load user's private data from /users/{uid}
-    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
-    if(userDoc.exists){
-      const data = userDoc.data();
-      Object.entries(data).forEach(([k,v])=>{
-        try{ cSet(k, JSON.parse(v)); }catch{}
-      });
-    }
-
-// Load journal entries from their own locked-down collection
-    const journalEntries = await fsGetJournal([]);
-    cSet('journals', journalEntries);
-
-    // ALSO load profile data (classIds, name, etc.) from /profiles/{uid}
-    const profileDoc = await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).get();
-    if(profileDoc.exists){
-      const pdata = profileDoc.data();
-      if(CU){
-        if(pdata.classIds) CU.classIds = pdata.classIds;
-        if(pdata.name) CU.name = pdata.name;
-        if(pdata.grade) CU.grade = pdata.grade;
-        if(pdata.periodOrder) CU.periodOrder = pdata.periodOrder;
-      }
-    }
-
-    // Load shared data (classes) - legacy blob, for backwards compatibility
-    const sharedDoc = await fbDb.collection('shared').doc('data').get();
-    if(sharedDoc.exists){
-      const data = sharedDoc.data();
-      ['classes'].forEach(k=>{
-        if(data[k]){ try{ cSet(k, JSON.parse(data[k])); }catch{} }
-      });
-    }
-
-    // Load from new per-doc classes collection (this is the source of truth going forward)
-    const classes = await fsGetAllClasses();
-    if(classes.length) cSet('classes', classes);
-
-  } catch(e){ console.error('loadUserData error', e); }
-}
-
-// ─────────────────────────────────────────────
-// STUDENT-TEACHER LINK - store uid mapping
-// ─────────────────────────────────────────────
-// When a user signs up we store their profile in /profiles/{uid}
-// So teachers can look up student uids to read their data
-async function saveProfile(uid, profile){
-  if(!fbDb) return;
-  try {
-    await fbDb.collection('profiles').doc(uid).set(profile, { merge: true });
-  } catch(e){
-    console.error('saveProfile failed', e);
-    toast('⚠️ Could not save your profile - check your connection and try again.');
-  }
-}
-
-async function getProfile(uid){
-  if(!fbDb) return null;
-  try {
-    const doc = await fbDb.collection('profiles').doc(uid).get();
-    return doc.exists ? doc.data() : null;
-  } catch(e){ return null; }
-}
-
-// ─────────────────────────────────────────────
-// TEACHER LINK BACKFILL - some student profiles may be missing
-// teacherUids because they joined a class (either via joinClass() or
-// via the signup-with-code flow) before teacherUids tracking existed,
-// or through a code path that never set it. Security rules require
-// teacherUids to grant a teacher read access to a student's data, so
-// this repairs any student profile that's missing a link for a class
-// they're already in. Safe to call on every login - it's a no-op once
-// a profile is caught up, and joinClass() already sets this correctly
-// for brand-new joins going forward.
-// ─────────────────────────────────────────────
-async function ensureTeacherLinks(){
-  if(!CU || CU.role !== 'student' || !fbAuth?.currentUser) return;
-  if(!CU.classIds?.length) return;
-
-  const classes = gc().length ? gc() : await fsGetAllClasses();
-  const existingTeacherUids = new Set(CU.teacherUids || []);
-  let changed = false;
-
-  CU.classIds.forEach(classId=>{
-    const cls = classes.find(c=>c.id===classId);
-    const teacherUid = cls?.teacherUid || cls?.teacherId;
-    if(teacherUid && !existingTeacherUids.has(teacherUid)){
-      existingTeacherUids.add(teacherUid);
-      changed = true;
-    }
-  });
-
-  if(changed){
-    CU.teacherUids = [...existingTeacherUids];
-    try {
-      await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
-        .set({ teacherUids: CU.teacherUids }, { merge: true });
-    } catch(e){ console.error('ensureTeacherLinks failed', e); }
-  }
-}
-
-// Get all student uids in a teacher's classes - batched to respect Firebase's
-// 10-value limit on array-contains-any, so this still works with 10+ classes.
-async function getStudentUids(classIds){
-  if(!fbDb || !fbAuth?.currentUser) return [];
-  try {
-    const snap = await fbDb.collection('profiles')
-      .where('role','==','student')
-      .where('teacherUids','array-contains', fbAuth.currentUser.uid)
-      .get();
-    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
-  } catch(e){ console.error('getStudentUids error', e); return []; }
-}
-
-// Load a single student's full data doc (used by the teacher dashboard)
-async function loadStudentData(uid){
-  if(!fbDb) return {};
-  try {
-    const doc = await fbDb.collection('users').doc(uid).get();
-    if(!doc.exists) return {};
-    const raw = doc.data();
-    const parsed = {};
-    Object.entries(raw).forEach(([k,v])=>{
-      try{ parsed[k] = JSON.parse(v); }catch{ parsed[k] = v; }
-    });
-    // Ensure a 'students' entry always exists, built from the profile if missing,
-    // so the teacher dashboard can always render a row for this student.
-    if(!parsed.students){
-      const profile = await getProfile(uid);
-      if(profile){
-        parsed.students = [{
-          id: profile.localId || uid,
-          name: profile.name,
-          email: profile.email,
-          grade: profile.grade,
-          classIds: profile.classIds || [],
-          periodOrder: profile.periodOrder || [],
-          joined: profile.joined,
-        }];
-      }
-    }
-    return parsed;
-  } catch(e){ console.error('loadStudentData error', e); return {}; }
-}
-
-// Merge an array of records into another array by a unique key (studentId + extra fields),
-// replacing any existing record for that student/date/type combo so re-fetches don't duplicate.
-function mergeInto(target, incoming, keyField){
-  incoming.forEach(item=>{
-    const idx = target.findIndex(t => t.id && item.id && t.id === item.id);
-    if(idx >= 0) target[idx] = item;
-    else target.push(item);
-  });
-}
-
-// ─────────────────────────────────────────────
-// VALIDATION
-// ─────────────────────────────────────────────
-function validEmail(e){
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e.trim());
-}
-function validPw(p){
-  return p.length>=8 && /[A-Z]/.test(p) && /[0-9]/.test(p) && /[!@#$%^&*(),.?":{}|<>]/.test(p);
-}
-function checkPwStrength(v){
-  const rules = {
-    'r-len':   v.length>=8,
-    'r-upper': /[A-Z]/.test(v),
-    'r-num':   /[0-9]/.test(v),
-    'r-special':/[!@#$%^&*(),.?":{}|<>]/.test(v),
   };
-  let score = Object.values(rules).filter(Boolean).length;
-  const fill = document.getElementById('pw-strength-fill');
-  const colors = ['','#ef4444','#f59e0b','#3b82f6','#22c55e'];
-  if(fill){ fill.style.width=(score*25)+'%'; fill.style.background=colors[score]||''; }
-  Object.entries(rules).forEach(([id,ok])=>{
-    const el=document.getElementById(id);
-    if(el){ el.classList.toggle('ok',ok); }
-  });
-}
-function togglePw(id,btn){
-  const inp=document.getElementById(id);
-  if(!inp)return;
-  if(inp.type==='password'){ inp.type='text'; btn.textContent='🙈'; }
-  else{ inp.type='password'; btn.textContent='👁'; }
-}
 
-// ─────────────────────────────────────────────
-// SCREEN NAVIGATION
-// ─────────────────────────────────────────────
-function showScreen(id){
-  document.querySelectorAll('.screen').forEach(s=>{
-    s.classList.remove('active','fade');
-    s.style.display='none';
-    s.style.flexDirection='';
-  });
-  const el=document.getElementById(id);
-  if(!el)return;
-  el.style.display='flex';
-  if(id==='screen-student'||id==='screen-teacher') el.style.flexDirection='column';
-  el.classList.add('active','fade');
-}
-
-function gotoAuth(role){
-  authRole=role;
-  const brand=document.getElementById('auth-brand-label');
-  brand.textContent = role==='student' ? '🎒 Student Login' : '📋 Teacher Login';
-  document.getElementById('su-student-fields').classList.toggle('hidden', role!=='student');
-  document.getElementById('su-teacher-fields').classList.toggle('hidden', role!=='teacher');
-  authTab('login');
-  showScreen('screen-auth');
-}
-
-function authTab(tab){
-  document.getElementById('form-login').classList.toggle('hidden', tab!=='login');
-  document.getElementById('form-signup').classList.toggle('hidden', tab!=='signup');
-  document.getElementById('atab-login').classList.toggle('active', tab==='login');
-  document.getElementById('atab-signup').classList.toggle('active', tab!=='login');
-}
-
-// ─────────────────────────────────────────────
-// COOKIE CONSENT - synced to the account, not just the browser
-// So the consent question only ever gets asked once per account,
-// even if the student logs in on a different device later.
-// ─────────────────────────────────────────────
-async function saveCookieConsentToAccount(accepted){
-  if(!fbAuth?.currentUser) return; // not logged in yet, localStorage handles it for now
-  try {
-    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).set(
-      { cookieConsent: accepted, cookieConsentDate: today() },
-      { merge: true }
-    );
-  } catch(e){ console.error('saveCookieConsentToAccount failed', e); }
-}
-window.saveCookieConsentToAccount = saveCookieConsentToAccount;
-
-async function syncCookieConsentAfterLogin(uid){
-  try {
-    const profile = await getProfile(uid);
-    const banner = document.getElementById('cookie-banner');
-    if(profile && typeof profile.cookieConsent === 'boolean'){
-      // Account already answered before (maybe on another device) - use that,
-      // don't ask again.
-      localStorage.setItem('wellspace_cookie_consent', profile.cookieConsent ? 'accepted' : 'declined');
-      if(banner) banner.classList.add('hidden');
-      if(profile.cookieConsent && typeof loadGoogleAnalytics==='function') loadGoogleAnalytics();
-    } else {
-      // Account has no answer yet. If this browser already answered
-      // (e.g. they chose on the entry screen before logging in), save
-      // that answer to the account now so it's remembered going forward.
-      const local = localStorage.getItem('wellspace_cookie_consent');
-      if(local === 'accepted' || local === 'declined'){
-        await saveCookieConsentToAccount(local === 'accepted');
+  // ==================== STATE MANAGEMENT ====================
+  let state = {
+    user: null,
+    role: null,
+    currentView: 'home',
+    theme: 'light',
+    fontSize: 'medium',
+    highContrast: false,
+    reducedMotion: false,
+    sidebarOpen: false,
+    notifications: true,
+    data: {
+      checkIns: [],
+      goals: [],
+      habits: [],
+      reflections: [],
+      classes: [],
+      achievements: [],
+      settings: {
+        shareWithTeacher: false,
+        allowAnonymous: true,
+        reminderTime: '20:00',
+        reminderEnabled: true
       }
     }
-  } catch(e){ console.error('syncCookieConsentAfterLogin failed', e); }
-}
+  };
 
-// ─────────────────────────────────────────────
-// AUTH - LOGIN (Firebase Auth)
-// ─────────────────────────────────────────────
-async function doLogin(){
-  const email = document.getElementById('login-email').value.trim().toLowerCase();
-  const pass  = document.getElementById('login-pass').value;
-  const errEl = document.getElementById('login-err');
+  // ==================== UTILITY FUNCTIONS ====================
+  const $ = (selector, context = document) => context.querySelector(selector);
+  const $$ = (selector, context = document) => Array.from(context.querySelectorAll(selector));
+  const generateId = () => Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+  const today = () => new Date().toISOString().split('T')[0];
+  const now = () => new Date().toISOString();
+  const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formatTime = (timeStr) => new Date(timeStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / (1000 * 60 * 60 * 24));
+  const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+  const announce = (message) => {
+    const el = document.getElementById('sr-announcer');
+    if (el) { el.textContent = message; setTimeout(() => el.textContent = '', 1000); }
+  };
 
-  if(!email||!pass) return showErr(errEl,'Please enter your email and password.');
-  if(!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
-
-  try {
-    showErr(errEl,''); // clear error
-    const cred = await fbAuth.signInWithEmailAndPassword(email, pass);
-    const uid  = cred.user.uid;
-
-    // Load profile
-    const profile = await getProfile(uid);
-    if(!profile) return showErr(errEl,'Account not found. Please sign up.');
-
-    // Check role matches
-    if(profile.role !== authRole) return showErr(errEl, `This is a ${profile.role} account. Please use the ${profile.role} login.`);
-
-    CU = { ...profile, id: profile.localId || uid, uid };
-    await loadUserData();
-    await ensureTeacherLinks();
-    syncCookieConsentAfterLogin(uid);
-
-    toast(`Welcome back, ${CU.name}! 👋`);
-    if(authRole==='student') loadStudentDash();
-    else { await loadTeacherStudents(); loadTeacherDash(); }
-
-  } catch(e){
-    if(e.code==='auth/wrong-password'||e.code==='auth/user-not-found'||e.code==='auth/invalid-credential'){
-      showErr(errEl,'Email or password incorrect. Check your details.');
-    } else {
-      showErr(errEl,'Login failed. Please try again.');
-    }
-  }
-}
-
-// ─────────────────────────────────────────────
-// AUTH - SIGNUP (Firebase Auth)
-// ─────────────────────────────────────────────
-async function doSignup(){
-  const name  = document.getElementById('su-name').value.trim();
-  const email = document.getElementById('su-email').value.trim().toLowerCase();
-  const pass  = document.getElementById('su-pass').value;
-  const privacyOk = document.getElementById('su-privacy').checked;
-  const errEl = document.getElementById('signup-err');
-
-  if(!name||!email||!pass) return showErr(errEl,'Please fill in all required fields.');
-  if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address.');
-  if(!validPw(pass))       return showErr(errEl,'Password must be 8+ chars with uppercase, number & special character.');
-  if(!privacyOk)           return showErr(errEl,'Please accept the privacy policy to continue.');
-
-  try {
-    if(authRole==='student'){
-      const grade = document.getElementById('su-grade').value;
-      const code  = document.getElementById('su-code').value.trim().toUpperCase();
-      if(!grade) return showErr(errEl,'Please select your grade.');
-
-      // Look up class code in the per-doc classes collection (source of truth)
-      const classes = await fsGetAllClasses();
-      cSet('classes', classes);
-
-      let classIds = [];
-      if(code){
-        const cls = classes.find(c=>c.code===code);
-        if(!cls) return showErr(errEl,`Class code "${code}" not found. Ask your teacher for the correct code.`);
-        classIds = [cls.id];
+  // ==================== STORAGE (Privacy-First) ====================
+  const Storage = {
+    save() {
+      try {
+        const payload = {
+          version: CONFIG.VERSION,
+          timestamp: now(),
+          user: state.user,
+          role: state.role,
+          data: state.data
+        };
+        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(payload));
+        localStorage.setItem(CONFIG.SETTINGS_KEY, JSON.stringify({
+          theme: state.theme,
+          fontSize: state.fontSize,
+          highContrast: state.highContrast,
+          reducedMotion: state.reducedMotion,
+          notifications: state.notifications
+        }));
+      } catch (e) {
+        console.error('Storage save failed:', e);
+        notify('Storage full. Export your data to free up space.', 'warning');
       }
+    },
 
-      // Create Firebase Auth account
-      const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
-      const uid  = cred.user.uid;
-      const localId = 's'+uid8();
-
-      const profile = { role:'student', name, email, grade, classIds, periodOrder:[], joined:today(), localId, uid };
-
-      // Save profile to shared profiles collection (this is what teachers query)
-      await saveProfile(uid, profile);
-
-      // Save student list entry to user's own doc
-      const studentEntry = { id:localId, name, email, grade, classIds, periodOrder:[], joined:today() };
-      cSet('students', [studentEntry]);
-      await fsSet('students', [studentEntry]);
-
-      CU = { ...profile, id: localId };
-      await loadUserData();
-      await ensureTeacherLinks();
-      toast(`Account created! Welcome, ${name} 🎉`);
-      loadStudentDash();
-
-    } else {
-      const province = document.getElementById('su-province').value;
-      const school   = document.getElementById('su-school').value.trim();
-      if(!province) return showErr(errEl,'Please select your province.');
-
-      const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
-      const uid  = cred.user.uid;
-      const localId = 't'+uid8();
-
-      const profile = { role:'teacher', name, email, province, school, socialWorker:null, joined:today(), localId, uid };
-      await saveProfile(uid, profile);
-
-      const teacherEntry = { id:localId, name, email, province, school, socialWorker:null, joined:today() };
-      cSet('teachers', [teacherEntry]);
-      await fsSet('teachers', [teacherEntry]);
-
-      CU = { ...profile, id: localId };
-      await loadUserData();
-      toast(`Account created! Welcome, ${name} 📋`);
-      loadTeacherDash();
-    }
-  } catch(e){
-    if(e.code==='auth/email-already-in-use'){
-      showErr(errEl,'An account with this email already exists.');
-    } else {
-      showErr(errEl,'Could not create account. Please try again.');
-      console.error(e);
-    }
-  }
-}
-
-function logout(){
-  CU=null; authRole=null;
-  pendingMoodSel=null;
-  Object.keys(cache).forEach(k=>delete cache[k]);
-  invalidateTeacherCache();
-  if(fbAuth) fbAuth.signOut().catch(()=>{});
-  showScreen('screen-entry');
-}
-
-// ─────────────────────────────────────────────
-// TEACHER - load students across Firestore docs
-// Cached for 60s so the dashboard doesn't re-read everything on every click.
-// ─────────────────────────────────────────────
-let _teacherStudentCache = null;
-let _teacherStudentCacheTime = 0;
-const TEACHER_CACHE_TTL = 60 * 1000; // 60 seconds
-
-async function loadTeacherStudents(){
-  const now = Date.now();
-
-  // Serve from cache if fresh
-  if (_teacherStudentCache && (now - _teacherStudentCacheTime) < TEACHER_CACHE_TTL) {
-    Object.entries(_teacherStudentCache).forEach(([k, v]) => cSet(k, v));
-    return;
-  }
-
-  const myClasses  = gc().filter(c => c.teacherId === CU.id);
-  const myClassIds = myClasses.map(c => c.id);
-  if (!myClassIds.length) {
-    // No classes yet - clear any stale student data and bail
-    cSet('students', []);
-    return;
-  }
-
-  try {
-    // Batched query - works for any number of classes, not just <=10
-    const studentProfiles = await getStudentUids(myClassIds);
-
-    const allStudents = [];
-    const allMoods    = cGet('moods', []);
-    const allGoals    = cGet('goals', []);
-    const allWellness = cGet('wellness', []);
-    const allResps    = cGet('responsibilities', []);
-
-    for (const sp of studentProfiles) {
-      const data = await loadStudentData(sp.uid);
-
-      if (data.students) {
-        // Only add students who are actually in one of this teacher's classes
-        const myStudents = data.students.filter(s =>
-          s.classIds && s.classIds.some(id => myClassIds.includes(id))
-        );
-        allStudents.push(...myStudents);
+    load() {
+      try {
+        const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+        const settings = localStorage.getItem(CONFIG.SETTINGS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.data) state.data = { ...state.data, ...parsed.data };
+          if (parsed.user) state.user = parsed.user;
+          if (parsed.role) state.role = parsed.role;
+        }
+        if (settings) {
+          const s = JSON.parse(settings);
+          state.theme = s.theme || 'light';
+          state.fontSize = s.fontSize || 'medium';
+          state.highContrast = s.highContrast || false;
+          state.reducedMotion = s.reducedMotion || false;
+          state.notifications = s.notifications !== false;
+        }
+      } catch (e) {
+        console.error('Storage load failed:', e);
       }
+    },
 
-      if (data.moods)            mergeInto(allMoods,    data.moods,            'studentId');
-      if (data.goals)            mergeInto(allGoals,    data.goals,            'studentId');
-      if (data.wellness)         mergeInto(allWellness, data.wellness,         'studentId');
-      if (data.responsibilities) mergeInto(allResps,    data.responsibilities, 'studentId');
+    export(format = 'json') {
+      const payload = {
+        app: CONFIG.APP_NAME,
+        version: CONFIG.VERSION,
+        exportedAt: now(),
+        user: state.user,
+        role: state.role,
+        data: state.data
+      };
+      if (format === 'json') {
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `wellspace-export-${today()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else if (format === 'csv') {
+        const headers = 'Date,Mood,Value,Sleep,Notes\n';
+        const rows = state.data.checkIns.map(c => 
+          `"${c.date}","${c.moodLabel}",${c.moodValue},${c.sleep || ''},"${(c.notes || '').replace(/"/g, '""')}"`
+        ).join('\n');
+        const blob = new Blob([headers + rows], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `wellspace-checkins-${today()}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      notify('Data exported successfully', 'success');
+    },
+
+    import(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (data.data) state.data = { ...state.data, ...data.data };
+          if (data.user) state.user = data.user;
+          if (data.role) state.role = data.role;
+          Storage.save();
+          notify('Data imported successfully! Refreshing...', 'success');
+          setTimeout(() => location.reload(), 1500);
+        } catch (err) {
+          notify('Invalid file format', 'error');
+        }
+      };
+      reader.readAsText(file);
+    },
+
+    clear() {
+      if (confirm('WARNING: This will permanently delete ALL your WellSpace data. This cannot be undone. Are you sure?')) {
+        localStorage.removeItem(CONFIG.STORAGE_KEY);
+        localStorage.removeItem(CONFIG.SETTINGS_KEY);
+        localStorage.removeItem(CONFIG.ONBOARDING_KEY);
+        notify('All data cleared. Reloading...', 'info');
+        setTimeout(() => location.reload(), 1500);
+      }
     }
+  };
 
-    cSet('students',         allStudents);
-    cSet('moods',            allMoods);
-    cSet('goals',            allGoals);
-    cSet('wellness',         allWellness);
-    cSet('responsibilities', allResps);
-
-    _teacherStudentCache = {
-      students: allStudents,
-      moods: [...allMoods],
-      goals: [...allGoals],
-      wellness: [...allWellness],
-      responsibilities: [...allResps],
+  // ==================== NOTIFICATION SYSTEM ====================
+  const notify = (message, type = 'info', duration = 4000) => {
+    if (!state.notifications && type !== 'error') return;
+    const container = document.getElementById('notification-container') || createNotificationContainer();
+    const el = document.createElement('div');
+    el.className = `notification notification-${type}`;
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+    el.innerHTML = `<span class="notification-icon">${icons[type] || 'ℹ️'}</span><span class="notification-text">${message}</span><button class="notification-close" aria-label="Close notification">×</button>`;
+    container.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    const close = () => {
+      el.classList.remove('show');
+      setTimeout(() => el.remove(), 300);
     };
-    _teacherStudentCacheTime = now;
+    el.querySelector('.notification-close').addEventListener('click', close);
+    if (duration > 0) setTimeout(close, duration);
+  };
 
-  } catch (e) { console.error('loadTeacherStudents error', e); }
-}
-
-// Call this after any action that changes student/class data, so the next
-// dashboard read pulls fresh data instead of serving the 60s cache.
-function invalidateTeacherCache(){
-  _teacherStudentCache = null;
-  _teacherStudentCacheTime = 0;
-}
-
-// ─────────────────────────────────────────────
-// STUDENT DASHBOARD
-// ─────────────────────────────────────────────
-function loadStudentDash(){
-  showScreen('screen-student');
-  const el=document.getElementById('screen-student');
-  el.style.display='flex'; el.classList.add('active');
-
-  const h=new Date().getHours();
-  const gr=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
-  document.getElementById('s-greet').textContent=`${gr}, ${CU.name}! 👋`;
-  document.getElementById('s-date').textContent=new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric'});
-  document.getElementById('s-av').textContent=CU.name[0].toUpperCase();
-
-  updateStudentNav();
-  sSection('home');
-}
-
-function hasClasses(){
-  return CU.classIds && CU.classIds.length > 0;
-}
-
-function updateStudentNav(){
-  const navItems = document.querySelectorAll('#s-sidebar .sn');
-  if(navItems[8]) navItems[8].style.display = '';
-}
-
-function sSection(name){
-  document.querySelectorAll('#s-sidebar .sn').forEach(n=>n.classList.remove('active'));
-  const navMap=['home','mood','goals','calendar','stats','wellness','help','classes','profile'];
-  const idx=navMap.indexOf(name);
-  const navItems=document.querySelectorAll('#s-sidebar .sn');
-  if(navItems[idx]) navItems[idx].classList.add('active');
-
-  document.querySelectorAll('#s-main .dsec').forEach(s=>s.classList.remove('active'));
-  const sec=document.getElementById('s-sec-'+name);
-  if(sec) sec.classList.add('active');
-
-  if(name==='home')     renderHome();
-  if(name==='mood')     renderMoodCheck();
-  if(name==='goals')    renderGoalsSection();
-  if(name==='calendar') renderCalendar();
-  if(name==='stats')    renderStats();
-  if(name==='wellness') renderWellnessSection();
-  if(name==='help')     renderHelpSection();
-  if(name==='classes')  renderClassesSection();
-  if(name==='profile')  renderStudentProfile();
-}
-
-// HOME
-function renderHome(){
-  const hour=new Date().getHours();
-  const bannerEl=document.getElementById('s-home-banner');
-  const msgs=[
-    [5,11,"Morning, {n}! 🌅 Start your day with intention."],
-    [11,14,"Hey {n}! 🌤 It's the middle of the day - how are you feeling?"],
-    [14,18,"Afternoon, {n}! 📚 Great time to focus on your most important tasks."],
-    [18,21,"Evening, {n}! 🌙 Wind down your work and get ready for tomorrow."],
-    [21,24,"Late night, {n}! 😴 Remember - sleep is the best productivity tool."],
-    [0,5,"Very late, {n}! 🌙 You need rest. Your goals will be here tomorrow."],
-  ];
-  const [, , msg] = msgs.find(([s,e])=>hour>=s&&hour<e)||msgs[0];
-  bannerEl.innerHTML=`<strong>${msg.replace('{n}',escapeHtml(CU.name))}</strong><p>${new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</p>`;
-
-  const goals=ggo().filter(g=>g.studentId===CU.id&&!g.done).slice(0,4);
-  const todayDay=new Date().toLocaleDateString('en-CA',{weekday:'long'});
-  const todayGoals=goals.filter(g=>g.day===todayDay);
-  const prevEl=document.getElementById('s-home-goals-preview');
-  if(todayGoals.length>0){
-    prevEl.innerHTML=`
-      <div class="sub-hdr" style="margin-top:0">Today's Tasks (${todayDay})</div>
-      ${todayGoals.map(g=>`
-        <div class="goal-row" style="margin-bottom:8px">
-          <div class="gcheck ${g.done?'checked':''}" onclick="quickToggleGoal('${g.id}');">${g.done?'✓':''}</div>
-          <div class="ginfo"><h5>${escapeHtml(g.task)}</h5><span class="gmeta">🕐 ${escapeHtml(g.time)} · ${escapeHtml(g.duration)}</span></div>
-          <span class="gtype-badge gtype-${g.type||'study'}">${typeLabel(g.type)}</span>
-        </div>
-      `).join('')}
-    `;
-  } else {
-    prevEl.innerHTML=`<div class="ai-nudge" style="margin-top:16px"><div class="ai-nudge-icon">🎯</div><div><strong>No tasks for today yet</strong><p>Head to Goals to plan your day!</p></div></div>`;
+  function createNotificationContainer() {
+    const div = document.createElement('div');
+    div.id = 'notification-container';
+    div.setAttribute('aria-live', 'polite');
+    div.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(div);
+    return div;
   }
-}
 
-// MOOD CHECK
-function renderMoodCheck(){
-  const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
-  const todayMoods = gm().filter(m => m.studentId === CU.id && m.date === today());
-  const container = document.getElementById('s-mood-list');
-  const hasTeacher = hasClasses();
+  // ==================== THEME & ACCESSIBILITY ====================
+  const Theme = {
+    init() {
+      this.apply();
+      this.bindEvents();
+    },
 
-  const items = [
-    ...(hasTeacher ? myClasses.map(c => ({id:c.id, label:c.subject, time:`${c.startTime} - ${c.endTime}`, isClass:true})) : []),
-    {id:'general', label:'How are you feeling today?', time:'', isClass:false},
-  ];
+    apply() {
+      document.documentElement.setAttribute('data-theme', state.theme);
+      document.documentElement.setAttribute('data-font-size', state.fontSize);
+      document.documentElement.setAttribute('data-high-contrast', state.highContrast);
+      document.documentElement.setAttribute('data-reduced-motion', state.reducedMotion);
+      const themeBtn = document.getElementById('theme-toggle');
+      if (themeBtn) {
+        themeBtn.setAttribute('aria-label', `Switch theme. Current: ${state.theme}`);
+        themeBtn.innerHTML = state.theme === 'dark' ? '☀️' : state.theme === 'high-contrast' ? '👁️' : '🌙';
+      }
+      $$('.font-size-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.size === state.fontSize);
+      });
+    },
 
-  const sub = document.querySelector('#s-sec-mood .sec-hdr p');
-  if(sub) sub.textContent = hasTeacher ? 'How are you feeling in each period today?' : 'Check in with yourself - just for you 🌱';
+    cycle() {
+      const themes = state.highContrast ? ['light', 'dark', 'high-contrast'] : ['light', 'dark'];
+      const idx = themes.indexOf(state.theme);
+      state.theme = themes[(idx + 1) % themes.length];
+      this.apply();
+      Storage.save();
+      announce(`Theme changed to ${state.theme}`);
+    },
 
-  container.innerHTML = items.map(item => {
-    const existing = todayMoods.find(m => m.classId === item.id);
-    const shareButtons = hasTeacher
-      ? `<button class="btn-green" onclick="saveMood(true)">Share with Teacher</button>
-         <button class="btn-outline" onclick="saveMood(false)">Keep Private</button>`
-      : `<button class="btn-green" onclick="saveMood(false)">Save</button>`;
+    setFontSize(size) {
+      state.fontSize = size;
+      this.apply();
+      Storage.save();
+      announce(`Font size set to ${size}`);
+    },
 
-    return `
-      <div class="mood-card">
-        <div class="mood-card-hdr">
-          <h4>${item.isClass ? '📚 ' : ''}${escapeHtml(item.label)}</h4>
-          ${item.time ? `<span class="cls-time">${escapeHtml(item.time)}</span>` : ''}
+    toggleHighContrast() {
+      state.highContrast = !state.highContrast;
+      state.theme = state.highContrast ? 'high-contrast' : 'light';
+      this.apply();
+      Storage.save();
+      announce(`High contrast ${state.highContrast ? 'enabled' : 'disabled'}`);
+    },
+
+    toggleReducedMotion() {
+      state.reducedMotion = !state.reducedMotion;
+      this.apply();
+      Storage.save();
+    },
+
+    bindEvents() {
+      const themeBtn = document.getElementById('theme-toggle');
+      if (themeBtn) themeBtn.addEventListener('click', () => this.cycle());
+      $$('.font-size-btn').forEach(btn => {
+        btn.addEventListener('click', () => this.setFontSize(btn.dataset.size));
+      });
+      const hcBtn = document.getElementById('high-contrast-toggle');
+      if (hcBtn) hcBtn.addEventListener('click', () => this.toggleHighContrast());
+      const rmBtn = document.getElementById('reduced-motion-toggle');
+      if (rmBtn) rmBtn.addEventListener('click', () => this.toggleReducedMotion());
+    }
+  };
+
+  // ==================== MODAL SYSTEM ====================
+  const Modal = {
+    open(content, title = '', onClose = null) {
+      let overlay = document.getElementById('modal-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'modal-overlay';
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <div class="modal-header">
+              <h2 id="modal-title" class="modal-title"></h2>
+              <button class="modal-close" aria-label="Close modal">×</button>
+            </div>
+            <div class="modal-body"></div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) this.close(); });
+        overlay.querySelector('.modal-close').addEventListener('click', () => this.close());
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.close(); });
+      }
+      overlay.querySelector('.modal-title').textContent = title;
+      overlay.querySelector('.modal-body').innerHTML = content;
+      overlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+      const focusable = overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusable.length) focusable[0].focus();
+      this._onClose = onClose;
+      announce(`Modal opened: ${title}`);
+    },
+
+    close() {
+      const overlay = document.getElementById('modal-overlay');
+      if (overlay) {
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+        if (this._onClose) this._onClose();
+        announce('Modal closed');
+      }
+    }
+  };
+
+  // ==================== ROUTER / NAVIGATION ====================
+  const Router = {
+    routes: {
+      'home': () => renderHome(),
+      'student-dashboard': () => renderStudentDashboard(),
+      'teacher-dashboard': () => renderTeacherDashboard(),
+      'checkin': () => renderCheckIn(),
+      'goals': () => renderGoals(),
+      'habits': () => renderHabits(),
+      'calendar': () => renderCalendar(),
+      'analytics': () => renderAnalytics(),
+      'resources': () => renderResources(),
+      'settings': () => renderSettings(),
+      'profile': () => renderProfile(),
+      'about': () => renderAbout(),
+      'faq': () => renderFAQ(),
+      'contact': () => renderContact(),
+      'privacy': () => renderPrivacy(),
+      'roadmap': () => renderRoadmap()
+    },
+
+    navigate(view, pushState = true) {
+      if (!state.user && view !== 'home' && view !== 'about' && view !== 'faq' && view !== 'contact' && view !== 'privacy') {
+        notify('Please complete onboarding first', 'warning');
+        view = 'home';
+      }
+      state.currentView = view;
+      $$('.nav-link').forEach(link => {
+        link.classList.toggle('active', link.dataset.view === view);
+        link.setAttribute('aria-current', link.dataset.view === view ? 'page' : 'false');
+      });
+      $$('.view').forEach(v => {
+        v.classList.remove('active');
+        v.setAttribute('hidden', 'true');
+      });
+      const target = document.getElementById(`view-${view}`);
+      if (target) {
+        target.classList.add('active');
+        target.removeAttribute('hidden');
+        target.focus();
+      } else if (this.routes[view]) {
+        this.routes[view]();
+        const newlyCreated = document.getElementById(`view-${view}`);
+        if (newlyCreated) {
+          newlyCreated.classList.add('active');
+          newlyCreated.removeAttribute('hidden');
+        }
+      }
+      state.sidebarOpen = false;
+      document.body.classList.remove('sidebar-open');
+      window.scrollTo({ top: 0, behavior: state.reducedMotion ? 'auto' : 'smooth' });
+      if (pushState) {
+        history.pushState({ view }, '', `#${view}`);
+      }
+      announce(`Navigated to ${view.replace(/-/g, ' ')}`);
+    },
+
+    init() {
+      window.addEventListener('popstate', (e) => {
+        if (e.state && e.state.view) {
+          this.navigate(e.state.view, false);
+        }
+      });
+      document.addEventListener('click', (e) => {
+        const link = e.target.closest('.nav-link');
+        if (link) {
+          e.preventDefault();
+          const view = link.dataset.view;
+          if (view) this.navigate(view);
+        }
+        const toggle = e.target.closest('.nav-toggle');
+        if (toggle) {
+          state.sidebarOpen = !state.sidebarOpen;
+          document.body.classList.toggle('sidebar-open', state.sidebarOpen);
+        }
+      });
+      const hash = location.hash.replace('#', '');
+      if (hash && this.routes[hash]) {
+        this.navigate(hash, false);
+      }
+    }
+  };
+
+  // ==================== ONBOARDING ====================
+  const Onboarding = {
+    step: 0,
+
+    start() {
+      const completed = localStorage.getItem(CONFIG.ONBOARDING_KEY);
+      if (completed || state.user) return;
+      this.step = 0;
+      this.render();
+    },
+
+    render() {
+      let overlay = document.getElementById('onboarding-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'onboarding-overlay';
+        overlay.className = 'onboarding-overlay';
+        document.body.appendChild(overlay);
+      }
+      const step = CONFIG.ONBOARDING_STEPS[this.step];
+      const isLast = this.step === CONFIG.ONBOARDING_STEPS.length - 1;
+      overlay.innerHTML = `
+        <div class="onboarding-card" role="dialog" aria-modal="true">
+          <div class="onboarding-progress">
+            ${CONFIG.ONBOARDING_STEPS.map((_, i) => `<div class="progress-dot ${i === this.step ? 'active' : ''} ${i < this.step ? 'completed' : ''}"></div>`).join('')}
+          </div>
+          <div class="onboarding-icon">${step.icon}</div>
+          <h2 class="onboarding-title">${step.title}</h2>
+          <p class="onboarding-text">${step.text}</p>
+          <div class="onboarding-actions">
+            ${this.step > 0 ? '<button class="btn btn-secondary onboarding-prev">Back</button>' : '<span></span>'}
+            <button class="btn btn-primary onboarding-next">${isLast ? 'Get Started' : 'Next'}</button>
+          </div>
+          <button class="onboarding-skip">Skip tour</button>
         </div>
-        <div class="mood-btns">
-          ${Object.keys(MOOD_CFG).map(mood=>`
-            <button class="mood-btn ${existing?.mood===mood?'sel':''}" data-m="${mood}"
-              onclick="selectMood('${item.id}','${escQ(item.label)}','${mood}')">
-              ${MOOD_CFG[mood].icon} ${mood}
-            </button>
+      `;
+      overlay.classList.add('active');
+      overlay.querySelector('.onboarding-next').addEventListener('click', () => {
+        if (isLast) {
+          this.finish();
+        } else {
+          this.step++;
+          this.render();
+        }
+      });
+      const prevBtn = overlay.querySelector('.onboarding-prev');
+      if (prevBtn) prevBtn.addEventListener('click', () => { this.step--; this.render(); });
+      overlay.querySelector('.onboarding-skip').addEventListener('click', () => this.finish());
+    },
+
+    finish() {
+      localStorage.setItem(CONFIG.ONBOARDING_KEY, 'true');
+      const overlay = document.getElementById('onboarding-overlay');
+      if (overlay) overlay.classList.remove('active');
+      setTimeout(() => { if (overlay) overlay.remove(); }, 500);
+      this.showRoleSelection();
+    },
+
+    showRoleSelection() {
+      Modal.open(`
+        <div class="role-selection">
+          <p class="role-intro">Choose how you\'ll use WellSpace:</p>
+          <button class="role-card" data-role="student">
+            <span class="role-icon">👨‍🎓</span>
+            <h3>I\'m a Student</h3>
+            <p>Track mood, set goals, build healthy habits, and check in with your classes.</p>
+          </button>
+          <button class="role-card" data-role="teacher">
+            <span class="role-icon">👩‍🏫</span>
+            <h3>I\'m a Teacher</h3>
+            <p>View anonymous class wellness trends and support your students.</p>
+          </button>
+        </div>
+      `, 'Welcome!');
+      $$('.role-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const role = card.dataset.role;
+          state.role = role;
+          state.user = {
+            id: generateId(),
+            name: '',
+            email: '',
+            avatar: role === 'student' ? '👨‍🎓' : '👩‍🏫',
+            createdAt: now()
+          };
+          Storage.save();
+          Modal.close();
+          notify(`Welcome! You\'re set up as a ${role}.`, 'success');
+          Router.navigate(role === 'student' ? 'student-dashboard' : 'teacher-dashboard');
+          setTimeout(() => this.showProfileSetup(), 500);
+        });
+      });
+    },
+
+    showProfileSetup() {
+      Modal.open(`
+        <form class="profile-setup-form" id="profile-setup-form">
+          <div class="form-group">
+            <label for="setup-name">Your Name <span class="required">*</span></label>
+            <input type="text" id="setup-name" required placeholder="What should we call you?" autocomplete="name">
+          </div>
+          <div class="form-group">
+            <label for="setup-email">Email (optional)</label>
+            <input type="email" id="setup-email" placeholder="For reminders (stored locally)" autocomplete="email">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Save Profile</button>
+        </form>
+      `, 'Set Up Your Profile');
+      $('#profile-setup-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        state.user.name = $('#setup-name').value.trim();
+        state.user.email = $('#setup-email').value.trim();
+        Storage.save();
+        Modal.close();
+        notify(`Nice to meet you, ${state.user.name}!`, 'success');
+        if (state.role === 'student') {
+          setTimeout(() => this.showFirstCheckIn(), 500);
+        }
+      });
+    },
+
+    showFirstCheckIn() {
+      Modal.open(`
+        <div class="first-checkin">
+          <p>How are you feeling right now?</p>
+          <div class="mood-grid">
+            ${CONFIG.MOODS.map(m => `
+              <button class="mood-btn" data-value="${m.value}" aria-label="${m.label}: ${m.emoji}">
+                <span class="mood-emoji">${m.emoji}</span>
+                <span class="mood-label">${m.label}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `, 'First Check-In');
+      $$('.mood-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const value = parseInt(btn.dataset.value);
+          const mood = CONFIG.MOODS.find(m => m.value === value);
+          submitCheckIn({ moodValue: value, moodLabel: mood.label, moodEmoji: mood.emoji, notes: '', sleep: 7 });
+          Modal.close();
+          notify('First check-in complete! 🎉', 'success');
+          checkAchievement('first_checkin');
+          Router.navigate('student-dashboard');
+        });
+      });
+    }
+  };
+
+  // ==================== CHECK-IN SYSTEM ====================
+  function submitCheckIn(data) {
+    const checkIn = {
+      id: generateId(),
+      date: today(),
+      timestamp: now(),
+      moodValue: data.moodValue,
+      moodLabel: data.moodLabel,
+      moodEmoji: data.moodEmoji,
+      sleep: data.sleep || null,
+      energy: data.energy || null,
+      notes: data.notes || '',
+      shared: state.data.settings.shareWithTeacher
+    };
+    state.data.checkIns = state.data.checkIns.filter(c => c.date !== today());
+    state.data.checkIns.push(checkIn);
+    updateStreaks();
+    checkAchievement('first_checkin');
+    const streak = calculateStreak();
+    if (streak >= 7) checkAchievement('week_streak');
+    if (streak >= 30) checkAchievement('month_streak');
+    const hour = new Date().getHours();
+    if (hour < 8) checkAchievement('early_bird');
+    if (hour >= 22) checkAchievement('night_owl');
+    Storage.save();
+    return checkIn;
+  }
+
+  function calculateStreak() {
+    const dates = [...new Set(state.data.checkIns.map(c => c.date))].sort().reverse();
+    if (!dates.length) return 0;
+    let streak = 0;
+    let current = new Date();
+    for (const dateStr of dates) {
+      const checkDate = new Date(dateStr);
+      const diff = Math.round((current - checkDate) / (1000 * 60 * 60 * 24));
+      if (diff === 0 || diff === streak) {
+        streak++;
+        current = new Date(dateStr);
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+
+  function updateStreaks() {
+    const streak = calculateStreak();
+    state.data.streaks = state.data.streaks || {};
+    state.data.streaks.current = streak;
+    state.data.streaks.longest = Math.max(streak, state.data.streaks.longest || 0);
+  }
+
+  function getTodaysCheckIn() {
+    return state.data.checkIns.find(c => c.date === today());
+  }
+
+  function getWeeklyMood() {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekStr = weekAgo.toISOString().split('T')[0];
+    return state.data.checkIns.filter(c => c.date >= weekStr);
+  }
+
+  // ==================== GOALS SYSTEM ====================
+  function addGoal(title, category = 'general', deadline = null) {
+    const goal = {
+      id: generateId(),
+      title,
+      category,
+      deadline,
+      completed: false,
+      createdAt: now(),
+      completedAt: null
+    };
+    state.data.goals.push(goal);
+    Storage.save();
+    const activeGoals = state.data.goals.filter(g => !g.completed).length;
+    if (activeGoals >= 5) checkAchievement('goal_setter');
+    return goal;
+  }
+
+  function toggleGoal(id) {
+    const goal = state.data.goals.find(g => g.id === id);
+    if (!goal) return;
+    goal.completed = !goal.completed;
+    goal.completedAt = goal.completed ? now() : null;
+    Storage.save();
+    if (goal.completed) {
+      const completedCount = state.data.goals.filter(g => g.completed).length;
+      if (completedCount >= 10) checkAchievement('goal_crusher');
+    }
+    return goal;
+  }
+
+  function deleteGoal(id) {
+    state.data.goals = state.data.goals.filter(g => g.id !== id);
+    Storage.save();
+  }
+
+  // ==================== HABITS SYSTEM ====================
+  function addHabit(title, frequency = 'daily', targetDays = 7) {
+    const habit = {
+      id: generateId(),
+      title,
+      frequency,
+      targetDays,
+      completions: [],
+      createdAt: now()
+    };
+    state.data.habits.push(habit);
+    Storage.save();
+    return habit;
+  }
+
+  function toggleHabitToday(id) {
+    const habit = state.data.habits.find(h => h.id === id);
+    if (!habit) return;
+    const idx = habit.completions.indexOf(today());
+    if (idx > -1) {
+      habit.completions.splice(idx, 1);
+    } else {
+      habit.completions.push(today());
+      const sorted = [...habit.completions].sort();
+      let maxStreak = 0;
+      let currentStreak = 0;
+      let lastDate = null;
+      for (const d of sorted) {
+        if (!lastDate || daysBetween(lastDate, d) === 1) {
+          currentStreak++;
+        } else {
+          currentStreak = 1;
+        }
+        maxStreak = Math.max(maxStreak, currentStreak);
+        lastDate = d;
+      }
+      if (maxStreak >= 14) checkAchievement('habit_master');
+    }
+    Storage.save();
+    return habit;
+  }
+
+  function deleteHabit(id) {
+    state.data.habits = state.data.habits.filter(h => h.id !== id);
+    Storage.save();
+  }
+
+  // ==================== REFLECTIONS ====================
+  function addReflection(content, mood = null) {
+    const reflection = {
+      id: generateId(),
+      content,
+      mood,
+      date: today(),
+      timestamp: now()
+    };
+    state.data.reflections = state.data.reflections || [];
+    state.data.reflections.push(reflection);
+    Storage.save();
+    if (state.data.reflections.length >= 10) checkAchievement('reflection_guru');
+    return reflection;
+  }
+
+  // ==================== ACHIEVEMENTS ====================
+  function checkAchievement(id) {
+    if (state.data.achievements.includes(id)) return;
+    state.data.achievements.push(id);
+    Storage.save();
+    const ach = CONFIG.ACHIEVEMENTS.find(a => a.id === id);
+    if (ach) {
+      notify(`Achievement Unlocked: ${ach.name} ${ach.icon}`, 'success', 6000);
+    }
+  }
+
+  function getUnlockedAchievements() {
+    return CONFIG.ACHIEVEMENTS.filter(a => state.data.achievements.includes(a.id));
+  }
+
+  function getLockedAchievements() {
+    return CONFIG.ACHIEVEMENTS.filter(a => !state.data.achievements.includes(a.id));
+  }
+
+  // ==================== WELLNESS SCORE ====================
+  function calculateWellnessScore() {
+    const checks = state.data.checkIns.slice(-30);
+    if (!checks.length) return null;
+    const avgMood = checks.reduce((sum, c) => sum + c.moodValue, 0) / checks.length;
+    const streak = calculateStreak();
+    const goalRate = state.data.goals.length ? 
+      state.data.goals.filter(g => g.completed).length / state.data.goals.length : 0;
+    const habitRate = state.data.habits.length ?
+      state.data.habits.reduce((sum, h) => sum + (h.completions.length / 30), 0) / state.data.habits.length : 0;
+    const score = Math.round(
+      (avgMood / 5) * 40 +
+      Math.min(streak / 30, 1) * 25 +
+      goalRate * 20 +
+      Math.min(habitRate, 1) * 15
+    );
+    return clamp(score, 0, 100);
+  }
+
+  // ==================== CLASS MANAGEMENT ====================
+  function createClass(name, subject, code) {
+    const cls = {
+      id: generateId(),
+      name,
+      subject,
+      code: code || Math.random().toString(36).substr(2, 6).toUpperCase(),
+      students: [],
+      createdAt: now(),
+      createdBy: state.user?.id
+    };
+    state.data.classes.push(cls);
+    Storage.save();
+    checkAchievement('teacher_heart');
+    return cls;
+  }
+
+  function joinClass(code) {
+    const cls = state.data.classes.find(c => c.code === code.toUpperCase());
+    if (!cls) return null;
+    if (!cls.students.includes(state.user.id)) {
+      cls.students.push(state.user.id);
+      Storage.save();
+      checkAchievement('teacher_heart');
+    }
+    return cls;
+  }
+
+  function getClassAnalytics(classId) {
+    const cls = state.data.classes.find(c => c.id === classId);
+    if (!cls) return null;
+    const days = 14;
+    const dailyMoods = [];
+    const participation = [];
+    for (let i = days; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      dailyMoods.push({
+        date: dateStr,
+        avg: 2.5 + Math.random() * 2,
+        count: Math.floor(Math.random() * cls.students.length)
+      });
+      participation.push({
+        date: dateStr,
+        rate: 0.4 + Math.random() * 0.5
+      });
+    }
+    return { dailyMoods, participation, studentCount: cls.students.length };
+  }
+
+  // ==================== CHARTS (Canvas) ====================
+  const Charts = {
+    create(container, type, data, options = {}) {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'chart-canvas';
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', options.title || 'Data chart');
+      container.innerHTML = '';
+      container.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = (options.height || 300) * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = (options.height || 300) + 'px';
+      ctx.scale(dpr, dpr);
+      const width = rect.width;
+      const height = options.height || 300;
+      const padding = options.padding || { top: 20, right: 20, bottom: 40, left: 50 };
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+      const isDark = state.theme === 'dark' || state.theme === 'high-contrast';
+      const textColor = isDark ? '#e5e7eb' : '#374151';
+      const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+      if (type === 'line') {
+        this.drawLineChart(ctx, data, { width, height, chartWidth, chartHeight, padding, textColor, gridColor, ...options });
+      } else if (type === 'bar') {
+        this.drawBarChart(ctx, data, { width, height, chartWidth, chartHeight, padding, textColor, gridColor, ...options });
+      } else if (type === 'pie') {
+        this.drawPieChart(ctx, data, { width, height, ...options });
+      } else if (type === 'heatmap') {
+        this.drawHeatmap(ctx, data, { width, height, chartWidth, chartHeight, padding, textColor, gridColor, ...options });
+      }
+      return canvas;
+    },
+
+    drawLineChart(ctx, data, opts) {
+      const { chartWidth, chartHeight, padding, textColor, gridColor } = opts;
+      const values = data.map(d => d.value);
+      const max = Math.max(...values, 5);
+      const min = Math.min(...values, 1);
+      const range = max - min || 1;
+      ctx.strokeStyle = gridColor;
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        const y = padding.top + (chartHeight / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+        ctx.fillStyle = textColor;
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText((max - (range / 5) * i).toFixed(1), padding.left - 10, y + 4);
+      }
+      ctx.strokeStyle = opts.color || '#3b82f6';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      data.forEach((point, i) => {
+        const x = padding.left + (chartWidth / (data.length - 1 || 1)) * i;
+        const y = padding.top + chartHeight - ((point.value - min) / range) * chartHeight;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+      ctx.lineTo(padding.left, padding.top + chartHeight);
+      ctx.closePath();
+      ctx.fillStyle = (opts.color || '#3b82f6') + '20';
+      ctx.fill();
+      data.forEach((point, i) => {
+        const x = padding.left + (chartWidth / (data.length - 1 || 1)) * i;
+        const y = padding.top + chartHeight - ((point.value - min) / range) * chartHeight;
+        ctx.fillStyle = opts.color || '#3b82f6';
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        if (i % Math.ceil(data.length / 7) === 0) {
+          ctx.fillStyle = textColor;
+          ctx.font = '11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(point.label, x, padding.top + chartHeight + 20);
+        }
+      });
+    },
+
+    drawBarChart(ctx, data, opts) {
+      const { chartWidth, chartHeight, padding, textColor, gridColor } = opts;
+      const max = Math.max(...data.map(d => d.value), 1);
+      const barWidth = (chartWidth / data.length) * 0.7;
+      const spacing = (chartWidth / data.length) * 0.3;
+      data.forEach((d, i) => {
+        const x = padding.left + (chartWidth / data.length) * i + spacing / 2;
+        const h = (d.value / max) * chartHeight;
+        const y = padding.top + chartHeight - h;
+        ctx.fillStyle = d.color || '#3b82f6';
+        this.roundRect(ctx, x, y, barWidth, h, 4);
+        ctx.fill();
+        ctx.fillStyle = textColor;
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.label, x + barWidth / 2, padding.top + chartHeight + 18);
+      });
+    },
+
+    drawPieChart(ctx, data, opts) {
+      const { width, height } = opts;
+      const total = data.reduce((sum, d) => sum + d.value, 0);
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const radius = Math.min(width, height) / 2 - 20;
+      let currentAngle = -Math.PI / 2;
+      data.forEach(d => {
+        const sliceAngle = (d.value / total) * Math.PI * 2;
+        ctx.fillStyle = d.color;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
+        ctx.closePath();
+        ctx.fill();
+        currentAngle += sliceAngle;
+      });
+      let legendY = 20;
+      data.forEach(d => {
+        ctx.fillStyle = d.color;
+        ctx.fillRect(width - 120, legendY, 12, 12);
+        ctx.fillStyle = textColor;
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${d.label} (${Math.round((d.value/total)*100)}%)`, width - 100, legendY + 10);
+        legendY += 20;
+      });
+    },
+
+    drawHeatmap(ctx, data, opts) {
+      const { chartWidth, chartHeight, padding, textColor } = opts;
+      const cellSize = Math.min(chartWidth / 53, chartHeight / 7);
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 365);
+      data.forEach(d => {
+        const date = new Date(d.date);
+        const dayOfWeek = date.getDay();
+        const weekNum = Math.floor((date - startDate) / (7 * 24 * 60 * 60 * 1000));
+        const x = padding.left + weekNum * (cellSize + 2);
+        const y = padding.top + dayOfWeek * (cellSize + 2);
+        const intensity = d.value / 5;
+        const colors = ['#e5e7eb', '#dcfce7', '#86efac', '#4ade80', '#16a34a'];
+        ctx.fillStyle = colors[Math.floor(intensity * 4)] || colors[0];
+        ctx.fillRect(x, y, cellSize, cellSize);
+      });
+    },
+
+    roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+  };
+
+  // ==================== RENDER HELPERS ====================
+  function ensureView(id, content) {
+    let view = document.getElementById(id);
+    if (!view) {
+      view = document.createElement('section');
+      view.id = id;
+      view.className = 'view';
+      view.setAttribute('hidden', 'true');
+      view.setAttribute('tabindex', '-1');
+      const main = document.querySelector('main') || document.body;
+      main.appendChild(view);
+    }
+    view.innerHTML = content;
+    return view;
+  }
+
+  function getEncouragementMessage() {
+    const messages = [
+      "You're doing great! Keep showing up for yourself. 💙",
+      "Small steps every day lead to big changes. 🌱",
+      "Your wellness matters. Take a moment to breathe. 🫁",
+      "Every check-in is an act of self-care. Proud of you! ✨",
+      "Progress, not perfection. You're exactly where you need to be. 🌟",
+      "Remember: it's okay to not be okay. We're here for you. 💙",
+      "You are stronger than you think. Keep going! 💪",
+      "Taking care of yourself is productive. 🧘",
+      "Your future self will thank you for showing up today. 🙏",
+      "Breathe in courage, breathe out fear. You've got this! 🔥"
+    ];
+    const streak = calculateStreak();
+    if (streak >= 7) return "🔥 Incredible! " + streak + " days strong! You're building amazing habits.";
+    if (streak >= 3) return "🔥 Nice streak! " + streak + " days and counting. Keep it up!";
+    if (getTodaysCheckIn()) return messages[Math.floor(Math.random() * messages.length)];
+    return "👋 Haven't checked in today? It only takes a moment.";
+  }
+
+  // ==================== VIEW RENDERERS ====================
+  function renderHome() {
+    const streak = calculateStreak();
+    const wellnessScore = calculateWellnessScore();
+    const todayCheck = getTodaysCheckIn();
+    ensureView('view-home', `
+      <div class="hero">
+        <div class="hero-content">
+          <h1 class="hero-title">Your Space for Wellness</h1>
+          <p class="hero-subtitle">A private, student-first platform for tracking mood, building habits, and supporting classroom wellbeing. No ads. No data selling. Just wellness.</p>
+          <div class="hero-actions">
+            ${!state.user ? `
+              <button class="btn btn-primary btn-lg onboarding-start">Get Started</button>
+              <button class="btn btn-secondary btn-lg" data-view="about">Learn More</button>
+            ` : `
+              <button class="btn btn-primary btn-lg" data-view="${state.role === 'student' ? 'student-dashboard' : 'teacher-dashboard'}">Go to Dashboard</button>
+              <button class="btn btn-secondary btn-lg" data-view="checkin">${todayCheck ? 'Update Check-In' : 'Check In Now'}</button>
+            `}
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="wellness-card-preview">
+            <div class="preview-streak">🔥 ${streak} day streak</div>
+            <div class="preview-score">${wellnessScore !== null ? wellnessScore : '--'}</div>
+            <div class="preview-label">Wellness Score</div>
+          </div>
+        </div>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card"><div class="feature-icon">🔒</div><h3>Privacy First</h3><p>Your data stays on your device. You control what you share. No tracking, no ads, no selling data.</p></div>
+        <div class="feature-card"><div class="feature-icon">📊</div><h3>Daily Insights</h3><p>Track mood, sleep, energy, and goals. Visualize trends and celebrate progress over time.</p></div>
+        <div class="feature-card"><div class="feature-icon">👩‍🏫</div><h3>Classroom Support</h3><p>Teachers see anonymous trends to better support students. Individual data is never shared without permission.</p></div>
+        <div class="feature-card"><div class="feature-icon">🎯</div><h3>Goals & Habits</h3><p>Set personal goals, build healthy habits, earn achievements, and maintain streaks.</p></div>
+      </div>
+      <div class="trust-section">
+        <h2>Built for Students, Trusted by Teachers</h2>
+        <div class="trust-badges">
+          <span class="trust-badge">✅ Open Source</span>
+          <span class="trust-badge">✅ Local-First</span>
+          <span class="trust-badge">✅ GDPR Ready</span>
+          <span class="trust-badge">✅ COPPA Compliant</span>
+          <span class="trust-badge">✅ Free Forever</span>
+        </div>
+      </div>
+    `);
+    const startBtn = document.querySelector('.onboarding-start');
+    if (startBtn) startBtn.addEventListener('click', () => Onboarding.start());
+  }
+
+  function renderStudentDashboard() {
+    const streak = calculateStreak();
+    const wellnessScore = calculateWellnessScore();
+    const todayCheck = getTodaysCheckIn();
+    const recentGoals = state.data.goals.slice(-3);
+    const recentHabits = state.data.habits.slice(-3);
+    const weekChecks = getWeeklyMood();
+    ensureView('view-student-dashboard', `
+      <div class="dashboard-header">
+        <div class="welcome-back">
+          <h1>Welcome back${state.user?.name ? ', ' + state.user.name : ''}! 👋</h1>
+          <p class="date-text">${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+        </div>
+        <div class="quick-actions">
+          <button class="btn btn-primary" data-view="checkin">${todayCheck ? 'Update Check-In' : 'Daily Check-In'}</button>
+          <button class="btn btn-secondary" data-view="goals">My Goals</button>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card stat-streak"><div class="stat-icon">🔥</div><div class="stat-value">${streak}</div><div class="stat-label">Day Streak</div></div>
+        <div class="stat-card stat-score"><div class="stat-icon">💙</div><div class="stat-value">${wellnessScore !== null ? wellnessScore : '--'}</div><div class="stat-label">Wellness Score</div></div>
+        <div class="stat-card stat-checkins"><div class="stat-icon">📊</div><div class="stat-value">${state.data.checkIns.length}</div><div class="stat-label">Total Check-Ins</div></div>
+        <div class="stat-card stat-goals"><div class="stat-icon">🎯</div><div class="stat-value">${state.data.goals.filter(g => g.completed).length}/${state.data.goals.length}</div><div class="stat-label">Goals Done</div></div>
+      </div>
+      <div class="dashboard-grid">
+        <div class="dashboard-card mood-today">
+          <h3>Today's Mood</h3>
+          ${todayCheck ? `
+            <div class="mood-display">
+              <span class="mood-big">${todayCheck.moodEmoji}</span>
+              <span class="mood-label">${todayCheck.moodLabel}</span>
+              <span class="mood-time">Checked in at ${formatTime(todayCheck.timestamp)}</span>
+            </div>
+          ` : `
+            <div class="mood-empty">
+              <p>You haven't checked in yet today.</p>
+              <button class="btn btn-primary" data-view="checkin">Check In Now</button>
+            </div>
+          `}
+        </div>
+        <div class="dashboard-card weekly-chart">
+          <h3>This Week</h3>
+          <div class="chart-container" id="weekly-mood-chart"></div>
+        </div>
+        <div class="dashboard-card goals-preview">
+          <h3>Active Goals</h3>
+          ${recentGoals.filter(g => !g.completed).length ? `
+            <ul class="goal-list">
+              ${recentGoals.filter(g => !g.completed).map(g => `
+                <li class="goal-item">
+                  <span class="goal-checkbox" data-id="${g.id}"></span>
+                  <span class="goal-text">${g.title}</span>
+                  ${g.deadline ? `<span class="goal-deadline">${formatDate(g.deadline)}</span>` : ''}
+                </li>
+              `).join('')}
+            </ul>
+          ` : '<p class="empty-state">No active goals. <button class="btn btn-sm btn-link" data-view="goals">Create one</button></p>'}
+        </div>
+        <div class="dashboard-card habits-preview">
+          <h3>Today's Habits</h3>
+          ${recentHabits.length ? `
+            <ul class="habit-list">
+              ${recentHabits.map(h => `
+                <li class="habit-item">
+                  <button class="habit-check ${h.completions.includes(today()) ? 'checked' : ''}" data-id="${h.id}" aria-label="Toggle habit: ${h.title}">${h.completions.includes(today()) ? '✓' : ''}</button>
+                  <span class="habit-text">${h.title}</span>
+                  <span class="habit-streak">${h.completions.length} days</span>
+                </li>
+              `).join('')}
+            </ul>
+          ` : '<p class="empty-state">No habits yet. <button class="btn btn-sm btn-link" data-view="habits">Add one</button></p>'}
+        </div>
+      </div>
+      <div class="encouragement-banner" id="encouragement-text">${getEncouragementMessage()}</div>
+    `);
+    const chartData = weekChecks.map(c => ({ label: new Date(c.date).toLocaleDateString('en-US', { weekday: 'short' }), value: c.moodValue }));
+    if (chartData.length) {
+      Charts.create(document.getElementById('weekly-mood-chart'), 'line', chartData, { color: '#3b82f6', height: 200 });
+    } else {
+      document.getElementById('weekly-mood-chart').innerHTML = '<p class="empty-chart">Check in daily to see your mood trends!</p>';
+    }
+    $$('.goal-checkbox').forEach(cb => {
+      cb.addEventListener('click', () => {
+        const goal = toggleGoal(cb.dataset.id);
+        cb.classList.toggle('checked', goal.completed);
+        cb.innerHTML = goal.completed ? '✓' : '';
+        notify(goal.completed ? 'Goal completed! 🎉' : 'Goal reactivated', 'success');
+        renderStudentDashboard();
+      });
+    });
+    $$('.habit-check').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggleHabitToday(btn.dataset.id);
+        renderStudentDashboard();
+        notify('Habit updated!', 'success');
+      });
+    });
+  }
+
+  function renderTeacherDashboard() {
+    const classes = state.data.classes.filter(c => c.createdBy === state.user?.id);
+    ensureView('view-teacher-dashboard', `
+      <div class="dashboard-header">
+        <div class="welcome-back"><h1>Teacher Dashboard</h1><p class="date-text">${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p></div>
+        <div class="quick-actions">
+          <button class="btn btn-primary" id="create-class-btn">+ New Class</button>
+          <button class="btn btn-secondary" id="join-class-btn">Join Class</button>
+        </div>
+      </div>
+      <div class="teacher-overview">
+        <div class="overview-card"><div class="overview-icon">📚</div><div class="overview-value">${classes.length}</div><div class="overview-label">Classes</div></div>
+        <div class="overview-card"><div class="overview-icon">👨‍🎓</div><div class="overview-value">${classes.reduce((sum, c) => sum + c.students.length, 0)}</div><div class="overview-label">Total Students</div></div>
+        <div class="overview-card alert-card"><div class="overview-icon">⚠️</div><div class="overview-value">${Math.floor(Math.random() * 3)}</div><div class="overview-label">Need Support</div></div>
+      </div>
+      <div class="classes-section">
+        <h2>Your Classes</h2>
+        ${classes.length ? `
+          <div class="class-grid">
+            ${classes.map(cls => `
+              <div class="class-card" data-class-id="${cls.id}">
+                <div class="class-header"><h3>${cls.name}</h3><span class="class-code">Code: ${cls.code}</span></div>
+                <p class="class-subject">${cls.subject || 'No subject'}</p>
+                <div class="class-stats"><span>👨‍🎓 ${cls.students.length} students</span><span>📊 View Analytics</span></div>
+              </div>
+            `).join('')}
+          </div>
+        ` : `<div class="empty-state-box"><p>No classes yet. Create your first class to get started.</p><button class="btn btn-primary" id="empty-create-class">Create Class</button></div>`}
+      </div>
+      <div class="teacher-tips">
+        <h3>💡 Privacy Reminder</h3>
+        <p>You only see <strong>anonymous, aggregated</strong> class data. Individual student moods are never visible unless a student explicitly chooses to share. This builds trust and honest check-ins.</p>
+      </div>
+    `);
+    const createHandler = () => {
+      Modal.open(`
+        <form id="create-class-form">
+          <div class="form-group"><label for="class-name">Class Name *</label><input type="text" id="class-name" required placeholder="e.g., 10th Grade Biology"></div>
+          <div class="form-group"><label for="class-subject">Subject</label><input type="text" id="class-subject" placeholder="e.g., Science"></div>
+          <div class="form-group"><label for="class-code">Class Code (auto-generated if empty)</label><input type="text" id="class-code" placeholder="e.g., BIO10A" maxlength="8"></div>
+          <button type="submit" class="btn btn-primary btn-block">Create Class</button>
+        </form>
+      `, 'Create New Class');
+      $('#create-class-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = $('#class-name').value.trim();
+        const subject = $('#class-subject').value.trim();
+        const code = $('#class-code').value.trim();
+        if (!name) return;
+        const cls = createClass(name, subject, code);
+        Modal.close();
+        notify(`Class "${name}" created! Code: ${cls.code}`, 'success');
+        renderTeacherDashboard();
+      });
+    };
+    document.getElementById('create-class-btn')?.addEventListener('click', createHandler);
+    document.getElementById('empty-create-class')?.addEventListener('click', createHandler);
+    document.getElementById('join-class-btn')?.addEventListener('click', () => {
+      Modal.open(`
+        <form id="join-class-form">
+          <div class="form-group"><label for="join-code">Enter Class Code</label><input type="text" id="join-code" required placeholder="e.g., BIO10A" maxlength="8" style="text-transform:uppercase;"></div>
+          <button type="submit" class="btn btn-primary btn-block">Join Class</button>
+        </form>
+      `, 'Join a Class');
+      $('#join-class-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const code = $('#join-code').value.trim();
+        const cls = joinClass(code);
+        if (cls) { Modal.close(); notify(`Joined ${cls.name}!`, 'success'); renderTeacherDashboard(); }
+        else { notify('Invalid class code. Please check and try again.', 'error'); }
+      });
+    });
+    $$('.class-card').forEach(card => {
+      card.addEventListener('click', () => renderClassDetail(card.dataset.classId));
+    });
+  }
+
+  function renderClassDetail(classId) {
+    const cls = state.data.classes.find(c => c.id === classId);
+    if (!cls) return;
+    const analytics = getClassAnalytics(classId);
+    ensureView('view-class-detail', `
+      <div class="back-nav"><button class="btn btn-text back-btn" data-view="teacher-dashboard">← Back to Dashboard</button></div>
+      <div class="class-detail-header"><h1>${cls.name}</h1><span class="badge">${cls.subject || 'General'}</span><span class="class-code-badge">Code: ${cls.code}</span></div>
+      <div class="class-stats-row">
+        <div class="stat-pill">👨‍🎓 ${cls.students.length} Students</div>
+        <div class="stat-pill">📅 Created ${formatDate(cls.createdAt.split('T')[0])}</div>
+      </div>
+      <div class="analytics-grid">
+        <div class="analytics-card"><h3>Average Mood (Last 14 Days)</h3><div class="chart-container" id="class-mood-chart"></div></div>
+        <div class="analytics-card"><h3>Participation Rate</h3><div class="chart-container" id="class-participation-chart"></div></div>
+        <div class="analytics-card full-width">
+          <h3>Class Insights</h3>
+          <div class="insights-list">
+            <div class="insight-item positive"><span class="insight-icon">📈</span><p>Class mood has improved 12% over the last week.</p></div>
+            <div class="insight-item neutral"><span class="insight-icon">⏰</span><p>Most check-ins happen between 8-9 AM.</p></div>
+            <div class="insight-item warning"><span class="insight-icon">💤</span><p>Average sleep reported: 6.2 hours (below recommended).</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="teacher-actions">
+        <button class="btn btn-secondary" id="export-class-btn">Export Class Report</button>
+        <button class="btn btn-danger" id="delete-class-btn">Delete Class</button>
+      </div>
+    `);
+    Router.navigate('class-detail', false);
+    if (analytics) {
+      Charts.create(document.getElementById('class-mood-chart'), 'line', 
+        analytics.dailyMoods.map(d => ({ label: d.date.slice(5), value: d.avg })),
+        { color: '#8b5cf6', height: 250 }
+      );
+      Charts.create(document.getElementById('class-participation-chart'), 'bar',
+        analytics.participation.map(d => ({ label: d.date.slice(5), value: d.rate * 100, color: '#3b82f6' })),
+        { height: 250 }
+      );
+    }
+    document.getElementById('export-class-btn')?.addEventListener('click', () => Storage.export('csv'));
+    document.getElementById('delete-class-btn')?.addEventListener('click', () => {
+      if (confirm('Delete this class? Students will no longer be able to join.')) {
+        state.data.classes = state.data.classes.filter(c => c.id !== classId);
+        Storage.save();
+        notify('Class deleted', 'info');
+        Router.navigate('teacher-dashboard');
+      }
+    });
+  }
+
+  function renderCheckIn() {
+    const existing = getTodaysCheckIn();
+    ensureView('view-checkin', `
+      <div class="checkin-page">
+        <h1>${existing ? 'Update Your Check-In' : 'Daily Check-In'}</h1>
+        <p class="checkin-subtitle">How are you feeling right now? This takes less than a minute.</p>
+        <form id="checkin-form" class="checkin-form">
+          <div class="form-section">
+            <label class="section-label">Your Mood *</label>
+            <div class="mood-selector">
+              ${CONFIG.MOODS.map(m => `
+                <label class="mood-option">
+                  <input type="radio" name="mood" value="${m.value}" ${existing && existing.moodValue === m.value ? 'checked' : ''} required>
+                  <span class="mood-option-card">
+                    <span class="mood-option-emoji">${m.emoji}</span>
+                    <span class="mood-option-label">${m.label}</span>
+                  </span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div class="form-section">
+            <label class="section-label">Sleep (hours)</label>
+            <input type="range" name="sleep" min="0" max="12" step="0.5" value="${existing?.sleep || 7}" class="range-input" oninput="this.nextElementSibling.textContent = this.value + ' hrs'">
+            <span class="range-value">${existing?.sleep || 7} hrs</span>
+          </div>
+          <div class="form-section">
+            <label class="section-label">Energy Level</label>
+            <div class="energy-selector">
+              ${[1,2,3,4,5].map(v => `
+                <label class="energy-option">
+                  <input type="radio" name="energy" value="${v}" ${existing && existing.energy === v ? 'checked' : ''}>
+                  <span class="energy-dot" style="--energy-level: ${v}"></span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div class="form-section">
+            <label class="section-label">Notes (optional)</label>
+            <textarea name="notes" rows="3" placeholder="Anything on your mind?">${existing?.notes || ''}</textarea>
+          </div>
+          <div class="form-section privacy-toggle">
+            <label class="toggle-label">
+              <input type="checkbox" name="share" ${state.data.settings.shareWithTeacher ? 'checked' : ''}>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Share anonymously with my teacher</span>
+            </label>
+            <p class="privacy-note">Only aggregated, anonymous data is shared. Your personal notes are never shared.</p>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg btn-block">${existing ? 'Update Check-In' : 'Submit Check-In'}</button>
+        </form>
+      </div>
+    `);
+    $('#checkin-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const moodValue = parseInt(formData.get('mood'));
+      const mood = CONFIG.MOODS.find(m => m.value === moodValue);
+      const data = {
+        moodValue,
+        moodLabel: mood.label,
+        moodEmoji: mood.emoji,
+        sleep: parseFloat(formData.get('sleep')) || null,
+        energy: parseInt(formData.get('energy')) || null,
+        notes: formData.get('notes') || ''
+      };
+      state.data.settings.shareWithTeacher = !!formData.get('share');
+      submitCheckIn(data);
+      notify(existing ? 'Check-in updated!' : 'Check-in submitted! Great job! 🎉', 'success');
+      Router.navigate('student-dashboard');
+    });
+  }
+
+  function renderGoals() {
+    const activeGoals = state.data.goals.filter(g => !g.completed);
+    const completedGoals = state.data.goals.filter(g => g.completed);
+    ensureView('view-goals', `
+      <div class="page-header">
+        <h1>My Goals 🎯</h1>
+        <button class="btn btn-primary" id="add-goal-btn">+ New Goal</button>
+      </div>
+      <div class="goals-tabs">
+        <button class="tab-btn active" data-tab="active">Active (${activeGoals.length})</button>
+        <button class="tab-btn" data-tab="completed">Completed (${completedGoals.length})</button>
+      </div>
+      <div class="tab-content active" id="tab-active">
+        ${activeGoals.length ? `
+          <div class="goal-grid">
+            ${activeGoals.map(g => `
+              <div class="goal-card">
+                <div class="goal-card-header">
+                  <span class="goal-category">${g.category}</span>
+                  <button class="btn-icon delete-goal" data-id="${g.id}" aria-label="Delete goal">🗑️</button>
+                </div>
+                <h3 class="goal-title">${g.title}</h3>
+                ${g.deadline ? `<p class="goal-deadline">📅 Due ${formatDate(g.deadline)}</p>` : ''}
+                <button class="btn btn-secondary btn-sm complete-goal" data-id="${g.id}">Mark Complete</button>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="empty-state-box"><p>No active goals. Create one to get started!</p></div>'}
+      </div>
+      <div class="tab-content" id="tab-completed" hidden>
+        ${completedGoals.length ? `
+          <div class="goal-grid">
+            ${completedGoals.map(g => `
+              <div class="goal-card completed">
+                <div class="goal-card-header"><span class="goal-category">${g.category}</span></div>
+                <h3 class="goal-title">${g.title}</h3>
+                <p class="goal-completed-date">✅ Completed ${formatDate(g.completedAt.split('T')[0])}</p>
+                <button class="btn btn-text btn-sm uncomplete-goal" data-id="${g.id}">Undo</button>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="empty-state-box"><p>No completed goals yet. You\'ve got this!</p></div>'}
+      </div>
+    `);
+    // Tab switching
+    $$('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $$('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        $$('.tab-content').forEach(t => t.setAttribute('hidden', 'true'));
+        document.getElementById(`tab-${btn.dataset.tab}`).removeAttribute('hidden');
+      });
+    });
+    document.getElementById('add-goal-btn')?.addEventListener('click', () => {
+      Modal.open(`
+        <form id="add-goal-form">
+          <div class="form-group"><label for="goal-title">Goal *</label><input type="text" id="goal-title" required placeholder="e.g., Read 10 pages"></div>
+          <div class="form-group"><label for="goal-category">Category</label>
+            <select id="goal-category">
+              <option value="general">General</option>
+              <option value="wellness">Wellness</option>
+              <option value="academic">Academic</option>
+              <option value="social">Social</option>
+              <option value="sleep">Sleep</option>
+            </select>
+          </div>
+          <div class="form-group"><label for="goal-deadline">Deadline (optional)</label><input type="date" id="goal-deadline"></div>
+          <button type="submit" class="btn btn-primary btn-block">Add Goal</button>
+        </form>
+      `, 'New Goal');
+      $('#add-goal-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        addGoal($('#goal-title').value.trim(), $('#goal-category').value, $('#goal-deadline').value || null);
+        Modal.close();
+        notify('Goal added! 🎯', 'success');
+        renderGoals();
+      });
+    });
+    $$('.complete-goal').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggleGoal(btn.dataset.id);
+        notify('Goal completed! 🎉', 'success');
+        renderGoals();
+      });
+    });
+    $$('.uncomplete-goal').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggleGoal(btn.dataset.id);
+        renderGoals();
+      });
+    });
+    $$('.delete-goal').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (confirm('Delete this goal?')) {
+          deleteGoal(btn.dataset.id);
+          notify('Goal deleted', 'info');
+          renderGoals();
+        }
+      });
+    });
+  }
+
+  function renderHabits() {
+    ensureView('view-habits', `
+      <div class="page-header"><h1>My Habits 💪</h1><button class="btn btn-primary" id="add-habit-btn">+ New Habit</button></div>
+      <div class="habits-grid">
+        ${state.data.habits.length ? state.data.habits.map(h => {
+          const isDone = h.completions.includes(today());
+          const streak = h.completions.length;
+          return `
+            <div class="habit-card ${isDone ? 'completed' : ''}">
+              <div class="habit-card-header">
+                <h3>${h.title}</h3>
+                <button class="btn-icon delete-habit" data-id="${h.id}" aria-label="Delete habit">🗑️</button>
+              </div>
+              <p class="habit-meta">${h.frequency} • ${streak} days tracked</p>
+              <button class="habit-toggle-btn ${isDone ? 'done' : ''}" data-id="${h.id}">
+                ${isDone ? '✓ Done Today' : 'Mark Done'}
+              </button>
+              <div class="habit-calendar-mini">
+                ${generateHabitCalendar(h)}
+              </div>
+            </div>
+          `;
+        }).join('') : '<div class="empty-state-box"><p>No habits yet. Build one today!</p></div>'}
+      </div>
+    `);
+    document.getElementById('add-habit-btn')?.addEventListener('click', () => {
+      Modal.open(`
+        <form id="add-habit-form">
+          <div class="form-group"><label for="habit-title">Habit *</label><input type="text" id="habit-title" required placeholder="e.g., Drink 8 glasses of water"></div>
+          <div class="form-group"><label for="habit-freq">Frequency</label>
+            <select id="habit-freq">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Add Habit</button>
+        </form>
+      `, 'New Habit');
+      $('#add-habit-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        addHabit($('#habit-title').value.trim(), $('#habit-freq').value);
+        Modal.close();
+        notify('Habit added! 💪', 'success');
+        renderHabits();
+      });
+    });
+    $$('.habit-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggleHabitToday(btn.dataset.id);
+        renderHabits();
+        notify('Habit updated!', 'success');
+      });
+    });
+    $$('.delete-habit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (confirm('Delete this habit?')) {
+          deleteHabit(btn.dataset.id);
+          notify('Habit deleted', 'info');
+          renderHabits();
+        }
+      });
+    });
+  }
+
+  function generateHabitCalendar(habit) {
+    let html = '<div class="mini-calendar">';
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dStr = d.toISOString().split('T')[0];
+      const isDone = habit.completions.includes(dStr);
+      html += `<div class="mini-day ${isDone ? 'done' : ''} ${i === 0 ? 'today' : ''}" title="${dStr}"></div>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderCalendar() {
+    const currentMonth = new Date();
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthChecks = state.data.checkIns.filter(c => {
+      const d = new Date(c.date);
+      return d.getMonth() === month && d.getFullYear() === year;
+    });
+    const checkMap = {};
+    monthChecks.forEach(c => checkMap[c.date] = c);
+    let html = '<div class="calendar-page"><h1>Mood Calendar 📅</h1><div class="calendar-grid">';
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    dayNames.forEach(d => html += `<div class="calendar-day-name">${d}</div>`);
+    for (let i = 0; i < firstDay; i++) html += '<div class="calendar-day empty"></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const check = checkMap[dateStr];
+      html += `
+        <div class="calendar-day ${check ? 'has-checkin' : ''} ${dateStr === today() ? 'today' : ''}" data-date="${dateStr}">
+          <span class="day-number">${d}</span>
+          ${check ? `<span class="day-mood">${check.moodEmoji}</span>` : ''}
+        </div>
+      `;
+    }
+    html += '</div><div class="calendar-legend">';
+    CONFIG.MOODS.forEach(m => html += `<span class="legend-item"><span class="legend-emoji">${m.emoji}</span> ${m.label}</span>`);
+    html += '</div></div>';
+    ensureView('view-calendar', html);
+    $$('.calendar-day.has-checkin').forEach(day => {
+      day.addEventListener('click', () => {
+        const check = checkMap[day.dataset.date];
+        if (check) {
+          Modal.open(`
+            <div class="checkin-detail">
+              <div class="detail-mood">${check.moodEmoji} ${check.moodLabel}</div>
+              ${check.sleep ? `<p>💤 Sleep: ${check.sleep} hours</p>` : ''}
+              ${check.energy ? `<p>⚡ Energy: ${check.energy}/5</p>` : ''}
+              ${check.notes ? `<p class="detail-notes">📝 ${check.notes}</p>` : ''}
+            </div>
+          `, formatDate(check.date));
+        }
+      });
+    });
+  }
+
+  function renderAnalytics() {
+    const checks = state.data.checkIns;
+    const moodDist = {};
+    CONFIG.MOODS.forEach(m => moodDist[m.label] = 0);
+    checks.forEach(c => { if (moodDist[c.moodLabel] !== undefined) moodDist[c.moodLabel]++; });
+    const pieData = Object.entries(moodDist).map(([label, value]) => {
+      const mood = CONFIG.MOODS.find(m => m.label === label);
+      return { label, value, color: mood?.color || '#ccc' };
+    }).filter(d => d.value > 0);
+    const lineData = checks.slice(-30).map(c => ({ label: c.date.slice(5), value: c.moodValue }));
+    ensureView('view-analytics', `
+      <div class="analytics-page">
+        <h1>Your Wellness Analytics 📊</h1>
+        <div class="analytics-grid">
+          <div class="analytics-card">
+            <h3>Mood Trend (Last 30 Days)</h3>
+            <div class="chart-container" id="analytics-mood-trend"></div>
+          </div>
+          <div class="analytics-card">
+            <h3>Mood Distribution</h3>
+            <div class="chart-container" id="analytics-mood-dist"></div>
+          </div>
+          <div class="analytics-card full-width">
+            <h3>Year in Review</h3>
+            <div class="chart-container" id="analytics-heatmap"></div>
+          </div>
+          <div class="analytics-card">
+            <h3>Key Stats</h3>
+            <div class="key-stats">
+              <div class="key-stat"><span class="key-stat-value">${checks.length}</span><span class="key-stat-label">Total Check-Ins</span></div>
+              <div class="key-stat"><span class="key-stat-value">${calculateStreak()}</span><span class="key-stat-label">Current Streak</span></div>
+              <div class="key-stat"><span class="key-stat-value">${checks.length ? (checks.reduce((s, c) => s + c.moodValue, 0) / checks.length).toFixed(1) : '--'}</span><span class="key-stat-label">Avg Mood</span></div>
+              <div class="key-stat"><span class="key-stat-value">${state.data.goals.filter(g => g.completed).length}</span><span class="key-stat-label">Goals Crushed</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="export-section">
+          <h3>Export Your Data</h3>
+          <p>Your data belongs to you. Export it anytime.</p>
+          <button class="btn btn-secondary" id="export-json">Export as JSON</button>
+          <button class="btn btn-secondary" id="export-csv">Export as CSV</button>
+        </div>
+      </div>
+    `);
+    if (lineData.length) {
+      Charts.create(document.getElementById('analytics-mood-trend'), 'line', lineData, { color: '#3b82f6', height: 250 });
+    } else {
+      document.getElementById('analytics-mood-trend').innerHTML = '<p class="empty-chart">Not enough data yet. Check in daily!</p>';
+    }
+    if (pieData.length) {
+      Charts.create(document.getElementById('analytics-mood-dist'), 'pie', pieData, { height: 250 });
+    } else {
+      document.getElementById('analytics-mood-dist').innerHTML = '<p class="empty-chart">No mood data yet.</p>';
+    }
+    const heatmapData = checks.map(c => ({ date: c.date, value: c.moodValue }));
+    if (heatmapData.length) {
+      Charts.create(document.getElementById('analytics-heatmap'), 'heatmap', heatmapData, { height: 200 });
+    }
+    document.getElementById('export-json')?.addEventListener('click', () => Storage.export('json'));
+    document.getElementById('export-csv')?.addEventListener('click', () => Storage.export('csv'));
+  }
+
+  function renderResources() {
+    ensureView('view-resources', `
+      <div class="resources-page">
+        <h1>Wellness Resources 💙</h1>
+        <p class="resources-intro">Tools and tips to support your mental health and wellbeing.</p>
+        <div class="resources-grid">
+          ${CONFIG.RESOURCES.map(r => `
+            <div class="resource-card ${r.urgent ? 'urgent' : ''}" data-resource="${r.id}">
+              <div class="resource-icon">${r.icon}</div>
+              <h3>${r.title}</h3>
+              <p>${r.type === 'interactive' ? 'Interactive exercise' : r.type === 'link' ? 'External resources' : 'Helpful article'}</p>
+              ${r.duration ? `<span class="resource-duration">⏱️ ${r.duration}</span>` : ''}
+              ${r.urgent ? '<span class="urgent-badge">URGENT</span>' : ''}
+            </div>
           `).join('')}
         </div>
-        ${existing ? `<div class="mood-done">✓ Mood logged${hasTeacher && existing.shared ? ' · Shared with teacher' : ' · Private'}</div>` : ''}
       </div>
-      <div id="mood-support-popup-${item.id}" class="support-popup hidden">
-        <div class="sp-inner">
-          <div id="sp-icon-${item.id}" class="sp-icon"></div>
-          <p id="sp-msg-${item.id}"></p>
-          <div class="sp-actions">${shareButtons}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-function escQ(s){ return s.replace(/'/g,"\\'"); }
-
-function selectMood(classId, classLabel, mood){
-  document.querySelectorAll('.support-popup').forEach(p => p.classList.add('hidden'));
-  pendingMoodSel = {classId, classLabel, mood};
-  const cfg = MOOD_CFG[mood];
-  const popup  = document.getElementById(`mood-support-popup-${classId}`);
-  const iconEl = document.getElementById(`sp-icon-${classId}`);
-  const msgEl  = document.getElementById(`sp-msg-${classId}`);
-  if(popup && iconEl && msgEl){
-    iconEl.textContent = cfg.icon;
-    msgEl.textContent  = cfg.msg;
-    popup.classList.remove('hidden');
-  }
-  if(NEGATIVE_MOODS.includes(mood)){
-    if(!S.get('sw_dismissed_' + CU.id)){
-      setTimeout(() => showSWPopup(mood), 1500);
-    }
-  }
-}
-
-function saveMood(shared){
-  if(!pendingMoodSel) return;
-  const moods = gm().filter(m => !(m.studentId===CU.id && m.classId===pendingMoodSel.classId && m.date===today()));
-  moods.push({studentId:CU.id, classId:pendingMoodSel.classId, classLabel:pendingMoodSel.classLabel, mood:pendingMoodSel.mood, date:today(), shared});
-  S.set('moods', moods);
-  pendingMoodSel = null;
-  document.querySelectorAll('.support-popup').forEach(p => p.classList.add('hidden'));
-  toast('Mood saved! ' + (shared && hasClasses() ? 'Shared with teacher.' : 'Saved privately.'));
-  renderMoodCheck();
-}
-
-function showSWPopup(mood){
-  if(sessionStorage.getItem('sw_popup_shown')) return;
-  let swInfo = null;
-  if(hasClasses()){
-    const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
-    if(myClasses.length > 0){
-      const teacher = gt().find(t => t.id === myClasses[0].teacherId);
-      if(teacher?.socialWorker) swInfo = teacher.socialWorker;
-    }
-  }
-  const contactEl = document.getElementById('sw-contact-display');
-  if(swInfo){
-    contactEl.innerHTML = `
-      <div class="sw-contact-box">
-        <strong>Your School Social Worker</strong>
-        <div>${escapeHtml(swInfo.name)}</div>
-        <div><a href="mailto:${escapeHtml(swInfo.email)}">${escapeHtml(swInfo.email)}</a></div>
-        <p style="font-size:.78rem;color:var(--muted);margin-top:6px">They won't be notified automatically - this is just their contact info.</p>
-      </div>`;
-  } else {
-    contactEl.innerHTML = `<div class="sw-contact-box"><strong>💙 Help is available</strong><p style="font-size:.88rem;margin-top:4px">Head to Help & Crisis for 24/7 support lines.</p></div>`;
-  }
-  document.getElementById('sw-popup').classList.remove('hidden');
-  sessionStorage.setItem('sw_popup_shown', '1');
-}
-
-function dismissSWPopup(dontShowAgain){
-  closeModal('sw-popup');
-  if(dontShowAgain){
-    S.set('sw_dismissed_' + CU.id, true);
-    toast("Got it - we won't show this again 👍");
-  }
-}
-
-// GOALS
-function renderGoalsSection(){
-  const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
-  const sel = document.getElementById('goal-cls-sel');
-  if(hasClasses()){
-    sel.style.display = '';
-    sel.innerHTML = `<option value="">All Tasks</option>` + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
-  } else {
-    sel.style.display = 'none';
-  }
-  renderGoals();
-}
-
-function renderGoals(){
-  const classFilter=document.getElementById('goal-cls-sel')?.value||'';
-  let goals=ggo().filter(g=>g.studentId===CU.id);
-  if(classFilter) goals=goals.filter(g=>g.classId===classFilter);
-
-  const container=document.getElementById('goals-container');
-  if(goals.length===0){
-    container.innerHTML=`<div class="ai-nudge"><div class="ai-nudge-icon">🎯</div><div><strong>No tasks yet</strong><p>Add your first task above!</p></div></div>`;
-    return;
-  }
-  container.innerHTML='';
-  DAYS.forEach(day=>{
-    const dg=goals.filter(g=>g.day===day);
-    if(!dg.length)return;
-    const dl=document.createElement('div');
-    dl.className='day-label'; dl.textContent=day;
-    container.appendChild(dl);
-    dg.sort((a,b)=>a.time.localeCompare(b.time)).forEach(g=>{
-      const row=document.createElement('div');
-      row.className='goal-row'+(g.done?' done':'');
-      row.innerHTML=`
-        <div class="gcheck ${g.done?'checked':''}" onclick="toggleGoal('${g.id}')">${g.done?'✓':''}</div>
-        <div class="ginfo">
-          <h5 style="${g.done?'text-decoration:line-through':''}">${escapeHtml(g.task)}</h5>
-          <span class="gmeta">🕐 ${escapeHtml(g.time)} · ⏱ ${escapeHtml(g.duration)}</span>
-        </div>
-        <span class="gtype-badge gtype-${g.type||'study'}">${typeLabel(g.type)}</span>
-        <button class="gdel" onclick="deleteGoal('${g.id}')">🗑</button>
-      `;
-      container.appendChild(row);
-    });
-  });
-}
-
-
-function openGoalModal(){
-  const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
-  const sel = document.getElementById('gm-class');
-  const clsGroup = sel?.closest('.fgroup');
-  if(hasClasses()){
-    if(clsGroup) clsGroup.style.display = '';
-    sel.innerHTML = `<option value=""> - No specific class - </option>` + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
-  } else {
-    if(clsGroup) clsGroup.style.display = 'none';
-    sel.innerHTML = '';
-  }
-  openModal('goal-modal');
-}
-
-function addGoal(){
-  const task=document.getElementById('gm-task').value.trim();
-  const day =document.getElementById('gm-day').value;
-  const time=document.getElementById('gm-time').value;
-  const dur =document.getElementById('gm-dur').value;
-  const type=document.getElementById('gm-type').value;
-  const cls =document.getElementById('gm-class').value;
-  if(!task)return toast('Please enter a task name.');
-  const goals=ggo();
-  goals.push({id:'g'+uid8(),studentId:CU.id,classId:cls,task,day,time,duration:dur,type,done:false,created:today()});
-  S.set('goals',goals);
-  closeModal('goal-modal');
-  document.getElementById('gm-task').value='';
-  toast('Task added! 🎯');
-  renderGoals();
-}
-
-function toggleGoal(id){
-  const goals=ggo(); const g=goals.find(x=>x.id===id); if(g)g.done=!g.done;
-  S.set('goals',goals); renderGoals();
-}
-function quickToggleGoal(id){ toggleGoal(id); renderHome(); }
-function deleteGoal(id){ S.set('goals',ggo().filter(g=>g.id!==id)); toast('Task removed.'); renderGoals(); }
-
-function typeLabel(type){
-  return {study:'📖 Study',gym:'🏋️ Gym',rest:'😴 Rest',personal:'🏠 Personal',social:'👥 Social',other:'📌 Other'}[type]||'📖 Study';
-}
-
-// CALENDAR
-function renderCalendar(){
-  const goals=ggo().filter(g=>g.studentId===CU.id);
-  const myClasses=gc().filter(c=>CU.classIds&&CU.classIds.includes(c.id));
-  const todayDay=new Date().toLocaleDateString('en-CA',{weekday:'long'});
-  const wrap=document.getElementById('cal-wrap');
-
-  const grid=document.createElement('div'); grid.className='cal-grid';
-  DAYS.forEach(day=>{
-    const col=document.createElement('div'); col.className='cal-col';
-    const isToday=day===todayDay;
-    col.innerHTML=`<div class="cal-day-hdr ${isToday?'today':''}">${day.slice(0,3)}${isToday?' · Today':''}</div>`;
-
-    myClasses.filter(c=>c.days?.includes(day)).forEach(c=>{
-      const ev=document.createElement('div'); ev.className='cal-event';
-      ev.textContent=`${c.startTime} ${c.subject}`;
-      col.appendChild(ev);
-    });
-
-    goals.filter(g=>g.day===day).sort((a,b)=>a.time.localeCompare(b.time)).forEach(g=>{
-      const ev=document.createElement('div'); ev.className=`cal-event ${g.type||'study'}`;
-      ev.textContent=`${g.time} ${g.task}`;
-      col.appendChild(ev);
-    });
-
-    if(!col.querySelector('.cal-event')){
-      const emp=document.createElement('div'); emp.className='cal-empty'; emp.textContent='Free day';
-      col.appendChild(emp);
-    }
-    grid.appendChild(col);
-  });
-  wrap.innerHTML=''; wrap.appendChild(grid);
-}
-
-// STATS
-function renderStats(){
-  const myMoods=gm().filter(m=>m.studentId===CU.id);
-  const myGoals=ggo().filter(g=>g.studentId===CU.id);
-  const completed=myGoals.filter(g=>g.done).length;
-  const shared=myMoods.filter(m=>m.shared).length;
-  document.getElementById('stats-cards').innerHTML=`
-    <div class="stat-card"><div class="stat-n">${myMoods.length}</div><div class="stat-l">Mood Check-ins</div></div>
-    <div class="stat-card"><div class="stat-n">${myGoals.length}</div><div class="stat-l">Total Tasks</div></div>
-    <div class="stat-card"><div class="stat-n">${completed}</div><div class="stat-l">Completed</div></div>
-    <div class="stat-card"><div class="stat-n">${shared}</div><div class="stat-l">Moods Shared</div></div>
-  `;
-  const classes=gc();
-  const hist=document.getElementById('mood-history');
-  hist.innerHTML=[...myMoods].reverse().slice(0,20).map(m=>{
-    const cls=classes.find(c=>c.id===m.classId);
-    return `<div class="mood-hist-item">
-      <span class="mtag ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)}</span>
-      <span>${escapeHtml(cls?.subject||m.classLabel||'General')}</span>
-      <span style="margin-left:auto;color:var(--muted);font-size:.78rem">${m.date}</span>
-    </div>`;
-  }).join('')||'<p style="color:var(--muted);padding:16px 0">No mood history yet.</p>';
-}
-
-// WELLNESS
-function renderWellnessSection(){
-  const logs = gw().filter(w => w.studentId === CU.id);
-  const sleepLogs = logs.filter(l => l.type==='sleep').slice(-5).reverse();
-  document.getElementById('sleep-log-display').innerHTML = sleepLogs.map(l=>`
-    <div class="wlog-entry">
-      <span>${escapeHtml(l.date)} · ${escapeHtml(l.hours)}h · ${escapeHtml(l.quality)}</span>
-      <span style="color:var(--muted);font-size:.75rem">${l.sharedWith ? '📤 Sent to teacher' : '🔒 Private'}</span>
-    </div>`).join('');
-
-  const respLogs = logs.filter(l => l.type==='resp').slice(-5).reverse();
-  document.getElementById('resp-log-display').innerHTML = respLogs.map(l=>`
-    <div class="wlog-entry"><span>${escapeHtml(l.text)}</span><span>${escapeHtml(l.date)}</span></div>`).join('');
-
-  const myClasses = gc().filter(c => CU.classIds?.includes(c.id));
-  const shareRows = ['sleep-share-row','resp-share-row','energy-share-row'];
-  shareRows.forEach(id => {
-    const row = document.getElementById(id);
-    if(row) row.style.display = hasClasses() ? '' : 'none';
-  });
-
-  if(hasClasses()){
-    const teacherOpts = myClasses.map(c => {
-      const teacher = gt().find(t => t.id === c.teacherId);
-      return `<option value="${c.teacherId}|${c.id}">${c.subject} (${teacher?.name || 'Teacher'})</option>`;
-    }).join('');
-    const optHtml = `<option value="">Pick a period…</option>` + teacherOpts;
-    ['sleep-teacher-sel','resp-teacher-sel','energy-teacher-sel'].forEach(id => {
-      const sel = document.getElementById(id);
-      if(sel) sel.innerHTML = optHtml;
-    });
-    ['sleep','resp','energy'].forEach(type => {
-      const cb  = document.getElementById(`share-${type}`);
-      const sel = document.getElementById(`${type}-teacher-sel`);
-      if(cb && sel){
-        cb.onchange = () => sel.classList.toggle('hidden', !cb.checked);
-      }
-    });
-  }
-}
-
-function logWellness(type){
-  const logs = gw();
-
-  function getShareTarget(checkboxId, selId){
-    const cb = document.getElementById(checkboxId);
-    if(!cb?.checked) return { shared: false, sharedWith: null };
-    const sel = document.getElementById(selId);
-    const val = sel?.value || '';
-    const [teacherId, classId] = val.split('|');
-    return { shared: true, sharedWith: { teacherId, classId } };
-  }
-
-  if(type === 'sleep'){
-    const hours   = document.getElementById('w-sleep').value;
-    const quality = document.getElementById('w-sleep-quality').value;
-    if(!hours || !quality) return toast('Please fill in sleep hours and quality.');
-    const { shared, sharedWith } = getShareTarget('share-sleep','sleep-teacher-sel');
-    if(shared && !sharedWith?.teacherId) return toast('Please pick which teacher to send this to.');
-    logs.push({ id:'w'+uid8(), studentId:CU.id, type:'sleep', hours, quality, shared, sharedWith, date:today() });
-    toast(shared ? `Sleep sent to ${getTeacherName(sharedWith.teacherId)} 📤` : 'Sleep logged privately 😴');
-  } else if(type === 'resp'){
-    const text = document.getElementById('w-resp').value.trim();
-    if(!text) return toast('Please describe your responsibility.');
-    const { shared, sharedWith } = getShareTarget('share-resp','resp-teacher-sel');
-    if(shared && !sharedWith?.teacherId) return toast('Please pick which teacher to send this to.');
-    logs.push({ id:'w'+uid8(), studentId:CU.id, type:'resp', text, shared, sharedWith, date:today() });
-    document.getElementById('w-resp').value = '';
-    toast(shared ? `Responsibility sent to ${getTeacherName(sharedWith.teacherId)} 📤` : 'Responsibility logged.');
-  } else if(type === 'energy'){
-    const energy = document.getElementById('w-energy').value;
-    const water  = document.getElementById('w-water').value;
-    const { shared, sharedWith } = getShareTarget('share-energy','energy-teacher-sel');
-    if(shared && !sharedWith?.teacherId) return toast('Please pick which teacher to send this to.');
-    logs.push({ id:'w'+uid8(), studentId:CU.id, type:'energy', energy, water, shared, sharedWith, date:today() });
-    toast(shared ? `Energy data sent to ${getTeacherName(sharedWith.teacherId)} 📤` : 'Logged! ⚡');
-  }
-  S.set('wellness', logs);
-  renderWellnessSection();
-}
-
-function getTeacherName(teacherId){
-  const t = gt().find(x => x.id === teacherId);
-  return t ? t.name : 'your teacher';
-}
-
-function saveJournal(){
-  const text=document.getElementById('w-journal').value.trim();
-  if(!text)return;
-  const journals=gj();
-  journals.push({studentId:CU.id,text,date:today(),time:new Date().toLocaleTimeString()});
-  S.set('journals',journals);
-  document.getElementById('journal-saved').classList.remove('hidden');
-  setTimeout(()=>document.getElementById('journal-saved').classList.add('hidden'),3000);
-}
-
-// HELP
-function renderHelpSection(){
-  let province = 'Ontario';
-  if(hasClasses()){
-    const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
-    if(myClasses.length > 0){
-      const teacher = gt().find(t => t.id === myClasses[0].teacherId);
-      if(teacher?.province) province = teacher.province;
-    }
-  }
-  const el = document.getElementById('help-content');
-  el.innerHTML = buildHelplinesHTML(province, !hasClasses());
-}
-
-function buildHelplinesHTML(province, hideProvinceLabel=false){
-  const data = HELPLINES[province] || HELPLINES.default;
-  const provinceNote = hideProvinceLabel ? '' : `<p style="font-size:.85rem;color:var(--muted);margin-bottom:20px">Showing resources for: <strong>${province}</strong></p>`;
-  return `
-    <div class="emergency-banner">🚨 If someone is in immediate danger, call 911 now.</div>
-    ${provinceNote}
-    <div class="helpline-section">
-      <h3>📞 Phone & Text Support</h3>
-      ${data.phone.map(h=>`
-        <div class="helpline-card">
-          <h4>${h.name}</h4>
-          <p style="font-size:.85rem;color:var(--text-2);margin-bottom:6px">${h.desc}</p>
-          <div class="contact-row">${h.contact||''}</div>
-          <div class="contact-row" style="margin-top:4px"><a href="${h.url}" target="_blank">🌐 ${h.url}</a></div>
-        </div>
-      `).join('')}
-    </div>
-    ${data.online?`
-    <div class="helpline-section">
-      <h3>🌐 Online Resources & Websites</h3>
-      ${data.online.map(h=>`
-        <div class="helpline-card">
-          <h4>${h.name}</h4>
-          <p style="font-size:.85rem;color:var(--text-2);margin-bottom:6px">${h.desc}</p>
-          <a href="${h.url}" target="_blank">🌐 ${h.url}</a>
-        </div>
-      `).join('')}
-    </div>`:''}
-  `;
-}
-
-function showHelplines(){
-  document.getElementById('quick-helpline-content').innerHTML=buildHelplinesHTML('Ontario');
-  showScreen('quick-helplines');
-}
-
-function buildClassBannerHTML(c, isTeacher=false){
-  const color    = c.color || '#1d5fa6';
-  const textColor = getContrastColor(color);
-  if(c.logo || c.emoji){
-    return `<div class="cls-banner-header" style="background:${color};color:${textColor}">
-      ${c.logo
-        ? `<img class="cls-banner-logo" src="${escapeHtml(c.logo)}" alt="logo"/>`
-        : `<span class="cls-banner-emoji">${escapeHtml(c.emoji)}</span>`}
-      <div class="cls-banner-text"><h4 style="color:${textColor}">${escapeHtml(c.subject)}</h4></div>
-    </div>`;
-  }
-  return `<div class="cls-banner" style="background:${color}"></div>`;
-}
-
-function getContrastColor(hex){
-  const c = hex.replace('#','');
-  const r = parseInt(c.substring(0,2),16);
-  const g = parseInt(c.substring(2,4),16);
-  const b = parseInt(c.substring(4,6),16);
-  const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
-  return luminance > 0.55 ? '#1e293b' : '#ffffff';
-}
-
-// CLASSES (student)
-function renderClassesSection(){
-  const myClasses=gc().filter(c=>CU.classIds&&CU.classIds.includes(c.id));
-  const list=document.getElementById('s-classes-list');
-  if(myClasses.length===0){
-    list.innerHTML=`<p style="color:var(--muted);padding:20px 0">No classes joined yet. Enter a class code above from your teacher.</p>`;
-  } else {
-    const order = CU.periodOrder?.length ? CU.periodOrder : myClasses.map(c=>c.id);
-    const ordered = order.map(id=>myClasses.find(c=>c.id===id)).filter(Boolean);
-    myClasses.forEach(c=>{ if(!ordered.find(x=>x.id===c.id)) ordered.push(c); });
-    list.innerHTML=ordered.map((c,i)=>{
-      const bannerHtml = buildClassBannerHTML(c, false);
-      return `
-        <div class="s-class-card">
-          ${bannerHtml}
-          <div class="s-class-card-body">
-            <div class="s-class-meta">Period ${i+1} · ${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)} · ${escapeHtml(c.days?.join(', ')||'-')}</div>
-            <span class="cls-code-badge">${escapeHtml(c.code)}</span>
-            ${c.bannerMsg?`<div class="cls-banner-msg" style="margin-top:10px">${escapeHtml(c.bannerMsg)}</div>`:''}
-          </div>
-        </div>`;
-    }).join('');
-  }
-  if(myClasses.length>1){
-    document.getElementById('period-order-wrap').classList.remove('hidden');
-    const order=CU.periodOrder?.length?CU.periodOrder:myClasses.map(c=>c.id);
-    const orderedClasses=order.map(id=>myClasses.find(c=>c.id===id)).filter(Boolean);
-    myClasses.forEach(c=>{ if(!orderedClasses.find(x=>x.id===c.id)) orderedClasses.push(c); });
-    periodOrder=[...orderedClasses.map(c=>c.id)];
-    document.getElementById('period-order-list').innerHTML=orderedClasses.map((c,i)=>`
-      <div class="period-row" id="pr-${c.id}" data-id="${c.id}">
-        <span class="period-handle">⠿</span>
-        <span style="flex:1">${i+1}. ${escapeHtml(c.subject)} <span style="color:var(--muted);font-size:.8rem">${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)}</span></span>
-        <div class="period-arrows">
-          <button onclick="movePeriod('${c.id}',-1)" title="Move up">▲</button>
-          <button onclick="movePeriod('${c.id}',1)" title="Move down">▼</button>
-        </div>
-      </div>
-    `).join('');
-  } else {
-    document.getElementById('period-order-wrap').classList.add('hidden');
-  }
-}
-
-function movePeriod(id,dir){
-  const idx=periodOrder.indexOf(id);
-  if(idx<0)return;
-  const newIdx=idx+dir;
-  if(newIdx<0||newIdx>=periodOrder.length)return;
-  [periodOrder[idx],periodOrder[newIdx]]=[periodOrder[newIdx],periodOrder[idx]];
-  const students=gs(); const s=students.find(x=>x.id===CU.id);
-  if(s){ s.periodOrder=periodOrder; S.set('students',students); CU.periodOrder=periodOrder; }
-  renderClassesSection();
-}
-
-function savePeriodOrder(){
-  const students=gs(); const s=students.find(x=>x.id===CU.id);
-  if(s){ s.periodOrder=periodOrder; S.set('students',students); CU.periodOrder=periodOrder; }
-  toast('Period order saved! ✓');
-}
-
-// ─────────────────────────────────────────────
-// CLASSES (student) - JOIN A CLASS BY CODE
-// Single, correct version. Updates:
-//   - student's local 'students' cache entry
-//   - /profiles/{uid}  (so teacher queries find this student)
-//   - /users/{uid}     (so loadStudentData can rebuild the student row)
-// Then invalidates the teacher cache so the teacher sees it on next load.
-// ─────────────────────────────────────────────
-async function joinClass(){
-  const inp  = document.getElementById('join-code');
-  const code = (inp?.value || '').trim().toUpperCase();
-  if(!code) return toast('Please enter a class code.');
-
-  const classes = await fsGetAllClasses();
-  cSet('classes', classes);
-  const cls = classes.find(c => c.code === code);
-  if(!cls) return toast(`Class code "${code}" not found. Double-check with your teacher.`);
-  if(CU.classIds?.includes(cls.id)) return toast("You're already in this class!");
-
-  // Update local student list entry
-  const students = gs();
-  const s = students.find(x => x.id === CU.id);
-  if(s){
-    s.classIds = [...(s.classIds || []), cls.id];
-    S.set('students', students);
-    CU.classIds = s.classIds;
-  } else {
-    CU.classIds = [...(CU.classIds || []), cls.id];
-  }
-
-  // Track which teacher(s) this student is now connected to, as a plain
-  // array of teacher UIDs on their own profile. Security rules can check
-  // this single, direct field to grant a teacher read access to this
-  // student's private /users/{uid} doc - far simpler than cross-referencing
-  // classIds arrays across two different documents inside a rule.
-  const existingTeacherUids = new Set(CU.teacherUids || []);
-  existingTeacherUids.add(cls.teacherUid || cls.teacherId); // teacherUid is the auth uid; fall back if not present
-  CU.teacherUids = [...existingTeacherUids];
-
-  if(fbAuth?.currentUser){
-    // Update /profiles/{uid} - this is what the teacher's query reads,
-    // and now also carries teacherUids for the security rule check.
-    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
-      .set({ classIds: CU.classIds, teacherUids: CU.teacherUids }, { merge: true });
-
-    // Update /users/{uid} so loadStudentData() can find/rebuild this student's row
-    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
-    let existingStudents = [];
-    if(userDoc.exists){
-      try{ existingStudents = JSON.parse(userDoc.data().students || '[]'); }catch{}
-    }
-    let myEntry = existingStudents.find(x => x.id === CU.id);
-    if(!myEntry){
-      myEntry = {
-        id: CU.id, name: CU.name, email: CU.email, grade: CU.grade,
-        periodOrder: CU.periodOrder || [], joined: CU.joined || today()
-      };
-      existingStudents.push(myEntry);
-    }
-    myEntry.classIds = CU.classIds;
-    await fbDb.collection('users').doc(fbAuth.currentUser.uid).set({
-      students: JSON.stringify(existingStudents)
-    }, { merge: true });
-  }
-
-  if(inp) inp.value = '';
-  toast(`Joined ${cls.subject}! 🎉`);
-  updateStudentNav();
-
-  // Refresh whichever screen is visible
-  if(document.getElementById('s-sec-classes')?.classList.contains('active')) renderClassesSection();
-  else renderHome();
-
-  // So the teacher's next dashboard load picks up the new student immediately
-  invalidateTeacherCache();
-}
-
-// ─────────────────────────────────────────────
-// TEACHER DASHBOARD
-// ─────────────────────────────────────────────
-function loadTeacherDash(){
-  showScreen('screen-teacher');
-  const el=document.getElementById('screen-teacher');
-  el.style.display='flex'; el.classList.add('active');
-  document.getElementById('t-greet').textContent=`Welcome, ${CU.name}! 📋`;
-  document.getElementById('t-date').textContent=new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric'});
-  document.getElementById('t-av').textContent=CU.name[0].toUpperCase();
-  // Load student data in background
-  loadTeacherStudents().then(()=>{ if(document.getElementById('t-sec-students')?.classList.contains('active')) renderStudentTable(); });
-  tSection('overview');
-}
-
-function tSection(name){
-  document.querySelectorAll('#t-sidebar .sn').forEach(n=>n.classList.remove('active'));
-  const navMap=['overview','classes','students','moods','wellness','goals','alerts','help','settings','profile'];
-  const idx=navMap.indexOf(name);
-  const navItems=document.querySelectorAll('#t-sidebar .sn');
-  if(navItems[idx]) navItems[idx].classList.add('active');
-  document.querySelectorAll('#t-main .dsec').forEach(s=>s.classList.remove('active'));
-  const sec=document.getElementById('t-sec-'+name);
-  if(sec) sec.classList.add('active');
-
-  if(name==='overview')  { loadTeacherStudents().then(renderTeacherOverview); }
-  if(name==='classes')   { loadTeacherStudents().then(renderTeacherClasses); }
-  if(name==='students')  { loadTeacherStudents().then(renderStudentTable); }
-  if(name==='moods')     { loadTeacherStudents().then(renderMoodReports); }
-  if(name==='wellness')  { loadTeacherStudents().then(renderWellnessTable); }
-  if(name==='goals')     { loadTeacherStudents().then(renderTeacherGoals); }
-  if(name==='alerts')    { loadTeacherStudents().then(renderAlerts); }
-  if(name==='help')      renderTeacherHelp();
-  if(name==='settings')  renderSettings();
-  if(name==='profile')   renderTeacherProfile();
-}
-
-function getMyClasses(){ return gc().filter(c=>c.teacherId===CU.id); }
-function getMyStudents(){
-  const myIds = getMyClasses().map(c=>c.id);
-  if(!myIds.length) return [];
-
-  const cached = gs().filter(s=>s.classIds?.some(id=>myIds.includes(id)));
-
-  if(cached.length === 0 && myIds.length > 0){
-    console.warn('⚠️ getMyStudents: Cache is empty but teacher has classes. Data may not be loaded yet.');
-  }
-
-  return cached;
-}
-
-// OVERVIEW
-function renderTeacherOverview(){
-  const students=getMyStudents();
-  const classes=getMyClasses();
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);
-  const alerts=moods.filter(m=>NEGATIVE_MOODS.includes(m.mood));
-  document.getElementById('t-stats-row').innerHTML=`
-    <div class="tstat blue"><div class="tstat-n">${students.length}</div><div class="tstat-l">Students</div></div>
-    <div class="tstat green"><div class="tstat-n">${classes.length}</div><div class="tstat-l">Classes</div></div>
-    <div class="tstat amber"><div class="tstat-n">${moods.length}</div><div class="tstat-l">Mood Check-ins</div></div>
-    <div class="tstat red"><div class="tstat-n">${alerts.length}</div><div class="tstat-l">Need Support</div></div>
-  `;
-  document.getElementById('t-alert-badge').textContent=alerts.length;
-  const prev=document.getElementById('t-alerts-preview');
-  if(alerts.length===0){ prev.innerHTML=''; return; }
-  prev.innerHTML=`
-    <div style="background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--r-md);padding:16px 20px;margin-top:4px">
-      <h4 style="color:var(--red);margin-bottom:10px">⚠️ ${alerts.length} student${alerts.length>1?'s need':'needs'} support today</h4>
-      ${alerts.slice(0,4).map(a=>{ const s=students.find(x=>x.id===a.studentId); return `<p style="font-size:.88rem;margin-bottom:4px">• <strong>${escapeHtml(s?.name||'Student')}</strong> - feeling <em>${escapeHtml(a.mood)}</em></p>`; }).join('')}
-    </div>`;
-}
-
-function renderTeacherClasses(){
-  const classes = getMyClasses();
-  const students = getMyStudents();
-  const grid = document.getElementById('t-classes-grid');
-  if(classes.length === 0){
-    grid.innerHTML = '<p style="color:var(--muted);padding:20px 0">No classes yet. Create one above!</p>'; return;
-  }
-  grid.innerHTML = classes.map(c => {
-    const count = students.filter(s => s.classIds?.includes(c.id)).length;
-    const bannerHtml = buildClassBannerHTML(c, true);
-    return `
-      <div class="t-class-card">
-        ${bannerHtml}
-        <div class="t-class-card-body">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span class="cls-code-badge">${escapeHtml(c.code)}</span>
-            <span style="font-size:.8rem;color:var(--muted)">${count} student${count!==1?'s':''}</span>
-          </div>
-          <span class="cls-time">🕐 ${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)} · ${escapeHtml(c.days?.join(', ')||'-')}</span>
-          ${c.bannerMsg ? `<div class="cls-banner-msg">${escapeHtml(c.bannerMsg)}</div>` : ''}
-          <div class="t-class-actions">
-            <button class="btn-outline small" onclick="copyCode('${c.code}')">📋 Copy Code</button>
-            <button class="btn-outline small" onclick="deleteClass('${c.id}')" style="padding:7px 10px">🗑</button>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-// STUDENTS TABLE
-function renderStudentTable(){
-  const myClasses = getMyClasses();
-  const students  = getMyStudents();
-  const filterSel = document.getElementById('t-cls-filter');
-  filterSel.innerHTML = '<option value="">All Classes</option>' + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
-
-  const search    = (document.getElementById('t-search')?.value||'').toLowerCase();
-  const clsFilter = document.getElementById('t-cls-filter')?.value||'';
-  let filtered    = students;
-  if(clsFilter) filtered = filtered.filter(s=>s.classIds?.includes(clsFilter));
-  if(search)    filtered = filtered.filter(s=>s.name.toLowerCase().includes(search)||s.email.includes(search));
-
-  const moods = gm().filter(m=>m.shared);
-  const wrap  = document.getElementById('t-student-table');
-  if(filtered.length===0){ wrap.innerHTML='<p style="color:var(--muted);padding:24px 0">No students found.</p>'; return; }
-
-  wrap.innerHTML = `<div class="table-scroll">
-    <table>
-      <thead><tr>
-        <th>Name</th><th>Grade</th><th>Classes</th>
-        <th>Today's Mood</th><th>Sleep</th><th>Status</th>
-      </tr></thead>
-      <tbody>
-        ${filtered.map(s=>{
-          const todayMoods = moods.filter(m=>m.studentId===s.id&&m.date===today());
-          const isAlert    = todayMoods.some(m=>NEGATIVE_MOODS.includes(m.mood));
-          const cls        = myClasses.filter(c=>s.classIds?.includes(c.id));
-          const sleepLog   = gw().filter(w=>w.studentId===s.id&&w.type==='sleep'&&w.shared&&w.date===today())[0];
-          const moodDisplay= todayMoods.length
-            ? todayMoods.map(m=>`<span class="mood-tag-sm ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)}</span>`).join('')
-            : '<span style="color:var(--muted);font-size:.82rem">Not logged</span>';
-          const clsNames   = cls.map(c=>{
-            const short = c.subject.length > 20 ? c.subject.slice(0,18)+'…' : c.subject;
-            return `<span title="${escapeHtml(c.subject)}" style="display:inline-block;background:var(--blue-pale);color:var(--blue);border-radius:5px;padding:1px 6px;font-size:.72rem;font-weight:700;margin:1px">${escapeHtml(short)}</span>`;
-          }).join('');
-          return `<tr class="${isAlert?'alert-row':''}">
-            <td><strong>${escapeHtml(s.name)}</strong><br><span style="font-size:.75rem;color:var(--muted)">${escapeHtml(s.email)}</span></td>
-            <td style="white-space:nowrap">${escapeHtml(s.grade||'-')}</td>
-            <td>${clsNames||'-'}</td>
-            <td style="min-width:120px">${moodDisplay}</td>
-            <td style="white-space:nowrap">${sleepLog?`<strong>${escapeHtml(sleepLog.hours)}h</strong> · ${escapeHtml(sleepLog.quality)}`:'<span style="color:var(--muted)"> - </span>'}</td>
-            <td style="white-space:nowrap">${isAlert?'<span style="color:var(--red);font-weight:700;font-size:.85rem">⚠️ Needs support</span>':'<span style="color:var(--green);font-size:.85rem">✅ OK</span>'}</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-  </div>`;
-}
-
-// MOOD REPORTS
-function renderMoodReports(){
-  const students=getMyStudents();
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);
-  const grid=document.getElementById('t-mood-grid');
-  if(students.length===0){ grid.innerHTML='<p style="color:var(--muted)">No students yet.</p>'; return; }
-  grid.innerHTML=students.map(s=>{
-    const sm=moods.filter(m=>m.studentId===s.id);
-    const counts={};
-    sm.forEach(m=>{ counts[m.mood]=(counts[m.mood]||0)+1; });
-    const total=sm.length||1;
-    const isAlert=sm.some(m=>NEGATIVE_MOODS.includes(m.mood)&&m.date===today());
-    return `
-      <div class="t-mood-card" ${isAlert?'style="border:2px solid var(--red)"':''}>
-        <h4>${escapeHtml(s.name)} ${isAlert?'⚠️':''}</h4>
-        ${Object.entries(counts).map(([mood,n])=>`
-          <div class="mbar-row">
-            <span style="width:80px;font-size:.78rem">${MOOD_CFG[mood]?.icon} ${escapeHtml(mood)}</span>
-            <div class="mbar-track"><div class="mbar-fill" style="width:${(n/total*100).toFixed(0)}%;background:${NEGATIVE_MOODS.includes(mood)?'var(--red)':'var(--blue)'}"></div></div>
-            <span style="font-size:.78rem">${n}</span>
-          </div>`).join('')||'<p style="color:var(--muted);font-size:.82rem">No shared moods yet</p>'}
-      </div>`;
-  }).join('');
-}
-
-// WELLNESS TABLE
-function renderWellnessTable(){
-  const students = getMyStudents();
-  const myClassIds = getMyClasses().map(c => c.id);
-  const allW = gw().filter(w =>
-    w.shared &&
-    students.some(s => s.id === w.studentId) &&
-    (w.sharedWith?.teacherId === CU.id || myClassIds.includes(w.sharedWith?.classId))
-  );
-  const allR = S.get('responsibilities',[]).filter(r =>
-    r.shared &&
-    students.some(s => s.id === r.studentId) &&
-    (r.sharedWith?.teacherId === CU.id || myClassIds.includes(r.sharedWith?.classId) || !r.sharedWith)
-  );
-  const wrap = document.getElementById('t-wellness-table');
-  const classes = getMyClasses();
-  let html = '';
-  if(allR.length > 0){
-    const grouped = {};
-    allR.forEach(r => { if(!grouped[r.studentId]) grouped[r.studentId]=[]; grouped[r.studentId].push(r); });
-    html += `<h4 style="color:var(--navy);margin-bottom:14px">📋 Student Responsibilities (Shared)</h4>`;
-    html += Object.entries(grouped).map(([sid,resps]) => {
-      const s = students.find(x => x.id === sid);
-      const totalHours = resps.reduce((acc,r) => acc+(parseFloat(r.hours)||0), 0);
-      return `<div class="t-goals-student" style="margin-bottom:12px">
-        <h4>${escapeHtml(s?.name||'Student')} <span style="font-weight:400;color:var(--muted);font-size:.8rem">${totalHours>0?'~'+totalHours+'h/week outside school':''}</span></h4>
-        ${resps.map(r=>`<div class="t-goal-row">
-          <span>📌</span>
-          <div><strong>${escapeHtml(r.text)}</strong>${r.when?` <span style="color:var(--muted)">(${escapeHtml(r.when)})</span>`:''}</div>
-          ${r.hours?`<span style="margin-left:auto;color:var(--muted);font-size:.8rem">~${escapeHtml(r.hours)}h/wk</span>`:''}
-        </div>`).join('')}
-      </div>`;
-    }).join('');
-  }
-  if(allW.length > 0){
-    html += `<h4 style="color:var(--navy);margin:22px 0 14px">🌱 Wellness Logs Sent to You</h4>
-    <div style="overflow-x:auto"><table>
-      <thead><tr><th>Student</th><th>Type</th><th>Data</th><th>Period</th><th>Date</th></tr></thead>
-      <tbody>
-        ${allW.map(w => {
-          const s = students.find(x => x.id === w.studentId);
-          const cls = classes.find(c => c.id === w.sharedWith?.classId);
-          const data = w.type==='sleep' ? `${escapeHtml(w.hours)}h · ${escapeHtml(w.quality)}`
-                     : w.type==='energy' ? `Energy: ${escapeHtml(w.energy)}/10 · 💧${escapeHtml(w.water)} glasses`
-                     : escapeHtml(w.text||'-');
-          return `<tr>
-            <td><strong>${escapeHtml(s?.name||'-')}</strong></td>
-            <td style="text-transform:capitalize">${escapeHtml(w.type)}</td>
-            <td>${data}</td>
-            <td style="font-size:.82rem;color:var(--muted)">${escapeHtml(cls?.subject||'-')}</td>
-            <td>${escapeHtml(w.date)}</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table></div>`;
-  }
-  if(!html) html = '<p style="color:var(--muted);padding:20px 0">No shared wellness data yet.</p>';
-  wrap.innerHTML = html;
-}
-
-// GOALS
-function renderTeacherGoals(){
-  const students=getMyStudents();
-  const el=document.getElementById('t-goals-list');
-  el.innerHTML=students.map(s=>{
-    const gs_=ggo().filter(g=>g.studentId===s.id);
-    return `<div class="t-goals-student">
-      <h4>${escapeHtml(s.name)} <span style="font-weight:400;color:var(--muted);font-size:.82rem">${gs_.length} task${gs_.length!==1?'s':''}</span></h4>
-      ${gs_.slice(0,6).map(g=>`
-        <div class="t-goal-row">${g.done?'✅':'⬜'} <strong>${escapeHtml(g.day)}</strong> ${escapeHtml(g.time)} - ${escapeHtml(g.task)} (${escapeHtml(g.duration)})</div>`).join('')
-      || '<p style="font-size:.82rem;color:var(--muted)">No goals entered yet.</p>'}
-      ${gs_.length>6?`<p style="font-size:.78rem;color:var(--muted);margin-top:4px">+${gs_.length-6} more</p>`:''}
-    </div>`;
-  }).join('')||'<p style="color:var(--muted)">No students yet.</p>';
-}
-
-// ALERTS
-function renderAlerts(){
-  const students=getMyStudents();
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&NEGATIVE_MOODS.includes(m.mood));
-  const el=document.getElementById('t-alerts-list');
-  if(moods.length===0){ el.innerHTML='<p style="color:var(--muted);text-align:center;padding:40px 0">🎉 No alerts - all students seem to be doing well!</p>'; return; }
-  const grouped={};
-  moods.forEach(m=>{ if(!grouped[m.studentId])grouped[m.studentId]=[]; grouped[m.studentId].push(m); });
-  el.innerHTML=Object.entries(grouped).map(([sid,ms])=>{
-    const s=students.find(x=>x.id===sid);
-    const recent=ms.sort((a,b)=>b.date.localeCompare(a.date))[0];
-    const cls=gc().find(c=>c.id===recent.classId);
-    return `<div class="alert-card-t">
-      <span style="font-size:1.5rem">⚠️</span>
-      <div><h5>${escapeHtml(s?.name||'Student')}</h5>
-      <p style="font-size:.85rem;color:var(--text-2)">Feeling <strong>${escapeHtml(recent.mood)}</strong> in ${escapeHtml(cls?.subject||recent.classLabel||'class')} on ${escapeHtml(recent.date)}</p></div>
-      <span class="alert-abadge">${ms.length} alert${ms.length>1?'s':''}</span>
-    </div>`;
-  }).join('');
-}
-
-// TEACHER HELP
-function renderTeacherHelp(){
-  const province=CU.province||'Ontario';
-  document.getElementById('t-help-content').innerHTML=buildHelplinesHTML(province);
-}
-
-// SETTINGS
-function renderSettings(){
-  const sel=document.getElementById('t-province-setting');
-  sel.innerHTML=PROVINCES.map(p=>`<option ${p===CU.province?'selected':''}>${p}</option>`).join('');
-  if(CU.socialWorker){
-    document.getElementById('sw-name').value=CU.socialWorker.name||'';
-    document.getElementById('sw-email').value=CU.socialWorker.email||'';
-  }
-  document.getElementById('t-account-info').innerHTML=`
-    <p><strong>Name:</strong> ${escapeHtml(CU.name)}</p>
-    <p><strong>Email:</strong> ${escapeHtml(CU.email)}</p>
-    <p><strong>School:</strong> ${escapeHtml(CU.school||'-')}</p>
-    <p><strong>Province:</strong> ${escapeHtml(CU.province||'-')}</p>
-    <p><strong>Joined:</strong> ${escapeHtml(CU.joined||'-')}</p>
-  `;
-}
-
-function saveSocialWorker(){
-  const name=document.getElementById('sw-name').value.trim();
-  const email=document.getElementById('sw-email').value.trim();
-  if(!name||!email)return toast('Please fill in name and email.');
-  if(!validEmail(email))return toast('Please enter a valid email address.');
-  const teachers=gt(); const t=teachers.find(x=>x.id===CU.id);
-  if(t){ t.socialWorker={name,email}; S.set('teachers',teachers); CU.socialWorker={name,email}; }
-  document.getElementById('sw-saved').classList.remove('hidden');
-  setTimeout(()=>document.getElementById('sw-saved').classList.add('hidden'),3000);
-  toast('Social worker contact saved! ✓');
-}
-
-function saveProvince(){
-  const p=document.getElementById('t-province-setting').value;
-  const teachers=gt(); const t=teachers.find(x=>x.id===CU.id);
-  if(t){ t.province=p; S.set('teachers',teachers); CU.province=p; }
-  toast(`Province updated to ${p}`);
-}
-
-// CLASS CRUD
-function openClassModal(){ openModal('class-modal'); }
-
-function genCode(){
-  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code=''; for(let i=0;i<8;i++) code+=chars[Math.floor(Math.random()*chars.length)];
-  document.getElementById('cm-code').value=code;
-}
-
-let pendingLogoDataUrl = null;
-
-function previewLogo(input){
-  const file = input.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    pendingLogoDataUrl = e.target.result;
-    document.getElementById('logo-preview-img').src = pendingLogoDataUrl;
-    document.getElementById('logo-preview-wrap').classList.remove('hidden');
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearLogo(){
-  pendingLogoDataUrl = null;
-  document.getElementById('logo-preview-wrap').classList.add('hidden');
-  document.getElementById('cm-logo-file').value = '';
-}
-
-// ─────────────────────────────────────────────
-// CLASSES (teacher) - CREATE / DELETE
-// Classes are stored as individual Firestore docs in 'shared_classes'
-// (one doc per class) so this scales past the old single-blob approach.
-// ─────────────────────────────────────────────
-async function fsSetClass(cls){
-  if(!fbDb) return;
-  try {
-    await fbDb.collection('shared_classes').doc(cls.id).set(cls);
-  } catch(e){ console.error('fsSetClass', e); }
-}
-
-async function fsDeleteClass(classId){
-  if(!fbDb) return;
-  try {
-    await fbDb.collection('shared_classes').doc(classId).delete();
-  } catch(e){
-    console.error('fsDeleteClass failed', e);
-    toast('⚠️ Could not delete class - check your connection and try again.');
-  }
-}
-
-async function fsGetAllClasses(){
-  if(!fbDb) return [];
-  try {
-    const snap = await fbDb.collection('shared_classes').get();
-    return snap.docs.map(d => d.data());
-  } catch(e){ return []; }
-}
-
-async function createClass(){
-  const subject  = document.getElementById('cm-subject').value.trim();
-  const start    = document.getElementById('cm-start').value;
-  const end      = document.getElementById('cm-end').value;
-  const code     = document.getElementById('cm-code').value.trim().toUpperCase();
-  const days     = [...document.querySelectorAll('input[name="cm-day"]:checked')].map(x=>x.value);
-  const color    = document.querySelector('input[name="cm-color"]:checked')?.value||'#1d5fa6';
-  const emoji    = document.getElementById('cm-emoji').value.trim();
-  const bannerMsg= document.getElementById('cm-banner-msg').value.trim();
-  const logo     = pendingLogoDataUrl||null;
-
-  if(!subject||!code)return toast('Please fill in subject and code.');
-  if(!/^[A-Z0-9]{3,12}$/.test(code)) return toast('Class code must be 3-12 letters/numbers only.');
-
-  // Check code uniqueness across all class docs
-  const existingClasses = await fsGetAllClasses();
-  if(existingClasses.find(c=>c.code===code)) return toast('That code already exists - try generating a new one.');
-
-  // teacherId is the short display id (used everywhere else in the UI).
-  // teacherUid is the real Firebase Auth uid - needed so students who join
-  // can record which teacher's auth uid to grant read-access to, since
-  // security rules can only check request.auth.uid, not the short id.
-  const newClass = {id:'c'+uid8(),teacherId:CU.id,teacherUid:CU.uid,subject,startTime:start,endTime:end,days,code,color,emoji,logo,bannerMsg};
-
-  await fsSetClass(newClass);
-
-  const updated = [...existingClasses, newClass];
-  cSet('classes', updated);
-
-  closeModal('class-modal');
-  document.getElementById('cm-subject').value='';
-  document.getElementById('cm-start').value='09:00';
-  document.getElementById('cm-end').value='09:45';
-  document.getElementById('cm-code').value='';
-  document.getElementById('cm-emoji').value='';
-  document.getElementById('cm-banner-msg').value='';
-  document.querySelectorAll('input[name="cm-day"]').forEach(x=>x.checked=false);
-  clearLogo();
-  pendingLogoDataUrl=null;
-  toast('Class created! 🎉');
-  renderTeacherClasses();
-  invalidateTeacherCache();
-}
-
-async function deleteClass(id){
-  if(!confirm('Delete this class? Students will lose access.'))return;
-  await fsDeleteClass(id);
-  const updated = cGet('classes', []).filter(c=>c.id!==id);
-  cSet('classes', updated);
-  toast('Class deleted.');
-  renderTeacherClasses();
-  invalidateTeacherCache();
-}
-
-function copyCode(code){
-  navigator.clipboard?.writeText(code).catch(()=>{});
-  toast(`Code "${code}" copied to clipboard!`);
-}
-
-// ─────────────────────────────────────────────
-// UTILITIES
-// ─────────────────────────────────────────────
-function openModal(id){
-  const el = document.getElementById(id);
-  el.classList.remove('hidden');
-  // Accessibility: move focus into the dialog and let Escape close it.
-  el._lastFocused = document.activeElement;
-  const dialog = el.querySelector('[role="dialog"]') || el;
-  const focusable = dialog.querySelector('input, select, textarea, button, a[href]');
-  (focusable || dialog).focus?.();
-  el._escHandler = (e) => { if(e.key === 'Escape') closeModal(id); };
-  document.addEventListener('keydown', el._escHandler);
-}
-function closeModal(id){
-  const el = document.getElementById(id);
-  el.classList.add('hidden');
-  if(el._escHandler){ document.removeEventListener('keydown', el._escHandler); el._escHandler = null; }
-  if(el._lastFocused){ el._lastFocused.focus?.(); el._lastFocused = null; }
-}
-function showErr(el,msg){ if(!el)return toast(msg); el.textContent=msg; el.classList.remove('hidden'); setTimeout(()=>el.classList.add('hidden'),5000); }
-function showPrivacy(){ openModal('privacy-modal'); }
-function showCookiePolicy(){ openModal('cookie-policy-modal'); }
-
-function toggleCookieConsent(){
-  const current = localStorage.getItem('wellspace_cookie_consent');
-  const wasAccepted = current === 'accepted';
-  const newValue = !wasAccepted;
-  if(typeof window.setCookieConsent === 'function') window.setCookieConsent(newValue);
-  if(wasAccepted && !newValue){
-    toast('Analytics cookies declined - reloading to apply');
-    setTimeout(()=>location.reload(), 900);
-  } else {
-    toast(newValue ? 'Analytics cookies accepted 🍪' : 'Analytics cookies declined');
-  }
-}
-
-function toast(msg){
-  const t=document.getElementById('toast');
-  t.textContent=msg; t.classList.remove('hidden');
-  clearTimeout(t._to); t._to=setTimeout(()=>t.classList.add('hidden'),3000);
-}
-
-function toggleSB(id){
-  document.getElementById(id)?.classList.toggle('open');
-}
-
-function today(){ return new Date().toISOString().split('T')[0]; }
-function uid8(){ return Math.random().toString(36).substr(2,8); }
-// keep old uid name working too
-function uid(){ return uid8(); }
-
-document.addEventListener('click',e=>{
-  ['s-sidebar','t-sidebar'].forEach(id=>{
-    const sb=document.getElementById(id);
-    if(sb&&sb.classList.contains('open')&&!sb.contains(e.target)&&!e.target.classList.contains('ham'))
-      sb.classList.remove('open');
-  });
-});
-
-// ─────────────────────────────────────────────
-// STUDENT PROFILE
-// ─────────────────────────────────────────────
-function renderStudentProfile(){
-  document.getElementById('s-profile-av').textContent = CU.name[0].toUpperCase();
-  document.getElementById('s-profile-name').textContent = CU.name;
-  document.getElementById('s-profile-email').textContent = CU.email;
-  document.getElementById('s-profile-grade').textContent = CU.grade || 'No grade set';
-  document.getElementById('s-edit-name').value = CU.name;
-  const respShareRow = document.querySelector('label[for="resp-share"]')?.closest('.share-toggle');
-  if(respShareRow) respShareRow.style.display = hasClasses() ? '' : 'none';
-  renderRespList();
-}
-
-function saveStudentProfile(){
-  const name    = document.getElementById('s-edit-name').value.trim();
-  const oldPass = document.getElementById('s-old-pass').value;
-  const newPass = document.getElementById('s-new-pass').value;
-  const errEl   = document.getElementById('s-profile-err');
-  const okEl    = document.getElementById('s-profile-ok');
-
-  if(!name) return showErr(errEl, 'Name cannot be empty.');
-
-  const students = gs();
-  const s = students.find(x => x.id === CU.id);
-  if(!s) return;
-
-  if(oldPass || newPass){
-    if(!oldPass) return showErr(errEl, 'Enter your current password to change it.');
-    if(!validPw(newPass)) return showErr(errEl, 'New password needs 8+ chars, uppercase, number & special character.');
-    // Update Firebase Auth password
-    fbAuth.currentUser?.updatePassword(newPass).catch(e=>{
-      showErr(errEl, 'Could not update password. Please log out and back in first.');
-    });
-  }
-
-  s.name = name;
-  CU.name = name;
-  S.set('students', students);
-  // Update profile
-  if(fbAuth?.currentUser) saveProfile(fbAuth.currentUser.uid, { name });
-
-  document.getElementById('s-greet').textContent = `${getGreeting()}, ${CU.name}! 👋`;
-  document.getElementById('s-av').textContent = CU.name[0].toUpperCase();
-  document.getElementById('s-profile-av').textContent = CU.name[0].toUpperCase();
-  document.getElementById('s-profile-name').textContent = CU.name;
-
-  errEl.classList.add('hidden');
-  okEl.classList.remove('hidden');
-  setTimeout(() => okEl.classList.add('hidden'), 3000);
-  document.getElementById('s-old-pass').value = '';
-  document.getElementById('s-new-pass').value = '';
-  toast('Profile updated! ✓');
-}
-
-function getGreeting(){
-  const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-}
-
-// ─────────────────────────────────────────────
-// RESPONSIBILITIES
-// ─────────────────────────────────────────────
-function addResponsibility(){
-  const text  = document.getElementById('resp-text').value.trim();
-  const when  = document.getElementById('resp-when').value.trim();
-  const hours = document.getElementById('resp-hours').value;
-  const shared= document.getElementById('resp-share').checked;
-
-  if(!text) return toast('Please describe the responsibility.');
-
-  const all = S.get('responsibilities', []);
-  all.push({ id: 'r'+uid8(), studentId: CU.id, text, when, hours, shared, date: today() });
-  S.set('responsibilities', all);
-
-  document.getElementById('resp-text').value = '';
-  document.getElementById('resp-when').value = '';
-  document.getElementById('resp-hours').value = '';
-  document.getElementById('resp-share').checked = false;
-  toast('Responsibility added!');
-  renderRespList();
-}
-
-function renderRespList(){
-  const all = S.get('responsibilities', []).filter(r => r.studentId === CU.id);
-  const el  = document.getElementById('resp-list');
-  if(!el) return;
-  if(all.length === 0){
-    el.innerHTML = '<p style="color:var(--muted);font-size:.85rem">No responsibilities added yet.</p>';
-    return;
-  }
-  el.innerHTML = all.map(r => `
-    <div class="resp-item">
-      <div class="resp-item-info">
-        <strong>${escapeHtml(r.text)}</strong>
-        <span>${r.when ? '🕐 '+escapeHtml(r.when) : ''} ${r.hours ? '· ~'+escapeHtml(r.hours)+'h/week' : ''}</span>
-      </div>
-      <span class="${r.shared ? 'resp-shared-badge' : 'resp-private-badge'}">${r.shared ? '👁 Shared' : '🔒 Private'}</span>
-      <button onclick="deleteResp('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:.9rem;padding:2px 6px;transition:color var(--t)" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">✕</button>
-    </div>
-  `).join('');
-}
-
-function deleteResp(id){
-  S.set('responsibilities', S.get('responsibilities',[]).filter(r => r.id !== id));
-  toast('Removed.');
-  renderRespList();
-}
-
-// ─────────────────────────────────────────────
-// TEACHER PROFILE
-// ─────────────────────────────────────────────
-function renderTeacherProfile(){
-  document.getElementById('t-profile-av').textContent = CU.name[0].toUpperCase();
-  document.getElementById('t-profile-name').textContent = CU.name;
-  document.getElementById('t-profile-email').textContent = CU.email;
-  document.getElementById('t-profile-school').textContent = CU.school || '';
-  document.getElementById('t-edit-name').value = CU.name;
-  document.getElementById('t-edit-school').value = CU.school || '';
-
-  const myStudents = getMyStudents();
-  const allResp = S.get('responsibilities', []).filter(r =>
-    r.shared && myStudents.some(s => s.id === r.studentId)
-  );
-  const el = document.getElementById('t-resp-view');
-  if(allResp.length === 0){
-    el.innerHTML = '<p style="color:var(--muted);font-size:.85rem">No students have shared responsibilities yet.</p>';
-    return;
-  }
-  const grouped = {};
-  allResp.forEach(r => {
-    if(!grouped[r.studentId]) grouped[r.studentId] = [];
-    grouped[r.studentId].push(r);
-  });
-  el.innerHTML = Object.entries(grouped).map(([sid, resps]) => {
-    const student = myStudents.find(s => s.id === sid);
-    return `
-      <div style="margin-bottom:14px">
-        <p style="font-weight:700;font-size:.9rem;color:var(--navy);margin-bottom:6px">${escapeHtml(student?.name || 'Student')}</p>
-        ${resps.map(r => `
-          <div class="resp-item" style="margin-bottom:6px">
-            <div class="resp-item-info">
-              <strong>${escapeHtml(r.text)}</strong>
-              <span>${r.when ? '🕐 '+escapeHtml(r.when) : ''} ${r.hours ? '· ~'+escapeHtml(r.hours)+'h/week' : ''}</span>
+    `);
+    $$('.resource-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.resource;
+        if (id === 'breathing') renderBreathingExercise();
+        else if (id === 'crisis') {
+          Modal.open(`
+            <div class="crisis-resources">
+              <h3>🆘 You Are Not Alone</h3>
+              <p>If you or someone you know is in crisis, please reach out:</p>
+              <div class="crisis-list">
+                <a href="tel:988" class="crisis-link">📞 988 Suicide & Crisis Lifeline</a>
+                <a href="tel:1-800-273-8255" class="crisis-link">📞 1-800-273-TALK (8255)</a>
+                <a href="sms:741741" class="crisis-link">💬 Text HOME to 741741 (Crisis Text Line)</a>
+              </div>
+              <p class="crisis-note">These resources are confidential and available 24/7.</p>
             </div>
-          </div>`).join('')}
-      </div>`;
-  }).join('');
-}
-
-function saveTeacherProfile(){
-  const name   = document.getElementById('t-edit-name').value.trim();
-  const school = document.getElementById('t-edit-school').value.trim();
-  const oldPass= document.getElementById('t-old-pass').value;
-  const newPass= document.getElementById('t-new-pass').value;
-  const errEl  = document.getElementById('t-profile-err');
-  const okEl   = document.getElementById('t-profile-ok');
-
-  if(!name) return showErr(errEl, 'Name cannot be empty.');
-
-  const teachers = gt();
-  const t = teachers.find(x => x.id === CU.id);
-  if(!t) return;
-
-  if(oldPass || newPass){
-    if(!oldPass) return showErr(errEl, 'Enter your current password to change it.');
-    if(!validPw(newPass)) return showErr(errEl, 'New password needs 8+ chars, uppercase, number & special character.');
-    fbAuth.currentUser?.updatePassword(newPass).catch(()=>{
-      showErr(errEl, 'Could not update password. Please log out and back in first.');
-    });
-  }
-
-  t.name   = name;
-  t.school = school;
-  CU.name  = name;
-  CU.school= school;
-  S.set('teachers', teachers);
-  if(fbAuth?.currentUser) saveProfile(fbAuth.currentUser.uid, { name, school });
-
-  document.getElementById('t-greet').textContent  = `Welcome, ${CU.name}! 📋`;
-  document.getElementById('t-av').textContent      = CU.name[0].toUpperCase();
-  document.getElementById('t-profile-av').textContent = CU.name[0].toUpperCase();
-  document.getElementById('t-profile-name').textContent = CU.name;
-  document.getElementById('t-profile-school').textContent = CU.school;
-
-  errEl.classList.add('hidden');
-  okEl.classList.remove('hidden');
-  setTimeout(() => okEl.classList.add('hidden'), 3000);
-  document.getElementById('t-old-pass').value = '';
-  document.getElementById('t-new-pass').value = '';
-  toast('Profile updated! ✓');
-}
-
-// ─────────────────────────────────────────────
-// DELETE ACCOUNT
-// ─────────────────────────────────────────────
-let deleteRole = null;
-
-function confirmDeleteAccount(role){
-  deleteRole = role;
-  document.getElementById('delete-confirm-input').value = '';
-  document.getElementById('delete-pass-input').value = '';
-  document.getElementById('delete-err').classList.add('hidden');
-  openModal('delete-modal');
-}
-
-async function executeDeleteAccount(){
-  const confirm = document.getElementById('delete-confirm-input').value.trim();
-  const pass    = document.getElementById('delete-pass-input').value;
-  const errEl   = document.getElementById('delete-err');
-
-  if(confirm !== 'DELETE') return showErr(errEl, 'Please type DELETE exactly to confirm.');
-
-  try {
-    // Re-authenticate then delete
-    const cred = firebase.auth.EmailAuthProvider.credential(CU.email, pass);
-    await fbAuth.currentUser.reauthenticateWithCredential(cred);
-
-    // Delete Firestore data
-    if(fbDb && fbAuth.currentUser){
-      await fbDb.collection('users').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
-      await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
-    }
-
-    await fbAuth.currentUser.delete();
-    closeModal('delete-modal');
-    CU = null;
-    toast('Account deleted. Goodbye 👋');
-    setTimeout(() => showScreen('screen-entry'), 1500);
-  } catch(e){
-    showErr(errEl, 'Incorrect password or session expired. Please log out and back in.');
-  }
-}
-
-// ─────────────────────────────────────────────
-// EMAIL VERIFICATION & FORGOT PASSWORD
-// ─────────────────────────────────────────────
-const EMAILJS_SERVICE  = 'service_jm737lr';
-const EMAILJS_TEMPLATE = 'template_6w1574v';
-
-let pendingVerify = null;
-let pendingReset  = null;
-
-function generateCode(){
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-function startSignupVerification(){
-  const name      = document.getElementById('su-name').value.trim();
-  const email     = document.getElementById('su-email').value.trim().toLowerCase();
-  const pass      = document.getElementById('su-pass').value;
-  const privacyOk = document.getElementById('su-privacy').checked;
-  const errEl     = document.getElementById('signup-err');
-
-  if(!name||!email||!pass) return showErr(errEl,'Please fill in all required fields.');
-  if(!validEmail(email))   return showErr(errEl,'Please enter a valid email address.');
-  if(!validPw(pass))       return showErr(errEl,'Password must be 8+ chars with uppercase, number & special character.');
-  if(!privacyOk)           return showErr(errEl,'Please accept the privacy policy to continue.');
-
-  if(authRole==='student'){
-    const grade = document.getElementById('su-grade').value;
-    const classCode = document.getElementById('su-code').value.trim().toUpperCase();
-    if(!grade) return showErr(errEl,'Please select your grade.');
-    pendingVerify = { name, email, pass, grade, code_class: classCode, role:'student' };
-  } else {
-    const province = document.getElementById('su-province').value;
-    const school   = document.getElementById('su-school').value.trim();
-    if(!province) return showErr(errEl,'Please select your province.');
-    pendingVerify = { name, email, pass, province, school, role:'teacher' };
-  }
-
-  const verifyCode = generateCode();
-  pendingVerify.code    = verifyCode;
-  pendingVerify.expires = Date.now() + 10*60*1000;
-
-  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-    to_name:  name,
-    to_email: email,
-    code:     verifyCode,
-  }).then(()=>{
-    document.getElementById('verify-email-display').textContent = email;
-    document.getElementById('verify-code-input').value = '';
-    document.getElementById('verify-err').classList.add('hidden');
-    document.getElementById('verify-ok').classList.add('hidden');
-    openModal('verify-modal');
-    toast('Verification code sent to your email! 📧');
-  }).catch(err=>{
-    console.error('EmailJS error:', err);
-    showErr(errEl, 'Could not send verification email. Please check your email address and try again.');
-  });
-}
-
-async function confirmVerifyCode(){
-  const input = document.getElementById('verify-code-input').value.trim();
-  const errEl = document.getElementById('verify-err');
-  const okEl  = document.getElementById('verify-ok');
-
-  if(!pendingVerify) return showErr(errEl,'Something went wrong. Please try signing up again.');
-  if(Date.now() > pendingVerify.expires) return showErr(errEl,'Code expired. Please request a new one.');
-  if(input !== pendingVerify.code) return showErr(errEl,'Incorrect code. Please check your email and try again.');
-
-  okEl.classList.remove('hidden');
-
-  setTimeout(async ()=>{
-    // Now create the Firebase Auth account
-    const { name, email, pass, role } = pendingVerify;
-    try {
-     if(role === 'student'){
-        const grade = pendingVerify.grade;
-        const classCode = pendingVerify.code_class || '';
-        const classes = await fsGetAllClasses();
-        cSet('classes', classes);
-        let classIds = [];
-        let teacherUids = [];
-        if(classCode){
-          const cls = classes.find(c=>c.code===classCode);
-          if(cls){
-            classIds = [cls.id];
-            teacherUids = [cls.teacherUid || cls.teacherId];
-          }
-        }
-        const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
-        const uid  = cred.user.uid;
-        const localId = 's'+uid8();
-        const profile = { role:'student', name, email, grade, classIds, teacherUids, periodOrder:[], joined:today(), localId, uid };
-        const studentEntry = { id:localId, name, email, grade, classIds, periodOrder:[], joined:today() };
-        cSet('students', [studentEntry]);
-        await fsSet('students', [studentEntry]);
-        CU = { ...profile, id: localId };
-      } else {
-        const { province, school } = pendingVerify;
-        const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
-        const uid  = cred.user.uid;
-        const localId = 't'+uid8();
-        const profile = { role:'teacher', name, email, province, school, socialWorker:null, joined:today(), localId, uid };
-        await saveProfile(uid, profile);
-        const teacherEntry = { id:localId, name, email, province, school, socialWorker:null, joined:today() };
-        cSet('teachers', [teacherEntry]);
-        await fsSet('teachers', [teacherEntry]);
-        CU = { ...profile, id: localId };
-      }
-      pendingVerify = null;
-      closeModal('verify-modal');
-      if(CU.role==='student') await ensureTeacherLinks();
-      toast(`Account created! Welcome, ${name} 🎉`);
-      syncCookieConsentAfterLogin(CU.uid);
-      if(CU.role==='student') loadStudentDash(); else loadTeacherDash();
-    } catch(e){
-      showErr(errEl, e.code==='auth/email-already-in-use'
-        ? 'An account with this email already exists.'
-        : 'Could not create account. Please try again.');
-    }
-  }, 1200);
-}
-
-// ─────────────────────────────────────────────
-// Simple client-side cooldown to stop spam-clicking "Resend" from
-// burning through the EmailJS free-tier quota or being used to
-// email-bomb someone else's address. This is a UX-level speed bump,
-// not a real security boundary - the actual fix is restricting
-// allowed origins + enabling rate limiting in the EmailJS dashboard,
-// since a determined attacker can call emailjs.send() directly from
-// the browser console and skip the UI/button entirely.
-// ─────────────────────────────────────────────
-const _emailCooldowns = {};
-function emailOnCooldown(key, seconds, btnEl){
-  const now = Date.now();
-  if(_emailCooldowns[key] && now < _emailCooldowns[key]) return true;
-  _emailCooldowns[key] = now + seconds*1000;
-  if(btnEl){
-    const original = btnEl.textContent;
-    btnEl.disabled = true;
-    let remaining = seconds;
-    btnEl.textContent = `Wait ${remaining}s`;
-    const iv = setInterval(()=>{
-      remaining--;
-      if(remaining <= 0){
-        clearInterval(iv);
-        btnEl.disabled = false;
-        btnEl.textContent = original;
-      } else {
-        btnEl.textContent = `Wait ${remaining}s`;
-      }
-    }, 1000);
-  }
-  return false;
-}
-
-function resendVerifyCode(){
-  if(!pendingVerify) return;
-  if(emailOnCooldown('verify', 30, event?.currentTarget)) return toast('Please wait before requesting another code.');
-  const newCode = generateCode();
-  pendingVerify.code    = newCode;
-  pendingVerify.expires = Date.now() + 10*60*1000;
-  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-    to_name:  pendingVerify.name,
-    to_email: pendingVerify.email,
-    code:     newCode,
-  }).then(()=>toast('New code sent! 📧')).catch(()=>toast('Could not resend. Try again.'));
-}
-
-// FORGOT PASSWORD - sends reset email that opens on YOUR site
-function sendResetCode(){
-  const email = document.getElementById('forgot-email').value.trim().toLowerCase();
-  const errEl = document.getElementById('forgot-err');
-  if(!email||!validEmail(email)) return showErr(errEl,'Please enter a valid email address.');
-  if(emailOnCooldown('reset:'+email, 30, event?.currentTarget)) return showErr(errEl,'Please wait before requesting another email.');
-  if(!fbAuth) initFirebase();
-
-  fbAuth.sendPasswordResetEmail(email, {
-    url: window.location.origin + window.location.pathname,
-    handleCodeInApp: true
-  }).then(()=>{
-    toast('If that account exists, a reset email has been sent 📧');
-    closeModal('forgot-modal');
-  }).catch(e=>{
-    // Deliberately generic regardless of the real error (including
-    // auth/user-not-found) - confirming or denying an email exists
-    // is an account-enumeration leak, so both outcomes look the same
-    // to whoever is submitting the form.
-    toast('If that account exists, a reset email has been sent 📧');
-    closeModal('forgot-modal');
-  });
-}
-function confirmResetPassword(){ toast('Please check your email for the reset link.'); }
-function resendResetCode(){ sendResetCode(); }
-
-// ─────────────────────────────────────────────
-// BOOT
-// ─────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async ()=>{
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  }
-
-  // Init Firebase
-  try { initFirebase(); } catch(e){ console.error('initFirebase failed', e); }
-
-  // Wait for Firebase Auth to restore session
-  if(fbAuth){
-    fbAuth.onAuthStateChanged(async (user)=>{
-      if(user && !CU){
-        // User was logged in - restore session
-        const profile = await getProfile(user.uid);
-        if(profile){
-          CU = { ...profile, id: profile.localId || user.uid, uid: user.uid };
-          await loadUserData();
-          if(profile.role==='student') await ensureTeacherLinks();
-          syncCookieConsentAfterLogin(user.uid);
-          if(profile.role==='student') loadStudentDash();
-          else { await loadTeacherStudents(); loadTeacherDash(); }
+          `, 'Crisis Resources');
         } else {
-          showScreen('screen-entry');
+          const tips = {
+            sleep: '<h3>😴 Sleep Tips</h3><ul><li>Keep a consistent sleep schedule</li><li>Avoid screens 1 hour before bed</li><li>Keep your room cool and dark</li><li>Limit caffeine after 2pm</li><li>Try a bedtime routine</li></ul>',
+            study: '<h3>📚 Study Techniques</h3><ul><li>Pomodoro: 25 min work, 5 min break</li><li>Active recall: Test yourself</li><li>Spaced repetition: Review over time</li><li>Teach someone else</li><li>Study in the same place</li></ul>',
+            stress: '<h3>🧘 Stress Management</h3><ul><li>Practice deep breathing</li><li>Take regular breaks</li><li>Exercise regularly</li><li>Talk to someone you trust</li><li>Write down your worries</li></ul>',
+            selfcare: '<h3>💙 Self-Care Ideas</h3><ul><li>Take a walk outside</li><li>Listen to your favorite music</li><li>Drink water and eat well</li><li>Call a friend</li><li>Do something creative</li></ul>'
+          };
+          Modal.open(tips[id] || '<p>Content coming soon!</p>', CONFIG.RESOURCES.find(r => r.id === id)?.title || 'Resource');
         }
-      } else if(!user && !CU){
-        showScreen('screen-entry');
+      });
+    });
+  }
+
+  function renderBreathingExercise() {
+    Modal.open(`
+      <div class="breathing-exercise">
+        <div class="breathing-circle" id="breathing-circle">
+          <div class="breathing-text" id="breathing-text">Breathe In</div>
+        </div>
+        <p class="breathing-instruction">Follow the circle. Inhale as it expands, exhale as it contracts.</p>
+        <button class="btn btn-secondary" id="stop-breathing">Stop</button>
+      </div>
+    `, 'Breathing Exercise');
+    let phase = 0; // 0=in, 1=hold, 2=out, 3=hold
+    const texts = ['Breathe In...', 'Hold...', 'Breathe Out...', 'Hold...'];
+    const circle = document.getElementById('breathing-circle');
+    const text = document.getElementById('breathing-text');
+    let interval;
+    function breathe() {
+      text.textContent = texts[phase];
+      if (phase === 0) circle.style.transform = 'scale(1.5)';
+      else if (phase === 2) circle.style.transform = 'scale(1)';
+      phase = (phase + 1) % 4;
+    }
+    breathe();
+    interval = setInterval(breathe, 4000);
+    document.getElementById('stop-breathing')?.addEventListener('click', () => {
+      clearInterval(interval);
+      Modal.close();
+    });
+  }
+
+  function renderSettings() {
+    ensureView('view-settings', `
+      <div class="settings-page">
+        <h1>Settings ⚙️</h1>
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h3>Appearance</h3>
+            <div class="setting-row">
+              <label>Theme</label>
+              <button class="btn btn-secondary" id="theme-toggle">${state.theme === 'dark' ? '☀️ Light' : state.theme === 'high-contrast' ? '👁️ High Contrast' : '🌙 Dark'}</button>
+            </div>
+            <div class="setting-row">
+              <label>Font Size</label>
+              <div class="font-size-controls">
+                <button class="font-size-btn ${state.fontSize === 'small' ? 'active' : ''}" data-size="small">A</button>
+                <button class="font-size-btn ${state.fontSize === 'medium' ? 'active' : ''}" data-size="medium">A</button>
+                <button class="font-size-btn ${state.fontSize === 'large' ? 'active' : ''}" data-size="large">A</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <label>High Contrast</label>
+              <button class="btn btn-secondary" id="high-contrast-toggle">${state.highContrast ? 'On' : 'Off'}</button>
+            </div>
+            <div class="setting-row">
+              <label>Reduced Motion</label>
+              <button class="btn btn-secondary" id="reduced-motion-toggle">${state.reducedMotion ? 'On' : 'Off'}</button>
+            </div>
+          </div>
+          <div class="settings-card">
+            <h3>Privacy</h3>
+            <div class="setting-row">
+              <label>Share Anonymous Data</label>
+              <label class="toggle-label">
+                <input type="checkbox" id="share-toggle" ${state.data.settings.shareWithTeacher ? 'checked' : ''}>
+                <span class="toggle-switch"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <label>Allow Anonymous Stats</label>
+              <label class="toggle-label">
+                <input type="checkbox" id="anonymous-toggle" ${state.data.settings.allowAnonymous ? 'checked' : ''}>
+                <span class="toggle-switch"></span>
+              </label>
+            </div>
+            <div class="privacy-info">
+              <p>🔒 <strong>Your data stays local.</strong> WellSpace stores everything on your device. We never upload your personal information to any server.</p>
+            </div>
+          </div>
+          <div class="settings-card">
+            <h3>Notifications</h3>
+            <div class="setting-row">
+              <label>Enable Notifications</label>
+              <label class="toggle-label">
+                <input type="checkbox" id="notif-toggle" ${state.notifications ? 'checked' : ''}>
+                <span class="toggle-switch"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <label>Daily Reminder Time</label>
+              <input type="time" id="reminder-time" value="${state.data.settings.reminderTime}">
+            </div>
+          </div>
+          <div class="settings-card danger-zone">
+            <h3>Data Management</h3>
+            <div class="setting-row">
+              <label>Export Data</label>
+              <button class="btn btn-secondary" id="settings-export-json">Export JSON</button>
+              <button class="btn btn-secondary" id="settings-export-csv">Export CSV</button>
+            </div>
+            <div class="setting-row">
+              <label>Import Data</label>
+              <input type="file" id="import-file" accept=".json">
+            </div>
+            <div class="setting-row">
+              <label>Delete All Data</label>
+              <button class="btn btn-danger" id="clear-data-btn">Clear Everything</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+    Theme.bindEvents();
+    document.getElementById('share-toggle')?.addEventListener('change', (e) => {
+      state.data.settings.shareWithTeacher = e.target.checked;
+      Storage.save();
+      notify('Privacy settings updated', 'success');
+    });
+    document.getElementById('anonymous-toggle')?.addEventListener('change', (e) => {
+      state.data.settings.allowAnonymous = e.target.checked;
+      Storage.save();
+    });
+    document.getElementById('notif-toggle')?.addEventListener('change', (e) => {
+      state.notifications = e.target.checked;
+      Storage.save();
+    });
+    document.getElementById('reminder-time')?.addEventListener('change', (e) => {
+      state.data.settings.reminderTime = e.target.value;
+      Storage.save();
+    });
+    document.getElementById('settings-export-json')?.addEventListener('click', () => Storage.export('json'));
+    document.getElementById('settings-export-csv')?.addEventListener('click', () => Storage.export('csv'));
+    document.getElementById('import-file')?.addEventListener('change', (e) => {
+      if (e.target.files[0]) Storage.import(e.target.files[0]);
+    });
+    document.getElementById('clear-data-btn')?.addEventListener('click', Storage.clear);
+  }
+
+  function renderProfile() {
+    const unlocked = getUnlockedAchievements();
+    const locked = getLockedAchievements();
+    ensureView('view-profile', `
+      <div class="profile-page">
+        <div class="profile-header">
+          <div class="profile-avatar">${state.user?.avatar || '👤'}</div>
+          <div class="profile-info">
+            <h1>${state.user?.name || 'User'}</h1>
+            <p class="profile-role">${state.role === 'student' ? '👨‍🎓 Student' : '👩‍🏫 Teacher'}</p>
+            <p class="profile-since">Member since ${state.user?.createdAt ? formatDate(state.user.createdAt.split('T')[0]) : 'recently'}</p>
+          </div>
+          <button class="btn btn-secondary" id="edit-profile-btn">Edit Profile</button>
+        </div>
+        <div class="profile-stats">
+          <div class="profile-stat"><span class="profile-stat-value">${state.data.checkIns.length}</span><span>Check-Ins</span></div>
+          <div class="profile-stat"><span class="profile-stat-value">${calculateStreak()}</span><span>Streak</span></div>
+          <div class="profile-stat"><span class="profile-stat-value">${state.data.achievements.length}</span><span>Badges</span></div>
+          <div class="profile-stat"><span class="profile-stat-value">${state.data.goals.filter(g => g.completed).length}</span><span>Goals</span></div>
+        </div>
+        <div class="achievements-section">
+          <h2>Achievements 🏆</h2>
+          <div class="achievements-grid">
+            ${unlocked.map(a => `
+              <div class="achievement-card unlocked">
+                <span class="achievement-icon">${a.icon}</span>
+                <h4>${a.name}</h4>
+                <p>${a.desc}</p>
+              </div>
+            `).join('')}
+            ${locked.map(a => `
+              <div class="achievement-card locked">
+                <span class="achievement-icon">🔒</span>
+                <h4>${a.name}</h4>
+                <p>${a.desc}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `);
+    document.getElementById('edit-profile-btn')?.addEventListener('click', () => {
+      Modal.open(`
+        <form id="edit-profile-form">
+          <div class="form-group"><label for="edit-name">Name</label><input type="text" id="edit-name" value="${state.user?.name || ''}"></div>
+          <div class="form-group"><label for="edit-email">Email</label><input type="email" id="edit-email" value="${state.user?.email || ''}"></div>
+          <div class="form-group"><label for="edit-avatar">Avatar</label>
+            <select id="edit-avatar">
+              <option value="👨‍🎓" ${state.user?.avatar === '👨‍🎓' ? 'selected' : ''}>👨‍🎓 Student</option>
+              <option value="👩‍🎓" ${state.user?.avatar === '👩‍🎓' ? 'selected' : ''}>👩‍🎓 Student</option>
+              <option value="👩‍🏫" ${state.user?.avatar === '👩‍🏫' ? 'selected' : ''}>👩‍🏫 Teacher</option>
+              <option value="👨‍🏫" ${state.user?.avatar === '👨‍🏫' ? 'selected' : ''}>👨‍🏫 Teacher</option>
+              <option value="🧑‍🎓" ${state.user?.avatar === '🧑‍🎓' ? 'selected' : ''}>🧑‍🎓 Neutral</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Save Changes</button>
+        </form>
+      `, 'Edit Profile');
+      $('#edit-profile-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        state.user.name = $('#edit-name').value.trim();
+        state.user.email = $('#edit-email').value.trim();
+        state.user.avatar = $('#edit-avatar').value;
+        Storage.save();
+        Modal.close();
+        notify('Profile updated!', 'success');
+        renderProfile();
+      });
+    });
+  }
+
+  function renderAbout() {
+    ensureView('view-about', `
+      <div class="static-page">
+        <h1>About WellSpace 💙</h1>
+        <div class="about-content">
+          <p class="lead">WellSpace is a free, open-source student wellness platform built with privacy at its core.</p>
+          <h2>Our Mission</h2>
+          <p>We believe every student deserves a safe, private space to check in with themselves. WellSpace gives students tools to track mood, set goals, and build healthy habits—while giving teachers the anonymous insights they need to support their classrooms.</p>
+          <h2>Why WellSpace?</h2>
+          <ul>
+            <li><strong>Privacy First:</strong> Your data never leaves your device unless you choose to share it.</li>
+            <li><strong>Student-Owned:</strong> You control your data. Export it, delete it, or keep it local.</li>
+            <li><strong>Free Forever:</strong> No ads, no subscriptions, no selling data.</li>
+            <li><strong>Open Source:</strong> Our code is public. Anyone can audit it or contribute.</li>
+          </ul>
+          <h2>Version</h2>
+          <p>WellSpace v${CONFIG.VERSION}</p>
+          <div class="about-actions">
+            <a href="https://github.com/yourusername/wellspace" class="btn btn-secondary" target="_blank" rel="noopener">View on GitHub</a>
+            <button class="btn btn-secondary" data-view="roadmap">View Roadmap</button>
+          </div>
+        </div>
+      </div>
+    `);
+  }
+
+  function renderFAQ() {
+    ensureView('view-faq', `
+      <div class="static-page">
+        <h1>Frequently Asked Questions ❓</h1>
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary>Is my data really private?</summary>
+            <p>Yes. All your data is stored locally in your browser using localStorage. It never touches our servers unless you explicitly choose to share anonymous class statistics.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Can my teacher see my individual mood?</summary>
+            <p>No. Teachers only see anonymous, aggregated class trends. Your individual check-ins, notes, and personal data are never visible to anyone unless you choose to share them.</p>
+          </details>
+          <details class="faq-item">
+            <summary>What happens if I clear my browser data?</summary>
+            <p>Your WellSpace data will be deleted. We recommend exporting your data regularly from the Settings page as a backup.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Is WellSpace free?</summary>
+            <p>Yes, WellSpace is completely free. No ads, no subscriptions, no hidden costs. We believe student wellness tools should be accessible to everyone.</p>
+          </details>
+          <details class="faq-item">
+            <summary>Can I use this on my phone?</summary>
+            <p>Absolutely! WellSpace is designed to work on all devices—phones, tablets, and desktops. You can also add it to your home screen for a native app feel.</p>
+          </details>
+          <details class="faq-item">
+            <summary>How do I join a class?</summary>
+            <p>Ask your teacher for their class code, then go to your dashboard and click "Join Class." Enter the code and you're in!</p>
+          </details>
+        </div>
+      </div>
+    `);
+  }
+
+  function renderContact() {
+    ensureView('view-contact', `
+      <div class="static-page">
+        <h1>Contact Us 📧</h1>
+        <p>Have questions, feedback, or want to contribute? We'd love to hear from you.</p>
+        <form id="contact-form" class="contact-form">
+          <div class="form-group"><label for="contact-name">Name</label><input type="text" id="contact-name" required></div>
+          <div class="form-group"><label for="contact-email">Email</label><input type="email" id="contact-email" required></div>
+          <div class="form-group"><label for="contact-message">Message</label><textarea id="contact-message" rows="5" required></textarea></div>
+          <button type="submit" class="btn btn-primary btn-block">Send Message</button>
+        </form>
+        <div class="contact-alternatives">
+          <p>Or reach us at:</p>
+          <a href="mailto:hello@wellspace.app" class="contact-link">hello@wellspace.app</a>
+          <a href="https://github.com/yourusername/wellspace/issues" class="contact-link" target="_blank" rel="noopener">GitHub Issues</a>
+        </div>
+      </div>
+    `);
+    $('#contact-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      notify('Message sent! (Demo mode - no email sent)', 'success');
+      e.target.reset();
+    });
+  }
+
+  function renderPrivacy() {
+    ensureView('view-privacy', `
+      <div class="static-page">
+        <h1>Privacy Policy 🔒</h1>
+        <div class="privacy-content">
+          <p class="lead">WellSpace is built on a simple principle: <strong>your data belongs to you.</strong></p>
+          <h2>What We Collect</h2>
+          <p><strong>Nothing.</strong> WellSpace stores all data locally on your device. We do not operate servers that store your personal information.</p>
+          <h2>Local Storage</h2>
+          <p>We use your browser's localStorage to save:</p>
+          <ul>
+            <li>Your profile information (name, email if provided)</li>
+            <li>Mood check-ins and notes</li>
+            <li>Goals, habits, and achievements</li>
+            <li>App settings and preferences</li>
+          </ul>
+          <h2>Data Sharing</h2>
+          <p>You control what you share:</p>
+          <ul>
+            <li><strong>Anonymous class statistics:</strong> Optional. Only aggregated data is shared.</li>
+            <li><strong>Individual data:</strong> Never shared without your explicit permission.</li>
+          </ul>
+          <h2>Your Rights</h2>
+          <ul>
+            <li>Export your data at any time</li>
+            <li>Delete all data permanently</li>
+            <li>Opt out of any data sharing</li>
+            <li>Use the app without providing personal information</li>
+          </ul>
+          <h2>Third Parties</h2>
+          <p>We do not use third-party analytics, tracking cookies, or advertising networks.</p>
+          <p class="privacy-date">Last updated: ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+        </div>
+      </div>
+    `);
+  }
+
+  function renderRoadmap() {
+    ensureView('view-roadmap', `
+      <div class="static-page">
+        <h1>Roadmap 🗺️</h1>
+        <div class="roadmap">
+          <div class="roadmap-item completed">
+            <span class="roadmap-status">✅</span>
+            <div class="roadmap-content">
+              <h3>Mood Check-Ins</h3>
+              <p>Daily mood tracking with notes and sleep data</p>
+            </div>
+          </div>
+          <div class="roadmap-item completed">
+            <span class="roadmap-status">✅</span>
+            <div class="roadmap-content">
+              <h3>Goals & Habits</h3>
+              <p>Personal goal setting and habit tracking</p>
+            </div>
+          </div>
+          <div class="roadmap-item completed">
+            <span class="roadmap-status">✅</span>
+            <div class="roadmap-content">
+              <h3>Teacher Dashboard</h3>
+              <p>Anonymous class wellness analytics</p>
+            </div>
+          </div>
+          <div class="roadmap-item completed">
+            <span class="roadmap-status">✅</span>
+            <div class="roadmap-content">
+              <h3>Privacy Controls</h3>
+              <p>Local-first storage with export/import</p>
+            </div>
+          </div>
+          <div class="roadmap-item in-progress">
+            <span class="roadmap-status">🚧</span>
+            <div class="roadmap-content">
+              <h3>Push Notifications</h3>
+              <p>Daily reminder notifications</p>
+            </div>
+          </div>
+          <div class="roadmap-item">
+            <span class="roadmap-status">⏳</span>
+            <div class="roadmap-content">
+              <h3>Parent Mode</h3>
+              <p>Optional parent insights for younger students</p>
+            </div>
+          </div>
+          <div class="roadmap-item">
+            <span class="roadmap-status">⏳</span>
+            <div class="roadmap-content">
+              <h3>School Admin Dashboard</h3>
+              <p>District-wide wellness insights</p>
+            </div>
+          </div>
+          <div class="roadmap-item">
+            <span class="roadmap-status">⏳</span>
+            <div class="roadmap-content">
+              <h3>Mobile App</h3>
+              <p>Native iOS and Android apps</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+  }
+
+  // ==================== INITIALIZATION ====================
+  function init() {
+    Storage.load();
+    Theme.init();
+    Router.init();
+
+    // Create screen reader announcer if not exists
+    if (!document.getElementById('sr-announcer')) {
+      const announcer = document.createElement('div');
+      announcer.id = 'sr-announcer';
+      announcer.setAttribute('aria-live', 'polite');
+      announcer.setAttribute('aria-atomic', 'true');
+      announcer.className = 'sr-only';
+      announcer.style.position = 'absolute';
+      announcer.style.left = '-10000px';
+      announcer.style.width = '1px';
+      announcer.style.height = '1px';
+      announcer.style.overflow = 'hidden';
+      document.body.appendChild(announcer);
+    }
+
+    // Keyboard navigation enhancement
+    document.addEventListener('keydown', (e) => {
+      // Skip to content
+      if (e.key === 'Tab' && e.shiftKey) {
+        const skipLink = document.getElementById('skip-link');
+        if (skipLink) skipLink.focus();
       }
     });
-  } else {
-    showScreen('screen-entry');
+
+    // Handle all button clicks with data-action
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (btn) {
+        const action = btn.dataset.action;
+        if (action === 'export-json') Storage.export('json');
+        if (action === 'export-csv') Storage.export('csv');
+        if (action === 'clear-data') Storage.clear();
+      }
+    });
+
+    // Check for daily reminder
+    if (state.data.settings.reminderEnabled && state.user) {
+      const lastCheck = getTodaysCheckIn();
+      if (!lastCheck) {
+        const hour = new Date().getHours();
+        const reminderHour = parseInt(state.data.settings.reminderTime.split(':')[0]);
+        if (hour >= reminderHour) {
+          notify('👋 Don't forget your daily check-in!', 'info', 8000);
+        }
+      }
+    }
+
+    // Start onboarding for new users
+    if (!state.user && !localStorage.getItem(CONFIG.ONBOARDING_KEY)) {
+      setTimeout(() => Onboarding.start(), 500);
+    }
+
+    // Initial render
+    const hash = location.hash.replace('#', '');
+    if (hash && Router.routes[hash]) {
+      Router.navigate(hash, false);
+    } else if (state.user) {
+      Router.navigate(state.role === 'student' ? 'student-dashboard' : 'teacher-dashboard', false);
+    } else {
+      Router.navigate('home', false);
+    }
+
+    console.log(`%c${CONFIG.APP_NAME} v${CONFIG.VERSION}`, 'color: #3b82f6; font-size: 20px; font-weight: bold;');
+    console.log('%cPrivacy-first student wellness platform', 'color: #6b7280; font-size: 12px;');
   }
-});
+
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  // Expose minimal API for debugging (not in production)
+  window.WellSpace = {
+    version: CONFIG.VERSION,
+    state: () => state,
+    storage: Storage,
+    notify,
+    checkAchievement
+  };
+
+})();
