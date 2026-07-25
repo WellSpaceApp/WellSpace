@@ -1,50 +1,840 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light" data-font-size="medium">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WellSpace</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!--
+    Security headers achievable on static GitHub Pages hosting (no server = no
+    real HTTP headers, so this is the meta-tag equivalent, which browsers do
+    honor for CSP and Referrer-Policy specifically).
+    Honest limitation: script-src includes 'unsafe-inline' because the app
+    uses onclick="" attributes throughout script.js/index.html. That means
+    this CSP does NOT stop inline-script based XSS - only the earlier
+    escapeHtml() fixes do that. What this DOES still block: loading any
+    script from a domain that isn't explicitly allow-listed below, which
+    stops a large class of data-exfiltration and third-party-script attacks.
+    X-Frame-Options, X-Content-Type-Options, and HSTS have no meta-tag
+    equivalent - those require a real HTTP header, which means either a
+    server or a CDN like Cloudflare in front of GitHub Pages.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.gstatic.com https://api.emailjs.com; frame-src 'self' https://*.firebaseapp.com; base-uri 'self'; form-action 'self';">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>WellSpace - Student Wellness & Productivity</title>
+  <meta name="description" content="WellSpace is a free wellness platform for high school students and teachers. Students track mood, sleep, energy, goals, and journal entries privately; teachers see classroom wellness trends and get alerts when a student may need support. Built for schools, not advertisers."/>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "WellSpace",
+    "url": "https://wellspaceapp.github.io/WellSpace/",
+    "description": "WellSpace is a free wellness platform for high school students and teachers. Students track mood, sleep, energy, goals, and journal entries privately; teachers see classroom wellness trends and get alerts when a student may need support.",
+    "applicationCategory": "EducationApplication",
+    "operatingSystem": "Any (web browser)",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "audience": [
+      { "@type": "EducationalAudience", "educationalRole": "student" },
+      { "@type": "EducationalAudience", "educationalRole": "teacher" }
+    ],
+    "publisher": {
+      "@type": "Organization",
+      "name": "WellSpace",
+      "url": "https://wellspaceapp.github.io/WellSpace/",
+      "email": "wellspacewebsite@gmail.com"
+    }
+  }
+  </script>
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="theme-color" content="#0f2942"/>
+  <meta property="og:type" content="website" />
+<meta property="og:url" content="https://wellspaceapp.github.io/WellSpace/" />
+<meta property="og:title" content="WellSpace - Student Wellness Web App" />
+<meta property="og:description" content="Free wellness platform for high school students and educators. Private mood check-ins, goal tracking, and teacher dashboards. No download required." />
+<meta property="og:image" content="https://wellspaceapp.github.io/WellSpace/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="WellSpace - Student Wellness Web App" />
+<meta name="twitter:description" content="Free wellness platform for high school students and educators. Private mood check-ins, goal tracking, and teacher dashboards." />
+<meta name="twitter:image" content="https://wellspaceapp.github.io/WellSpace/og-image.png" />
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="WellSpace"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"/>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:wght@600;700&display=swap" rel="stylesheet"/>
+  <style>:root{--font:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;--font-d:'Fraunces',Georgia,'Times New Roman',serif}</style>
 </head>
 <body>
-  <!-- Skip link for accessibility -->
-  <a href="#main-content" id="skip-link" class="sr-only">Skip to main content</a>
 
-  <header class="app-header">
-    <button class="nav-toggle" aria-label="Toggle navigation">☰</button>
-    <a href="#home" class="logo" data-view="home">WellSpace</a>
-    <nav class="main-nav">
-      <!-- These show/hide based on role via CSS if you want, or let the script handle it -->
-      <a href="#student-dashboard" class="nav-link" data-view="student-dashboard">Dashboard</a>
-      <a href="#checkin" class="nav-link" data-view="checkin">Check-In</a>
-      <a href="#goals" class="nav-link" data-view="goals">Goals</a>
-      <a href="#habits" class="nav-link" data-view="habits">Habits</a>
-      <a href="#calendar" class="nav-link" data-view="calendar">Calendar</a>
-      <a href="#analytics" class="nav-link" data-view="analytics">Analytics</a>
-      <a href="#resources" class="nav-link" data-view="resources">Resources</a>
-      <a href="#settings" class="nav-link" data-view="settings">Settings</a>
-      <a href="#profile" class="nav-link" data-view="profile">Profile</a>
-    </nav>
-    <div class="header-actions">
-      <button id="theme-toggle" class="btn-icon" aria-label="Switch theme">🌙</button>
+<a href="#" class="skip-link" onclick="event.preventDefault(); const m = document.getElementById('s-main').offsetParent ? 's-main' : (document.getElementById('t-main').offsetParent ? 't-main' : null); if(m){ const el=document.getElementById(m); el.setAttribute('tabindex','-1'); el.focus(); }">Skip to main content</a>
+
+<!-- COOKIE CONSENT BANNER -->
+<div id="cookie-banner" class="cookie-banner hidden">
+  <div class="cookie-banner-inner">
+    <p class="cookie-text">
+      🍪 We use a small amount of website analytics (Google Analytics) to see how many people visit WellSpace and which pages are useful - never your mood check-ins, journal entries, or any personal info. Read our <a href="#" onclick="openModal('cookie-policy-modal');return false;">Cookie Policy</a>.
+    </p>
+    <div class="cookie-actions">
+      <button class="btn-outline small" onclick="setCookieConsent(false)">Decline</button>
+      <button class="btn-main small" onclick="setCookieConsent(true)">Accept</button>
     </div>
-  </header>
+  </div>
+</div>
 
-  <main id="main-content">
-    <!-- Views are auto-generated by script.js, but you CAN pre-define them if you want -->
-  </main>
-
-  <footer class="app-footer">
-    <div class="footer-links">
-      <a href="#about" data-view="about">About</a>
-      <a href="#faq" data-view="faq">FAQ</a>
-      <a href="#contact" data-view="contact">Contact</a>
-      <a href="#privacy" data-view="privacy">Privacy</a>
-      <a href="#roadmap" data-view="roadmap">Roadmap</a>
+<!-- ENTRY SCREEN -->
+<div id="screen-entry" class="screen active">
+  <div class="entry-bg">
+    <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
+  </div>
+  <div class="entry-glass">
+    <div class="entry-brand"><span class="brand-leaf">🌿</span><span class="brand-name">WellSpace</span></div>
+    <p class="entry-sub">Wellness · Productivity · Balance</p>
+    <div class="entry-cards">
+      <button class="role-card student-card" onclick="gotoAuth('student')">
+        <div class="role-icon">🎒</div>
+        <div class="role-text">
+          <div class="role-label">I'm a Student</div>
+          <div class="role-desc">Track moods, goals & stay on track</div>
+        </div>
+        <span class="role-arrow">→</span>
+      </button>
+      <button class="role-card teacher-card" onclick="gotoAuth('teacher')">
+        <div class="role-icon">📋</div>
+        <div class="role-text">
+          <div class="role-label">I'm a Teacher</div>
+          <div class="role-desc">Manage classes & support students</div>
+        </div>
+        <span class="role-arrow">→</span>
+      </button>
     </div>
-    <p class="footer-copy">WellSpace v2.0.0 • Open Source • Built for Students</p>
-  </footer>
+    <p class="entry-help-note">Need mental health support right now? <a href="#" onclick="showHelplines()">Click here</a> - no account needed.</p>
+  </div>
+</div>
 
-  <script src="script.js"></script>
+<!-- QUICK HELPLINES -->
+<div id="quick-helplines" class="screen">
+  <div class="helpline-full">
+    <button class="back-link" onclick="showScreen('screen-entry')">← Back</button>
+    <div id="quick-helpline-content"></div>
+  </div>
+</div>
+
+<!-- AUTH SCREEN -->
+<div id="screen-auth" class="screen">
+  <div class="auth-bg"></div>
+  <div class="auth-container">
+    <button class="back-link" onclick="showScreen('screen-entry')">← Back</button>
+    <div class="auth-card" id="auth-card">
+      <div class="auth-brand" id="auth-brand-label"></div>
+      <div class="auth-tabs">
+        <button class="atab active" id="atab-login" onclick="authTab('login')">Log In</button>
+        <button class="atab" id="atab-signup" onclick="authTab('signup')">Sign Up</button>
+      </div>
+      <div id="form-login">
+        <div class="fgroup">
+          <label for="login-email">Email Address</label>
+          <input type="email" id="login-email" placeholder="you@email.com" autocomplete="email"/>
+        </div>
+        <div class="fgroup">
+          <label for="login-pass">Password</label>
+          <div class="pw-wrap">
+            <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/>
+            <button class="pw-toggle" onclick="togglePw('login-pass',this)">👁</button>
+          </div>
+        </div>
+        <div id="login-err" class="ferr hidden"></div>
+        <button class="btn-main" onclick="doLogin()">Log In</button>
+        <p style="text-align:center;margin-top:12px;font-size:.85rem">
+          <a href="#" onclick="openModal('forgot-modal')" style="color:var(--blue)">Forgot your password? 🔑 Reset Password</a>
+        </p>
+      </div>
+      <div id="form-signup" class="hidden">
+        <div class="fgroup">
+          <label for="su-name">Full Name</label>
+          <input type="text" id="su-name" placeholder="Your full name"/>
+        </div>
+        <div class="fgroup">
+          <label for="su-email">Email Address</label>
+          <input type="email" id="su-email" placeholder="you@school.ca"/>
+          <span class="field-hint">Must be a valid email (e.g. name@school.ca)</span>
+        </div>
+        <div class="fgroup">
+          <label for="su-pass">Password</label>
+          <div class="pw-wrap">
+            <input type="password" id="su-pass" placeholder="Create password" oninput="checkPwStrength(this.value)"/>
+            <button class="pw-toggle" onclick="togglePw('su-pass',this)">👁</button>
+          </div>
+          <div id="pw-strength-bar"><div id="pw-strength-fill"></div></div>
+          <ul class="pw-rules" id="pw-rules">
+            <li id="r-len">At least 8 characters</li>
+            <li id="r-upper">One uppercase letter</li>
+            <li id="r-num">One number</li>
+            <li id="r-special">One special character (!@#$...)</li>
+          </ul>
+        </div>
+        <div id="su-student-fields">
+          <div class="fgroup">
+            <label for="su-grade">Grade</label>
+            <select id="su-grade">
+              <option value="">Select grade…</option>
+              <option>Grade 9</option><option>Grade 10</option>
+              <option>Grade 11</option><option>Grade 12</option>
+              <option>University Year 1</option><option>University Year 2</option>
+              <option>University Year 3</option><option>University Year 4</option>
+            </select>
+          </div>
+          <div class="fgroup">
+            <label>Class Code <span class="opt-label">(optional - from your teacher)</span></label>
+            <input aria-label="e.g. ENG2D-2024" type="text" id="su-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
+            <span class="field-hint">You can join a class later too</span>
+          </div>
+        </div>
+        <div id="su-teacher-fields" class="hidden">
+          <div class="fgroup">
+            <label for="su-province">Province / Territory</label>
+            <select id="su-province">
+              <option value="">Select province…</option>
+              <option>Ontario</option><option>British Columbia</option>
+              <option>Alberta</option><option>Quebec</option>
+              <option>Nova Scotia</option><option>New Brunswick</option>
+              <option>Manitoba</option><option>Saskatchewan</option>
+              <option>PEI</option><option>Newfoundland & Labrador</option>
+              <option>Northwest Territories</option><option>Nunavut</option><option>Yukon</option>
+            </select>
+          </div>
+          <div class="fgroup">
+            <label for="su-school">School Name</label>
+            <input type="text" id="su-school" placeholder="e.g. Westview Secondary School"/>
+          </div>
+        </div>
+        <div class="privacy-check">
+          <input type="checkbox" id="su-privacy"/>
+          <label for="su-privacy">I agree to the <a href="./privacy.html" target="_blank">Privacy Policy</a> - my data is private and never shared without consent</label>
+        </div>
+        <div id="signup-err" class="ferr hidden"></div>
+        <button class="btn-main" onclick="startSignupVerification()">Create Account</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STUDENT DASHBOARD -->
+<div id="screen-student" class="screen">
+  <div class="app-layout">
+    <aside class="sidebar" id="s-sidebar">
+      <div class="sb-brand"><span>🌿</span> WellSpace</div>
+      <nav class="sb-nav">
+        <a class="sn active" onclick="sSection('home')"    ><i>🏠</i> Home</a>
+        <a class="sn"        onclick="sSection('mood')"    ><i>😊</i> Mood Check</a>
+        <a class="sn"        onclick="sSection('goals')"   ><i>🎯</i> Goals</a>
+        <a class="sn"        onclick="sSection('calendar')"><i>📅</i> Calendar</a>
+        <a class="sn"        onclick="sSection('stats')"   ><i>📊</i> My Stats</a>
+        <a class="sn"        onclick="sSection('wellness')"><i>🌱</i> Wellness</a>
+        <a class="sn"        onclick="sSection('help')"    ><i>💙</i> Help & Crisis</a>
+        <a class="sn"        onclick="sSection('classes')" ><i>🏫</i> My Classes</a>
+        <a class="sn"        onclick="sSection('profile')" ><i>👤</i> My Profile</a>
+      </nav>
+      <div class="sb-foot">
+        <button class="sb-logout" onclick="logout()">Log Out</button>
+      </div>
+    </aside>
+    <main class="app-main" id="s-main">
+      <header class="app-header">
+        <button class="ham" onclick="toggleSB('s-sidebar')">☰</button>
+        <div class="hdr-info"><h2 id="s-greet"></h2><p id="s-date"></p></div>
+        <div class="hdr-av" id="s-av">S</div>
+      </header>
+
+      <!-- HOME -->
+      <section class="dsec active" id="s-sec-home">
+        <div class="home-banner" id="s-home-banner"></div>
+        <div class="home-grid">
+          <div class="home-quick-card" onclick="sSection('mood')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('mood')}"><span>😊</span><strong>Check Mood</strong><p>Log today's feelings</p></div>
+          <div class="home-quick-card" onclick="sSection('goals')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('goals')}"><span>🎯</span><strong>Goals</strong><p>View & add tasks</p></div>
+          <div class="home-quick-card" onclick="sSection('wellness')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('wellness')}"><span>🌱</span><strong>Wellness</strong><p>Sleep, habits & more</p></div>
+        </div>
+        <div id="s-home-goals-preview"></div>
+      </section>
+
+      <!-- MOOD CHECK -->
+      <section class="dsec" id="s-sec-mood">
+        <div class="sec-hdr"><h3>Daily Mood Check</h3><p>How are you feeling in each period today?</p></div>
+        <div id="s-mood-list"></div>
+      </section>
+
+      <!-- GOALS -->
+      <section class="dsec" id="s-sec-goals">
+        <div class="sec-hdr"><h3>Weekly Goals & Planner</h3><p>Stay on track - one task at a time</p></div>
+        <div class="goals-toolbar">
+          <select id="goal-cls-sel" class="sel" onchange="renderGoals()" aria-label="Filter tasks by class"></select>
+          <button class="btn-main small" onclick="openGoalModal()">+ Add Task</button>
+        </div>
+        <div id="goals-container"></div>
+      </section>
+
+      <!-- CALENDAR -->
+      <section class="dsec" id="s-sec-calendar">
+        <div class="sec-hdr"><h3>Weekly Calendar</h3><p>Your full week at a glance</p></div>
+        <div id="cal-wrap" class="cal-wrap"></div>
+      </section>
+
+      <!-- STATS -->
+      <section class="dsec" id="s-sec-stats">
+        <div class="sec-hdr"><h3>My Stats</h3><p>Your progress over time</p></div>
+        <div id="stats-cards" class="stats-grid"></div>
+        <h4 class="sub-hdr">Mood History</h4>
+        <div id="mood-history"></div>
+      </section>
+
+      <!-- WELLNESS -->
+      <section class="dsec" id="s-sec-wellness">
+        <div class="sec-hdr"><h3>🌱 Wellness Tracker</h3><p>Private - only visible to you (unless you choose to share)</p></div>
+        <div class="wellness-grid">
+          <div class="wcard">
+            <h4>😴 Hours Slept Last Night</h4>
+            <div class="sleep-input-row">
+              <input aria-label="e.g. 7.5" type="number" id="w-sleep" min="0" max="24" step="0.5" placeholder="e.g. 7.5"/>
+              <select id="w-sleep-quality" aria-label="Sleep quality">
+                <option value="">Sleep quality…</option>
+                <option>Great</option><option>Okay</option><option>Poor</option>
+              </select>
+            </div>
+            <div class="share-toggle" id="sleep-share-row">
+              <input type="checkbox" id="share-sleep"/>
+              <label for="share-sleep">Send to a teacher</label>
+              <select id="sleep-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share sleep log with"></select>
+            </div>
+            <button class="btn-main small" onclick="logWellness('sleep')">Log Sleep</button>
+            <div id="sleep-log-display" class="wlog-display"></div>
+          </div>
+          <div class="wcard">
+            <h4>📋 Today's Responsibilities</h4>
+            <div class="resp-input-row">
+              <input aria-label="e.g. babysit sibling, part-time job" type="text" id="w-resp" placeholder="e.g. babysit sibling, part-time job…"/>
+            </div>
+            <div class="share-toggle" id="resp-share-row">
+              <input type="checkbox" id="share-resp"/>
+              <label for="share-resp">Send to a teacher</label>
+              <select id="resp-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share responsibilities with"></select>
+            </div>
+            <button class="btn-main small" onclick="logWellness('resp')">Add</button>
+            <div id="resp-log-display" class="wlog-display"></div>
+          </div>
+          <div class="wcard">
+            <h4>⚡ Energy & Hydration</h4>
+            <div class="fgroup">
+              <label for="w-energy">Energy Level (1-10)</label>
+              <input type="range" id="w-energy" min="1" max="10" value="5" oninput="document.getElementById('energy-val').textContent=this.value"/>
+              <span id="energy-val">5</span>
+            </div>
+            <div class="fgroup">
+              <label for="w-water">Glasses of water today</label>
+              <input type="number" id="w-water" min="0" max="20" placeholder="8"/>
+            </div>
+            <div class="share-toggle" id="energy-share-row">
+              <input type="checkbox" id="share-energy"/>
+              <label for="share-energy">Send to a teacher</label>
+              <select id="energy-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share energy log with"></select>
+            </div>
+            <button class="btn-main small" onclick="logWellness('energy')">Log</button>
+          </div>
+          <div class="wcard">
+            <h4>📝 Private Journal Note</h4>
+            <textarea id="w-journal" rows="4" placeholder="Write anything - thoughts, worries, wins…"></textarea>
+            <p class="privacy-note">🔒 This is always private. Never shared with anyone.</p>
+            <button class="btn-main small" onclick="saveJournal()">Save Note</button>
+            <div id="journal-saved" class="hidden" style="color:var(--green);font-size:.85rem;margin-top:6px">✓ Saved privately</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HELP & CRISIS -->
+      <section class="dsec" id="s-sec-help">
+        <div class="sec-hdr"><h3>💙 Help & Crisis Support</h3><p>You're not alone - real people are available 24/7</p></div>
+        <div id="help-content"></div>
+      </section>
+
+      <!-- MY CLASSES -->
+      <section class="dsec" id="s-sec-classes">
+        <div class="sec-hdr"><h3>🏫 My Classes</h3><p>Classes you've joined via teacher codes</p></div>
+        <div class="join-class-row">
+          <input aria-label="Enter class code from your teacher" type="text" id="join-code" placeholder="Enter class code from your teacher…" style="text-transform:uppercase"/>
+          <button class="btn-main small" onclick="joinClass()">Join Class</button>
+        </div>
+        <div id="s-classes-list"></div>
+        <div id="period-order-wrap" class="hidden">
+          <h4 style="margin:20px 0 6px;color:var(--navy)">Arrange Your Periods in Order</h4>
+          <p class="field-hint">Use the arrows to reorder</p>
+          <div id="period-order-list" class="period-order-list"></div>
+          <button class="btn-main small" onclick="savePeriodOrder()">Save Order</button>
+        </div>
+      </section>
+
+      <!-- MY PROFILE -->
+      <section class="dsec" id="s-sec-profile">
+        <div class="sec-hdr"><h3>👤 My Profile</h3><p>Manage your account and responsibilities</p></div>
+        <div class="profile-grid">
+          <div class="profile-card">
+            <div class="profile-avatar-row">
+              <div class="profile-big-av" id="s-profile-av">A</div>
+              <div>
+                <h3 id="s-profile-name"></h3>
+                <p id="s-profile-email" style="color:var(--muted);font-size:.88rem"></p>
+                <span id="s-profile-grade" class="cls-code-badge" style="margin-top:6px;display:inline-block"></span>
+              </div>
+            </div>
+            <div class="profile-section-title">Edit Name</div>
+            <div class="fgroup"><label for="s-edit-name">Full Name</label><input type="text" id="s-edit-name" placeholder="Your name"/></div>
+            <div class="profile-section-title">Change Password</div>
+            <div class="fgroup"><label for="s-old-pass">Current Password</label><input type="password" id="s-old-pass" placeholder="••••••••"/></div>
+            <div class="fgroup"><label for="s-new-pass">New Password</label><input type="password" id="s-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+            <div id="s-profile-err" class="ferr hidden"></div>
+            <div id="s-profile-ok" class="success-note hidden">✓ Profile updated!</div>
+            <button class="btn-main small" onclick="saveStudentProfile()">Save Changes</button>
+          </div>
+          <div class="profile-card">
+            <h4 style="color:var(--navy);margin-bottom:4px">📋 My Responsibilities</h4>
+            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Add things outside of school - work, family, sports, etc.</p>
+            <div class="fgroup"><label for="resp-text">Responsibility</label><input type="text" id="resp-text" placeholder="e.g. Part-time job, babysit siblings…"/></div>
+            <div class="fgroup"><label for="resp-when">Days / When</label><input type="text" id="resp-when" placeholder="e.g. Mon-Wed 4-8pm"/></div>
+            <div class="fgroup"><label for="resp-hours">Hours per week (approx)</label><input type="number" id="resp-hours" min="0" max="80" placeholder="e.g. 15"/></div>
+            <div class="share-toggle" style="margin-bottom:14px">
+              <input type="checkbox" id="resp-share"/>
+              <label for="resp-share">Share this with my teacher so they understand my workload</label>
+            </div>
+            <button class="btn-main small" onclick="addResponsibility()">Add Responsibility</button>
+            <div id="resp-list" style="margin-top:16px;display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+          <div class="profile-card danger-card">
+            <h4>⚠️ Account Actions</h4>
+            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">These actions are permanent and cannot be undone.</p>
+            <button class="btn-outline" onclick="showPrivacy()" style="margin-bottom:12px">🔒 View Privacy Policy</button>
+            <button class="btn-outline" onclick="showCookiePolicy()" style="margin-bottom:12px">🍪 View Cookie Policy</button>
+            <button class="btn-outline" onclick="toggleCookieConsent()" style="margin-bottom:12px" id="s-cookie-toggle-btn">🍪 Manage Cookie Preference</button>
+            <button class="btn-danger" onclick="confirmDeleteAccount('student')">🗑 Delete My Account</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- TEACHER DASHBOARD -->
+<div id="screen-teacher" class="screen">
+  <div class="app-layout">
+    <aside class="sidebar teacher-sb" id="t-sidebar">
+      <div class="sb-brand"><span>📋</span> WellSpace</div>
+      <nav class="sb-nav">
+        <a class="sn active" onclick="tSection('overview')"><i>🏠</i> Overview</a>
+        <a class="sn"        onclick="tSection('classes')" ><i>📚</i> Classes</a>
+        <a class="sn"        onclick="tSection('students')"><i>👥</i> Students</a>
+        <a class="sn"        onclick="tSection('moods')"   ><i>😊</i> Mood Reports</a>
+        <a class="sn"        onclick="tSection('wellness')"><i>🌱</i> Wellness Data</a>
+        <a class="sn"        onclick="tSection('goals')"   ><i>🎯</i> Goals</a>
+        <a class="sn"        onclick="tSection('alerts')"  ><i>⚠️</i> Alerts <span class="nbadge" id="t-alert-badge">0</span></a>
+        <a class="sn"        onclick="tSection('help')"    ><i>💙</i> Help Resources</a>
+        <a class="sn"        onclick="tSection('settings')"><i>⚙️</i> Settings</a>
+        <a class="sn"        onclick="tSection('profile')" ><i>👤</i> My Profile</a>
+      </nav>
+      <div class="sb-foot"><button class="sb-logout" onclick="logout()">Log Out</button></div>
+    </aside>
+    <main class="app-main" id="t-main">
+      <header class="app-header teacher-hdr">
+        <button class="ham" onclick="toggleSB('t-sidebar')">☰</button>
+        <div class="hdr-info"><h2 id="t-greet"></h2><p id="t-date"></p></div>
+        <div class="hdr-av teacher-av" id="t-av">T</div>
+      </header>
+      <section class="dsec active" id="t-sec-overview">
+        <div id="t-stats-row" class="t-stats-row"></div>
+        <div id="t-alerts-preview"></div>
+      </section>
+      <section class="dsec" id="t-sec-classes">
+        <div class="sec-hdr"><h3>📚 My Classes</h3><p>Create classes and share codes with students</p></div>
+        <button class="btn-main" onclick="openClassModal()">+ Create Class</button>
+        <div id="t-classes-grid" class="t-classes-grid"></div>
+      </section>
+      <section class="dsec" id="t-sec-students">
+        <div class="sec-hdr"><h3>👥 My Students</h3></div>
+        <div class="t-filter-row">
+          <input aria-label="Search students" type="text" id="t-search" class="search-inp" placeholder="Search students…" oninput="renderStudentTable()"/>
+          <select id="t-cls-filter" class="sel" onchange="renderStudentTable()" aria-label="Filter students by class"><option value="">All Classes</option></select>
+        </div>
+        <div id="t-student-table"></div>
+      </section>
+      <section class="dsec" id="t-sec-moods">
+        <div class="sec-hdr"><h3>😊 Mood Reports</h3><p>Shared moods from your students</p></div>
+        <div id="t-mood-grid" class="t-mood-grid"></div>
+      </section>
+      <section class="dsec" id="t-sec-wellness">
+        <div class="sec-hdr"><h3>🌱 Student Wellness Data</h3><p>Only data students chose to share</p></div>
+        <div id="t-wellness-table"></div>
+      </section>
+      <section class="dsec" id="t-sec-goals">
+        <div class="sec-hdr"><h3>🎯 Student Goals</h3></div>
+        <div id="t-goals-list"></div>
+      </section>
+      <section class="dsec" id="t-sec-alerts">
+        <div class="sec-hdr"><h3>⚠️ Students Needing Support</h3><p>Based on shared mood check-ins</p></div>
+        <div id="t-alerts-list"></div>
+      </section>
+      <section class="dsec" id="t-sec-help">
+        <div class="sec-hdr"><h3>💙 Wellness Resources</h3></div>
+        <div id="t-help-content"></div>
+      </section>
+      <section class="dsec" id="t-sec-settings">
+        <div class="sec-hdr"><h3>⚙️ Account Settings</h3></div>
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h4>School Social Worker</h4>
+            <p class="field-hint">Students who need help will see this contact info</p>
+            <div class="fgroup"><label for="sw-name">Social Worker Name</label><input type="text" id="sw-name" placeholder="e.g. Ms. Thompson"/></div>
+            <div class="fgroup"><label for="sw-email">Social Worker Email</label><input type="email" id="sw-email" placeholder="mthompson@school.ca"/></div>
+            <button class="btn-main small" onclick="saveSocialWorker()">Save Contact</button>
+            <div id="sw-saved" class="hidden success-note">✓ Saved</div>
+          </div>
+          <div class="settings-card">
+            <h4>Province / Territory</h4>
+            <select id="t-province-setting" class="sel" aria-label="Province or territory"></select>
+            <button class="btn-main small" onclick="saveProvince()" style="margin-top:10px">Update Province</button>
+          </div>
+          <div class="settings-card">
+            <h4>Account Info</h4>
+            <div id="t-account-info"></div>
+          </div>
+        </div>
+      </section>
+      <section class="dsec" id="t-sec-profile">
+        <div class="sec-hdr"><h3>👤 My Profile</h3></div>
+        <div class="profile-grid">
+          <div class="profile-card">
+            <div class="profile-avatar-row">
+              <div class="profile-big-av teacher-av" id="t-profile-av">T</div>
+              <div>
+                <h3 id="t-profile-name"></h3>
+                <p id="t-profile-email" style="color:var(--muted);font-size:.88rem"></p>
+                <p id="t-profile-school" style="color:var(--muted);font-size:.82rem;margin-top:2px"></p>
+              </div>
+            </div>
+            <div class="profile-section-title">Edit Details</div>
+            <div class="fgroup"><label for="t-edit-name">Full Name</label><input type="text" id="t-edit-name" placeholder="Your name"/></div>
+            <div class="fgroup"><label for="t-edit-school">School Name</label><input type="text" id="t-edit-school" placeholder="Your school"/></div>
+            <div class="profile-section-title">Change Password</div>
+            <div class="fgroup"><label for="t-old-pass">Current Password</label><input type="password" id="t-old-pass" placeholder="••••••••"/></div>
+            <div class="fgroup"><label for="t-new-pass">New Password</label><input type="password" id="t-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+            <div id="t-profile-err" class="ferr hidden"></div>
+            <div id="t-profile-ok" class="success-note hidden">✓ Profile updated!</div>
+            <button class="btn-main small" onclick="saveTeacherProfile()">Save Changes</button>
+          </div>
+          <div class="profile-card">
+            <h4 style="color:var(--navy);margin-bottom:4px">📋 Student Responsibilities (Shared)</h4>
+            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Responsibilities students chose to share with you</p>
+            <div id="t-resp-view"></div>
+          </div>
+          <div class="profile-card danger-card">
+            <h4>⚠️ Account Actions</h4>
+            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">Deleting your account will remove all your classes and student associations.</p>
+         <button class="btn-outline" onclick="showPrivacy()" style="margin-bottom:12px">🔒 View Privacy Policy</button>
+            <button class="btn-outline" onclick="showCookiePolicy()" style="margin-bottom:12px">🍪 View Cookie Policy</button>
+            <button class="btn-outline" onclick="toggleCookieConsent()" style="margin-bottom:12px" id="t-cookie-toggle-btn">🍪 Manage Cookie Preference</button>
+            <button class="btn-danger" onclick="confirmDeleteAccount('teacher')">🗑 Delete My Account</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- MODALS -->
+
+<!-- GOAL MODAL -->
+<div id="goal-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="goal-modal-title">
+    <div class="modal-hdr"><h3 id="goal-modal-title">➕ Add Task</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('goal-modal')">✕</button></div>
+    <div class="fgroup"><label for="gm-task">Task Name</label><input type="text" id="gm-task" placeholder="e.g. Study Chapter 5"/></div>
+    <div class="fgroup"><label for="gm-day">Day</label>
+      <select id="gm-day">
+        <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+        <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+      </select></div>
+    <div class="fgroup two-col">
+      <div><label for="gm-time">Start Time</label><input type="time" id="gm-time" value="09:00"/></div>
+      <div><label for="gm-dur">Duration</label>
+        <select id="gm-dur">
+          <option>30 min</option><option>45 min</option><option>1 hour</option>
+          <option>1.5 hours</option><option>2 hours</option><option>2.5 hours</option><option>3 hours</option>
+        </select></div>
+    </div>
+    <div class="fgroup"><label for="gm-type">Type</label>
+      <select id="gm-type">
+        <option value="study">📖 Study / Homework</option>
+        <option value="gym">🏋️ Gym / Sport</option>
+        <option value="rest">😴 Rest / Break</option>
+        <option value="personal">🏠 Personal / Chores</option>
+        <option value="social">👥 Social</option>
+        <option value="other">📌 Other</option>
+      </select></div>
+    <div class="fgroup"><label for="gm-class">Class (optional)</label>
+      <select id="gm-class"><option value=""> - No specific class - </option></select></div>
+    <div class="modal-foot">
+      <button class="btn-main" onclick="addGoal()">Add Task</button>
+      <button class="btn-outline" onclick="closeModal('goal-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLASS MODAL -->
+<div id="class-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
+    <div class="modal-hdr"><h3 id="class-modal-title">➕ Create Class</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('class-modal')">✕</button></div>
+    <div class="fgroup"><label for="cm-subject">Subject Name</label><input type="text" id="cm-subject" placeholder="e.g. English - Grade 10 (ENG2D)"/></div>
+    <div class="fgroup two-col">
+      <div><label for="cm-start">Start Time</label><input type="time" id="cm-start" value="09:00"/></div>
+      <div><label for="cm-end">End Time</label><input type="time" id="cm-end" value="09:45"/></div>
+    </div>
+    <div class="fgroup"><label>Days</label>
+      <div class="day-check-row">
+        <label><input type="checkbox" name="cm-day" value="Monday"/> Mon</label>
+        <label><input type="checkbox" name="cm-day" value="Tuesday"/> Tue</label>
+        <label><input type="checkbox" name="cm-day" value="Wednesday"/> Wed</label>
+        <label><input type="checkbox" name="cm-day" value="Thursday"/> Thu</label>
+        <label><input type="checkbox" name="cm-day" value="Friday"/> Fri</label>
+      </div>
+    </div>
+    <div class="fgroup">
+      <label>Class Banner Color</label>
+      <div class="banner-color-row">
+        <label class="color-opt"><input aria-label="Blue" type="radio" name="cm-color" value="#1d5fa6" checked/><span style="background:#1d5fa6"></span></label>
+        <label class="color-opt"><input aria-label="Green" type="radio" name="cm-color" value="#2e9e6b"/><span style="background:#2e9e6b"></span></label>
+        <label class="color-opt"><input aria-label="Purple" type="radio" name="cm-color" value="#7c3aed"/><span style="background:#7c3aed"></span></label>
+        <label class="color-opt"><input aria-label="Orange" type="radio" name="cm-color" value="#d97706"/><span style="background:#d97706"></span></label>
+        <label class="color-opt"><input aria-label="Red" type="radio" name="cm-color" value="#dc2626"/><span style="background:#dc2626"></span></label>
+        <label class="color-opt"><input aria-label="Teal" type="radio" name="cm-color" value="#0f766e"/><span style="background:#0f766e"></span></label>
+      </div>
+    </div>
+    <div class="fgroup">
+      <label>Class Logo / Icon <span class="opt-label">(emoji or upload image)</span></label>
+      <div class="logo-row">
+        <input aria-label="Paste emoji e.g. 📐 🧬 📖" type="text" id="cm-emoji" placeholder="Paste emoji e.g. 📐 🧬 📖" style="max-width:180px"/>
+        <span style="color:var(--muted);font-size:.85rem;align-self:center">or</span>
+        <label class="upload-label">Upload Image<input aria-label="Upload class logo image" type="file" id="cm-logo-file" accept="image/*" onchange="previewLogo(this)" style="display:none"/></label>
+      </div>
+      <div id="logo-preview-wrap" class="hidden" style="margin-top:8px">
+        <img id="logo-preview-img" alt="Class logo preview" style="width:56px;height:56px;border-radius:var(--r-sm);object-fit:cover;border:1px solid var(--border)"/>
+        <button class="btn-outline small" onclick="clearLogo()" style="margin-left:8px">Remove</button>
+      </div>
+    </div>
+    <div class="fgroup">
+      <label>Banner Message <span class="opt-label">(optional)</span></label>
+      <input aria-label="e.g. This week: Macbeth Act 2" type="text" id="cm-banner-msg" placeholder="e.g. This week: Macbeth Act 2"/>
+    </div>
+    <div class="fgroup">
+      <label>Class Code <span class="opt-label">(students use this to join)</span></label>
+      <div class="code-row">
+        <input aria-label="e.g. ENG2D-2024" type="text" id="cm-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
+        <button class="btn-outline small" onclick="genCode()">Generate</button>
+      </div>
+      <span class="field-hint">Share this code with your students</span>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-main" onclick="createClass()">Create Class</button>
+      <button class="btn-outline" onclick="closeModal('class-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- SOCIAL WORKER POPUP -->
+<div id="sw-popup" class="modal-bg hidden">
+  <div class="modal support-modal" role="dialog" aria-modal="true" aria-labelledby="sw-popup-title">
+    <div class="modal-hdr"><h3 id="sw-popup-title">💙 We're Here For You</h3><button class="modal-close" aria-label="Close dialog" onclick="dismissSWPopup(false)">✕</button></div>
+    <p>It sounds like you might be going through something difficult. You don't have to face it alone.</p>
+    <div id="sw-contact-display"></div>
+    <div class="sw-actions">
+      <button class="btn-outline" onclick="dismissSWPopup(false);sSection('help')">See All Support Lines</button>
+      <button class="btn-green" onclick="dismissSWPopup(false)">I'm okay for now</button>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);text-align:center">
+      <button onclick="dismissSWPopup(true)" style="background:none;border:none;color:var(--muted);font-size:.8rem;cursor:pointer;font-family:var(--font);text-decoration:underline">Don't show this again</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRIVACY MODAL -->
+<div id="privacy-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title" style="max-width:600px;max-height:80vh;overflow-y:auto">
+    <div class="modal-hdr"><h3 id="privacy-modal-title">🔒 Privacy Policy</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('privacy-modal')">✕</button></div>
+    <p style="font-size:.78rem;color:var(--muted)">Last updated: June 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
+      <p><strong>What we collect</strong><br>Name, email, grade (students) or school/province (teachers), mood check-ins, sleep logs, energy logs, goals, journal entries, and class codes. Nothing else - no location, no device ID, no browsing history.</p>
+      <p><strong>Student data is private by default</strong><br>Every entry you make is private. Data is only visible to your teacher when YOU actively click "Share with Teacher." Teachers never see anything you haven't explicitly shared. Your journal is always 100% private - no one can ever see it.</p>
+      <p><strong>Who sees your data</strong><br>
+        • You - always see your own data<br>
+        • Your teacher - only data you've shared with them<br>
+        • Other teachers - nothing<br>
+        • Other students - nothing<br>
+        • WellSpace - nothing beyond what's needed to run the app
+      </p>
+      <p><strong>How we store it</strong><br>All data is stored on Google Firebase with encrypted HTTPS connections and strict per-user Firestore security rules. Each user's data is stored in their own private document - no shared blobs, no cross-user access. Passwords are never stored by us - Firebase Authentication handles them entirely with industry-standard encryption.</p>
+      <p><strong>We never</strong><br>
+        • Sell your data to anyone<br>
+        • Use your data for advertising<br>
+        • Share your data with third parties<br>
+        • Store passwords in plain text<br>
+        • Access your data without your action
+      </p>
+      <p><strong>PIPEDA Compliance</strong><br>We comply with Canada's Personal Information Protection and Electronic Documents Act (PIPEDA). We collect only the minimum data necessary to operate WellSpace.</p>
+      <p><strong>Deleting your account</strong><br>Delete your account anytime in Profile settings. Your Firebase Auth account, Firestore data, and profile are all permanently deleted immediately. No data is retained after deletion.</p>
+      <p><strong>Third-party services</strong><br>Google Firebase (database & auth), EmailJS (verification emails), GitHub Pages (hosting), Google Analytics (basic website usage stats).</p>
+      <p><strong>Google Analytics - what it does and does not see</strong><br>We use Google Analytics (GA4) only to understand general site usage - things like how many people visit, which pages are viewed, and device/browser type. GA never receives your name, email, mood check-ins, sleep or energy logs, goals, journal entries, or any other health-related data - that information stays only in our encrypted Firebase database and is never sent to Google. See our full <a href="#" onclick="closeModal('privacy-modal');openModal('cookie-policy-modal');return false;">Cookie Policy</a> for details.</p>
+      <p style="font-size:.78rem;color:var(--muted)">Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    </div>
+    <button class="btn-main small" onclick="closeModal('privacy-modal')" style="margin-top:8px">Got It</button>
+  </div>
+</div>
+
+<!-- COOKIE POLICY MODAL -->
+<div id="cookie-policy-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cookie-policy-modal-title" style="max-width:600px;max-height:80vh;overflow-y:auto">
+    <div class="modal-hdr"><h3 id="cookie-policy-modal-title">🍪 Cookie Policy</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('cookie-policy-modal')">✕</button></div>
+    <p style="font-size:.78rem;color:var(--muted)">Last updated: July 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
+      <p><strong>What cookies are</strong><br>Cookies (and similar tools like local storage) are small pieces of data a website saves in your browser so it can remember things between visits, like whether you're logged in.</p>
+      <p><strong>Cookies WellSpace uses</strong><br>
+        • Login session - keeps you signed in to your account (required for the app to work)<br>
+        • Cookie preference - remembers whether you accepted or declined analytics cookies, so we don't ask you every time<br>
+        • Google Analytics (only if you accept) - basic, anonymized website usage stats
+      </p>
+      <p><strong>We ask once, not every visit</strong><br>When you accept or decline analytics cookies, that choice is saved to your account, not just your browser. So once you've answered, on any device you log in on we already know your answer and won't ask again. You can still change your mind anytime from Profile settings or by clearing your browser data.</p>
+      <p><strong>What Google Analytics does and does not see</strong><br>If you accept, Google Analytics receives basic technical info like page views and device type. It never receives your name, email, mood check-ins, journal entries, or any health-related data - that stays only in our encrypted database. We don't use Google Signals or ad personalization, and IP addresses are anonymized.</p>
+      <p><strong>No advertising cookies</strong><br>WellSpace has no ad trackers and does not use cookies for advertising or to build a profile of you for marketing.</p>
+      <p><strong>Managing cookies</strong><br>You can decline analytics cookies anytime in the banner or by emailing us, and you can always clear cookies through your browser settings. Declining does not affect your ability to use WellSpace - only the login session cookie is required.</p>
+      <p style="font-size:.78rem;color:var(--muted)">This Cookie Policy works alongside our <a href="#" onclick="closeModal('cookie-policy-modal');openModal('privacy-modal');return false;">Privacy Policy</a>. Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    </div>
+    <button class="btn-main small" onclick="closeModal('cookie-policy-modal')" style="margin-top:8px">Got It</button>
+  </div>
+</div>
+
+<!-- DELETE ACCOUNT MODAL -->
+<div id="delete-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal-hdr"><h3 id="delete-modal-title">🗑 Delete Account</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('delete-modal')">✕</button></div>
+    <div style="background:var(--red-lt);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:18px">
+      <p style="color:var(--red);font-weight:700;margin-bottom:4px">⚠️ This cannot be undone</p>
+      <p style="color:var(--red);font-size:.88rem">All your data will be permanently deleted.</p>
+    </div>
+    <div class="fgroup"><label for="delete-confirm-input">Type DELETE to confirm</label><input type="text" id="delete-confirm-input" placeholder="Type DELETE here…"/></div>
+    <div class="fgroup"><label for="delete-pass-input">Enter your password</label><input type="password" id="delete-pass-input" placeholder="••••••••"/></div>
+    <div id="delete-err" class="ferr hidden"></div>
+    <div class="modal-foot">
+      <button class="btn-danger" onclick="executeDeleteAccount()">Permanently Delete</button>
+      <button class="btn-outline" onclick="closeModal('delete-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- FORGOT PASSWORD MODAL -->
+<div id="forgot-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="forgot-modal-title">
+    <div class="modal-hdr"><h3 id="forgot-modal-title">🔑 Reset Password</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('forgot-modal')">✕</button></div>
+    <div id="forgot-step-1">
+      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Enter your email address and we'll send you a reset code.</p>
+      <div class="fgroup"><label for="forgot-email">Email Address</label><input type="email" id="forgot-email" placeholder="you@email.com"/></div>
+      <div id="forgot-err" class="ferr hidden"></div>
+      <button class="btn-main" onclick="sendResetCode()">Send Reset Code</button>
+    </div>
+    <div id="forgot-step-2" class="hidden">
+      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="forgot-email-display"></strong>. Enter it below.</p>
+      <div class="fgroup"><label for="forgot-code-input">6-digit Code</label><input type="text" id="forgot-code-input" placeholder="123456" maxlength="6"/></div>
+      <div class="fgroup"><label for="forgot-new-pass">New Password</label><input type="password" id="forgot-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+      <div id="forgot-reset-err" class="ferr hidden"></div>
+      <div id="forgot-reset-ok" class="success-note hidden">✓ Password reset! Redirecting…</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn-main" onclick="confirmResetPassword()">Reset Password</button>
+        <button class="btn-outline small" onclick="resendResetCode()">Resend Code</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EMAIL VERIFY MODAL -->
+<div id="verify-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="verify-modal-title">
+    <div class="modal-hdr"><h3 id="verify-modal-title">📧 Verify Your Email</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('verify-modal')">✕</button></div>
+    <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="verify-email-display"></strong>. Enter it below to activate your account.</p>
+    <div class="fgroup"><label for="verify-code-input">6-digit Code</label><input type="text" id="verify-code-input" placeholder="123456" maxlength="6"/></div>
+    <div id="verify-err" class="ferr hidden"></div>
+    <div id="verify-ok" class="success-note hidden">✓ Verified! Creating your account…</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn-main" onclick="confirmVerifyCode()">Verify</button>
+      <button class="btn-outline small" onclick="resendVerifyCode()">Resend Code</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- FIREBASE - must load BEFORE script.js -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<!-- EMAILJS -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+  if(typeof emailjs !== 'undefined') emailjs.init('hgQbp6YnQ4Y8QabYh');
+</script>
+<!-- GOOGLE ANALYTICS (privacy-safe, loads only after cookie consent) -->
+<script>
+  window.WELLSPACE_GA_ID = 'G-ZE25K1RHBZ';
+
+  function loadGoogleAnalytics(){
+    if(window.__gaLoaded) return;
+    window.__gaLoaded = true;
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.WELLSPACE_GA_ID;
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    window.gtag = gtag;
+    gtag('js', new Date());
+    // Privacy-safe config: no ad personalization, no Google Signals,
+    // IP anonymization (default in GA4), and no automatic PII collection.
+    gtag('config', window.WELLSPACE_GA_ID, {
+      anonymize_ip: true,
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false
+    });
+  }
+
+  function setCookieConsent(accepted){
+    localStorage.setItem('wellspace_cookie_consent', accepted ? 'accepted' : 'declined');
+    document.getElementById('cookie-banner').classList.add('hidden');
+    if(accepted) loadGoogleAnalytics();
+    // If someone is logged in, save the choice to their account too,
+    // so it's remembered on any device, not just this browser.
+    if(typeof window.saveCookieConsentToAccount === 'function'){
+      window.saveCookieConsentToAccount(accepted);
+    }
+  }
+
+  (function initCookieConsent(){
+    var consent = localStorage.getItem('wellspace_cookie_consent');
+    if(consent === 'accepted'){
+      loadGoogleAnalytics();
+    } else if(consent !== 'declined'){
+      document.addEventListener('DOMContentLoaded', function(){
+        document.getElementById('cookie-banner').classList.remove('hidden');
+      });
+    }
+  })();
+</script>
+<!-- APP -->
+<script src="script.js"></script>
 </body>
 </html>
