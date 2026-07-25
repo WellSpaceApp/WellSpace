@@ -795,7 +795,7 @@ function renderHome(){
       <div class="sub-hdr" style="margin-top:0">Today's Tasks (${todayDay})</div>
       ${todayGoals.map(g=>`
         <div class="goal-row" style="margin-bottom:8px">
-          <div class="gcheck ${g.done?'checked':''}" onclick="quickToggleGoal('${g.id}');">${g.done?'✓':''}</div>
+          <div class="gcheck ${g.done?'checked':''}" role="button" tabindex="0" aria-pressed="${g.done?'true':'false'}" aria-label="Mark '${escQ(g.task)}' as ${g.done?'not done':'done'}" onclick="quickToggleGoal('${g.id}');" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();quickToggleGoal('${g.id}');}">${g.done?'✓':''}</div>
           <div class="ginfo"><h5>${escapeHtml(g.task)}</h5><span class="gmeta">🕐 ${escapeHtml(g.time)} · ${escapeHtml(g.duration)}</span></div>
           <span class="gtype-badge gtype-${g.type||'study'}">${typeLabel(g.type)}</span>
         </div>
@@ -956,7 +956,7 @@ function renderGoals(){
       const row=document.createElement('div');
       row.className='goal-row'+(g.done?' done':'');
       row.innerHTML=`
-        <div class="gcheck ${g.done?'checked':''}" onclick="toggleGoal('${g.id}')">${g.done?'✓':''}</div>
+        <div class="gcheck ${g.done?'checked':''}" role="button" tabindex="0" aria-pressed="${g.done?'true':'false'}" aria-label="Mark '${escQ(g.task)}' as ${g.done?'not done':'done'}" onclick="toggleGoal('${g.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleGoal('${g.id}');}">${g.done?'✓':''}</div>
         <div class="ginfo">
           <h5 style="${g.done?'text-decoration:line-through':''}">${escapeHtml(g.task)}</h5>
           <span class="gmeta">🕐 ${escapeHtml(g.time)} · ⏱ ${escapeHtml(g.duration)}</span>
@@ -2300,9 +2300,63 @@ function confirmResetPassword(){ toast('Please check your email for the reset li
 function resendResetCode(){ sendResetCode(); }
 
 // ─────────────────────────────────────────────
+// ACCESSIBILITY PREFERENCES - text size, high contrast, reduced motion
+// These are DISPLAY preferences, not account/wellbeing data, so they live
+// in localStorage (same pattern already used for cookie consent) rather
+// than Firestore - they apply instantly on load, before auth resolves,
+// and don't need to sync across devices the way mood/goal data does.
+// Purely additive: only adds classes to <html>, never removes or
+// overrides existing markup, so it can't break any other feature.
+// ─────────────────────────────────────────────
+const A11Y_TEXT_STEPS = ['a11y-text-sm', '', 'a11y-text-lg', 'a11y-text-xl']; // index 1 ("") = default
+
+function applyA11yTextClass(idx){
+  A11Y_TEXT_STEPS.forEach(c=>{ if(c) document.documentElement.classList.remove(c); });
+  const cls = A11Y_TEXT_STEPS[idx];
+  if(cls) document.documentElement.classList.add(cls);
+}
+
+function setA11yTextSize(delta){
+  let idx = parseInt(localStorage.getItem('wellspace_a11y_text_idx') || '1', 10);
+  idx = delta === 0 ? 1 : Math.min(A11Y_TEXT_STEPS.length - 1, Math.max(0, idx + delta));
+  localStorage.setItem('wellspace_a11y_text_idx', String(idx));
+  applyA11yTextClass(idx);
+}
+
+function toggleA11yContrast(on){
+  document.documentElement.classList.toggle('a11y-contrast', !!on);
+  localStorage.setItem('wellspace_a11y_contrast', on ? '1' : '0');
+}
+
+function toggleA11yReducedMotion(on){
+  document.documentElement.classList.toggle('a11y-reduced-motion', !!on);
+  localStorage.setItem('wellspace_a11y_motion', on ? '1' : '0');
+}
+
+function initA11yPrefs(){
+  try {
+    applyA11yTextClass(parseInt(localStorage.getItem('wellspace_a11y_text_idx') || '1', 10));
+
+    const contrastOn = localStorage.getItem('wellspace_a11y_contrast') === '1';
+    document.documentElement.classList.toggle('a11y-contrast', contrastOn);
+    ['a11y-contrast-toggle','t-a11y-contrast-toggle'].forEach(id=>{
+      const el = document.getElementById(id); if(el) el.checked = contrastOn;
+    });
+
+    const motionOn = localStorage.getItem('wellspace_a11y_motion') === '1';
+    document.documentElement.classList.toggle('a11y-reduced-motion', motionOn);
+    ['a11y-motion-toggle','t-a11y-motion-toggle'].forEach(id=>{
+      const el = document.getElementById(id); if(el) el.checked = motionOn;
+    });
+  } catch(e){ console.error('initA11yPrefs failed', e); }
+}
+
+// ─────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async ()=>{
+  initA11yPrefs();
+
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   }
