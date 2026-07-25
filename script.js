@@ -795,7 +795,7 @@ function renderHome(){
       <div class="sub-hdr" style="margin-top:0">Today's Tasks (${todayDay})</div>
       ${todayGoals.map(g=>`
         <div class="goal-row" style="margin-bottom:8px">
-          <div class="gcheck ${g.done?'checked':''}" role="button" tabindex="0" aria-pressed="${g.done?'true':'false'}" aria-label="Mark '${escQ(g.task)}' as ${g.done?'not done':'done'}" onclick="quickToggleGoal('${g.id}');" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();quickToggleGoal('${g.id}');}">${g.done?'✓':''}</div>
+          <div class="gcheck ${g.done?'checked':''}" role="button" tabindex="0" aria-pressed="${g.done?'true':'false'}" aria-label="Mark ${escapeHtml(g.task)} as ${g.done?'not done':'done'}" onclick="quickToggleGoal('${g.id}');" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();quickToggleGoal('${g.id}');}">${g.done?'✓':''}</div>
           <div class="ginfo"><h5>${escapeHtml(g.task)}</h5><span class="gmeta">🕐 ${escapeHtml(g.time)} · ${escapeHtml(g.duration)}</span></div>
           <span class="gtype-badge gtype-${g.type||'study'}">${typeLabel(g.type)}</span>
         </div>
@@ -956,7 +956,7 @@ function renderGoals(){
       const row=document.createElement('div');
       row.className='goal-row'+(g.done?' done':'');
       row.innerHTML=`
-        <div class="gcheck ${g.done?'checked':''}" role="button" tabindex="0" aria-pressed="${g.done?'true':'false'}" aria-label="Mark '${escQ(g.task)}' as ${g.done?'not done':'done'}" onclick="toggleGoal('${g.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleGoal('${g.id}');}">${g.done?'✓':''}</div>
+        <div class="gcheck ${g.done?'checked':''}" role="button" tabindex="0" aria-pressed="${g.done?'true':'false'}" aria-label="Mark ${escapeHtml(g.task)} as ${g.done?'not done':'done'}" onclick="toggleGoal('${g.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleGoal('${g.id}');}">${g.done?'✓':''}</div>
         <div class="ginfo">
           <h5 style="${g.done?'text-decoration:line-through':''}">${escapeHtml(g.task)}</h5>
           <span class="gmeta">🕐 ${escapeHtml(g.time)} · ⏱ ${escapeHtml(g.duration)}</span>
@@ -2197,6 +2197,14 @@ async function confirmVerifyCode(){
         const uid  = cred.user.uid;
         const localId = 's'+uid8();
         const profile = { role:'student', name, email, grade, classIds, teacherUids, periodOrder:[], joined:today(), localId, uid };
+        // BUGFIX: this save was missing, so students who signed up through
+        // email verification never got a /profiles/{uid} doc written to
+        // Firestore. Without it, a teacher's "My Students" query (which
+        // searches the profiles collection for teacherUids array-contains
+        // their uid) can never find them - the student's own screen still
+        // looked fine because it was running entirely off the in-memory
+        // session, masking the missing Firestore doc until next login.
+        await saveProfile(uid, profile);
         const studentEntry = { id:localId, name, email, grade, classIds, periodOrder:[], joined:today() };
         cSet('students', [studentEntry]);
         await fsSet('students', [studentEntry]);
