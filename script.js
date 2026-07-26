@@ -932,7 +932,6 @@ function renderGoalsSection(){
     sel.style.display = 'none';
   }
   renderGoals();
-  renderAINudge();
 }
 
 function renderGoals(){
@@ -999,7 +998,6 @@ function addGoal(){
   document.getElementById('gm-task').value='';
   toast('Task added! 🎯');
   renderGoals();
-  renderAINudge();
 }
 
 function toggleGoal(id){
@@ -1220,15 +1218,21 @@ function showHelplines(){
 function buildClassBannerHTML(c, isTeacher=false){
   const color    = c.color || '#1d5fa6';
   const textColor = getContrastColor(color);
-  if(c.logo || c.emoji){
-    return `<div class="cls-banner-header" style="background:${color};color:${textColor}">
-      ${c.logo
-        ? `<img class="cls-banner-logo" src="${escapeHtml(c.logo)}" alt="logo"/>`
-        : `<span class="cls-banner-emoji">${escapeHtml(c.emoji)}</span>`}
-      <div class="cls-banner-text"><h4 style="color:${textColor}">${escapeHtml(c.subject)}</h4></div>
-    </div>`;
-  }
-  return `<div class="cls-banner" style="background:${color}"></div>`;
+  // BUGFIX: this used to only render the subject name when c.logo or
+  // c.emoji was set. If a teacher created a class with just a banner
+  // color (the normal case - logo/emoji is optional), it fell through
+  // to `<div class="cls-banner" style="background:${color}"></div>` -
+  // a bare colored strip with no text anywhere in it. That's why banners
+  // showed only a color and never the class name. Now the subject name
+  // always renders on the banner; the logo/emoji is just an optional
+  // icon alongside it.
+  const iconHtml = c.logo
+    ? `<img class="cls-banner-logo" src="${escapeHtml(c.logo)}" alt="logo"/>`
+    : (c.emoji ? `<span class="cls-banner-emoji">${escapeHtml(c.emoji)}</span>` : '');
+  return `<div class="cls-banner-header" style="background:${color};color:${textColor}">
+    ${iconHtml}
+    <div class="cls-banner-text"><h4 style="color:${textColor}">${escapeHtml(c.subject)}</h4></div>
+  </div>`;
 }
 
 function getContrastColor(hex){
