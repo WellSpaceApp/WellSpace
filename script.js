@@ -188,6 +188,36 @@ async function fsGetShared(key, def=null){
 }
 
 // ─────────────────────────────────────────────
+// JOURNALS - dedicated owner-only collection.
+// Journals used to be embedded as a field inside /users/{uid} alongside
+// moods/goals/wellness. That doc's read rule grants access to any teacher
+// whose uid is in the student's teacherUids, so once a student joined a
+// class, their journal entries were reachable by that teacher via direct
+// Firestore access - even though the UI itself never surfaced them. The
+// security rules already define /journals/{uid} as owner-only with no
+// exceptions; these helpers actually route writes/reads there so that
+// rule is the one doing the work.
+// ─────────────────────────────────────────────
+async function fsSetJournal(uid, journals){
+  if(!fbDb || !uid) return;
+  try {
+    await fbDb.collection('journals').doc(uid).set({ entries: JSON.stringify(journals) }, { merge: true });
+  } catch(e){
+    console.error('fsSetJournal failed', e);
+    toast('⚠️ Could not save your journal - check your connection and try again.');
+  }
+}
+
+async function fsGetJournal(uid){
+  if(!fbDb || !uid) return [];
+  try {
+    const doc = await fbDb.collection('journals').doc(uid).get();
+    if(!doc.exists) return [];
+    return JSON.parse(doc.data().entries || '[]');
+  } catch(e){ return []; }
+}
+
+// ─────────────────────────────────────────────
 // LOCAL CACHE - fast reads, Firestore is source of truth
 // ─────────────────────────────────────────────
 const cache = {};
@@ -214,7 +244,11 @@ const S = {
   set(k, v){
     cSet(k, v);
     // Persist to correct Firestore location
-    if(SHARED_KEYS.includes(k)){
+    if(k === 'journals'){
+      // Journals are private-by-rule and live in their own collection -
+      // see fsSetJournal for why this can't just fall through to fsSet().
+      if(fbAuth?.currentUser) fsSetJournal(fbAuth.currentUser.uid, v);
+    } else if(SHARED_KEYS.includes(k)){
       fsSetShared(k, v);
     } else {
       fsSet(k, v);
@@ -246,7 +280,27 @@ async function loadUserData(){
       Object.entries(data).forEach(([k,v])=>{
         try{ cSet(k, JSON.parse(v)); }catch{}
       });
+
+      // MIGRATION: journals used to be stored inline in this doc, which a
+      // linked teacher could technically read directly from Firestore even
+      // though the UI never showed them. Move any old entries into the
+      // owner-only /journals/{uid} collection and scrub them out of here.
+      if(data.journals){
+        try{
+          const oldJournals = JSON.parse(data.journals);
+          const existingJournals = await fsGetJournal(fbAuth.currentUser.uid);
+          const merged = [...existingJournals, ...oldJournals];
+          await fsSetJournal(fbAuth.currentUser.uid, merged);
+          await fbDb.collection('users').doc(fbAuth.currentUser.uid)
+            .update({ journals: firebase.firestore.FieldValue.delete() });
+        } catch(e){ console.error('journal migration failed', e); }
+      }
     }
+
+    // Load journals from their dedicated owner-only collection (source of
+    // truth going forward - never from /users/{uid}).
+    const journals = await fsGetJournal(fbAuth.currentUser.uid);
+    cSet('journals', journals);
 
     // ALSO load profile data (classIds, name, etc.) from /profiles/{uid}
     const profileDoc = await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).get();
@@ -1771,7 +1825,9 @@ async function createClass(){
   if(!subject||!code)return toast('Please fill in subject and code.');
   if(!/^[A-Z0-9]{3,12}$/.test(code)) return toast('Class code must be 3-12 letters/numbers only.');
 
-  // Check code uniqueness across all class docs
+  // Fast, non-authoritative check for quick feedback - this alone is a
+  // race (read-then-write), so the transaction below is what actually
+  // guarantees uniqueness.
   const existingClasses = await fsGetAllClasses();
   if(existingClasses.find(c=>c.code===code)) return toast('That code already exists - try generating a new one.');
 
@@ -1780,6 +1836,24 @@ async function createClass(){
   // can record which teacher's auth uid to grant read-access to, since
   // security rules can only check request.auth.uid, not the short id.
   const newClass = {id:'c'+uid8(),teacherId:CU.id,teacherUid:CU.uid,subject,startTime:start,endTime:end,days,code,color,emoji,logo,bannerMsg};
+
+  // ATOMIC CODE RESERVATION: class_codes/{code} - one doc per code, ID is
+  // the code itself. Firestore create() inside a transaction fails outright
+  // if the doc already exists, so if two teachers submit the same code at
+  // the same moment, only one transaction commits; the other gets a clean
+  // "CODE_TAKEN" instead of silently colliding.
+  try {
+    await fbDb.runTransaction(async (tx) => {
+      const codeRef = fbDb.collection('class_codes').doc(code);
+      const codeSnap = await tx.get(codeRef);
+      if(codeSnap.exists) throw new Error('CODE_TAKEN');
+      tx.set(codeRef, { teacherUid: CU.uid, classId: newClass.id, createdAt: today() });
+    });
+  } catch(e){
+    if(e.message === 'CODE_TAKEN') return toast('That code already exists - try generating a new one.');
+    console.error('class code reservation failed', e);
+    return toast('⚠️ Could not create class - check your connection and try again.');
+  }
 
   await fsSetClass(newClass);
 
@@ -1803,7 +1877,12 @@ async function createClass(){
 
 async function deleteClass(id){
   if(!confirm('Delete this class? Students will lose access.'))return;
+  const cls = cGet('classes', []).find(c=>c.id===id);
   await fsDeleteClass(id);
+  if(cls?.code){
+    try { await fbDb.collection('class_codes').doc(cls.code).delete(); }
+    catch(e){ console.error('class_codes cleanup failed', e); }
+  }
   const updated = cGet('classes', []).filter(c=>c.id!==id);
   cSet('classes', updated);
   toast('Class deleted.');
