@@ -390,45 +390,43 @@ async function ensureTeacherLinks(){
   }
 }
 
-// Get all student uids in a teacher's classes - batched to respect Firebase's
-// 10-value limit on array-contains-any, so this still works with 10+ classes.
-async function getStudentUids(classIds){
-  if(!fbDb || !classIds?.length) return [];
-
-  const chunks = [];
-  for (let i = 0; i < classIds.length; i += 10) {
-    chunks.push(classIds.slice(i, i + 10));
-  }
-
-  const results = [];
-  const seen = new Set();
-
-  for (const chunk of chunks) {
-    try {
-      const snap = await fbDb.collection('profiles')
-        .where('role','==','student')
-        .where('classIds','array-contains-any', chunk)
-        .get();
-      snap.docs.forEach(d=>{
-        if(!seen.has(d.id)){
-          seen.add(d.id);
-          results.push({ uid: d.id, ...d.data() });
-        }
-      });
-    } catch(e){
-      console.error('getStudentUids chunk error', e);
-      // A missing composite index throws 'failed-precondition' with a
-      // message that contains a direct link to create it in the Firebase
-      // console. This used to fail silently, so the teacher dashboard
-      // just looked like it had zero students with no clue why. Surface
-      // it instead of swallowing it.
-      if(e.code === 'failed-precondition' || /index/i.test(e.message||'')){
-        toast('⚠️ Missing Firestore index for student lookup — check the browser console for a link to create it.');
-      }
+// Get all student profiles for this teacher.
+//
+// FIX: this used to query `.where('classIds','array-contains-any', chunk)`
+// and rely on the /profiles read rule (which checks `teacherUids`, not
+// `classIds`) to gate access. Firestore rejects an entire list query if
+// the security rule can't be validated purely from the query's own where
+// clauses - since the rule checked a field the query didn't filter on,
+// every call came back `permission-denied` for the WHOLE query. The old
+// catch block only toasted on `failed-precondition` (missing index), so
+// this specific failure was silent: students joined classes fine, but
+// teachers never saw them or any of their shared data, with no visible
+// error anywhere.
+//
+// Querying directly on `teacherUids array-contains teacherUid` matches
+// the rule exactly, so Firestore can validate the query and actually
+// return results. This also removes the old 10-item chunking, which was
+// only needed for `array-contains-any`'s limit - plain `array-contains`
+// has no such cap.
+async function getStudentUids(teacherUid){
+  if(!fbDb || !teacherUid) return [];
+  try {
+    const snap = await fbDb.collection('profiles')
+      .where('role','==','student')
+      .where('teacherUids','array-contains', teacherUid)
+      .get();
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  } catch(e){
+    console.error('getStudentUids error', e);
+    if(e.code === 'failed-precondition' || /index/i.test(e.message||'')){
+      toast('⚠️ Missing Firestore index for student lookup — check the browser console for a link to create it.');
+    } else if(e.code === 'permission-denied'){
+      toast('⚠️ Could not load students — permission denied. Check that student profiles have teacherUids set.');
+    } else {
+      toast('⚠️ Could not load students — check the browser console for details.');
     }
   }
-
-  return results;
+  return [];
 }
 
 // Load a single student's full data doc (used by the teacher dashboard)
@@ -735,8 +733,11 @@ async function loadTeacherStudents(){
   }
 
   try {
-    // Batched query - works for any number of classes, not just <=10
-    const studentProfiles = await getStudentUids(myClassIds);
+    // FIX: query on the teacher's uid (matches the /profiles security rule)
+    // instead of passing classIds into getStudentUids - see comment on
+    // getStudentUids for why the old classIds-based query was silently
+    // returning permission-denied for the whole query.
+    const studentProfiles = await getStudentUids(CU.uid);
 
     const allStudents = [];
     const allMoods    = cGet('moods', []);
