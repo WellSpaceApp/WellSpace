@@ -415,7 +415,17 @@ async function getStudentUids(classIds){
           results.push({ uid: d.id, ...d.data() });
         }
       });
-    } catch(e){ console.error('getStudentUids chunk error', e); }
+    } catch(e){
+      console.error('getStudentUids chunk error', e);
+      // A missing composite index throws 'failed-precondition' with a
+      // message that contains a direct link to create it in the Firebase
+      // console. This used to fail silently, so the teacher dashboard
+      // just looked like it had zero students with no clue why. Surface
+      // it instead of swallowing it.
+      if(e.code === 'failed-precondition' || /index/i.test(e.message||'')){
+        toast('⚠️ Missing Firestore index for student lookup — check the browser console for a link to create it.');
+      }
+    }
   }
 
   return results;
