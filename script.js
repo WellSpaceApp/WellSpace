@@ -1464,7 +1464,7 @@ function loadTeacherDash(){
 
 function tSection(name){
   document.querySelectorAll('#t-sidebar .sn').forEach(n=>n.classList.remove('active'));
-  const navMap=['overview','classes','students','moods','wellness','goals','alerts','help','settings','profile'];
+  const navMap=['overview','classes','students','moods','wellness','goals','alerts','summary','help','settings','profile'];
   const idx=navMap.indexOf(name);
   const navItems=document.querySelectorAll('#t-sidebar .sn');
   if(navItems[idx]) navItems[idx].classList.add('active');
@@ -1479,6 +1479,7 @@ function tSection(name){
   if(name==='wellness')  { loadTeacherStudents().then(renderWellnessTable); }
   if(name==='goals')     { loadTeacherStudents().then(renderTeacherGoals); }
   if(name==='alerts')    { loadTeacherStudents().then(renderAlerts); }
+   if(name==='summary')   { loadTeacherStudents().then(renderWeeklySummary); }
   if(name==='help')      renderTeacherHelp();
   if(name==='settings')  renderSettings();
   if(name==='profile')   renderTeacherProfile();
@@ -1720,7 +1721,217 @@ function renderAlerts(){
     </div>`;
   }).join('');
 }
+// ─────────────────────────────────────────────
+// WEEKLY CLASS SUMMARY
+// Reads entirely from already-loaded cache - no new Firestore reads.
+// Groups mood, wellness, goal, and alert data by class for the past 7 days.
+// ─────────────────────────────────────────────
+function renderWeeklySummary(){
+  const classes  = getMyClasses();
+  const students = getMyStudents();
+  const sel      = document.getElementById('summary-class-sel');
+  const wrap     = document.getElementById('summary-content');
+  if(!sel || !wrap) return;
 
+  // Populate the class filter dropdown
+  sel.innerHTML = '<option value="">All Classes</option>' +
+    classes.map(c => `<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
+
+  const filterClassId = sel.value;
+  const activeClasses = filterClassId
+    ? classes.filter(c => c.id === filterClassId)
+    : classes;
+
+  if(activeClasses.length === 0){
+    wrap.innerHTML = '<p style="color:var(--muted);padding:20px 0">No classes yet. Create a class first.</p>';
+    return;
+  }
+
+  // Build a set of dates for the past 7 days (YYYY-MM-DD strings)
+  const past7 = [];
+  for(let i = 0; i < 7; i++){
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    past7.push(d.toISOString().split('T')[0]);
+  }
+  const past7Set = new Set(past7);
+
+  const allMoods    = gm().filter(m => m.shared && past7Set.has(m.date));
+  const allWellness = gw().filter(w => w.shared && past7Set.has(w.date));
+  const allGoals    = ggo();
+
+  // Date range label
+  const newest = past7[0];
+  const oldest = past7[past7.length - 1];
+  const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+
+  let html = `<div style="font-size:.82rem;color:var(--muted);margin-bottom:20px">
+    Period: <strong>${fmtDate(oldest)} – ${fmtDate(newest)}</strong>
+  </div>`;
+
+  activeClasses.forEach(cls => {
+    const classStudents = students.filter(s => s.classIds?.includes(cls.id));
+    if(classStudents.length === 0){
+      html += `<div class="summary-class-block">
+        <div class="cls-banner-header" style="background:${cls.color||'#1d5fa6'};color:${getContrastColor(cls.color||'#1d5fa6')};border-radius:var(--r-md) var(--r-md) 0 0;padding:14px 18px">
+          <h4 style="color:${getContrastColor(cls.color||'#1d5fa6')};margin:0">${escapeHtml(cls.subject)}</h4>
+        </div>
+        <div style="padding:16px 18px;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-md) var(--r-md)">
+          <p style="color:var(--muted);font-size:.88rem">No students in this class yet.</p>
+        </div>
+      </div>`;
+      return;
+    }
+
+    // ── Mood summary for this class ──
+    const classMoods = allMoods.filter(m =>
+      classStudents.some(s => s.id === m.studentId) && m.classId === cls.id
+    );
+    const moodCounts = {};
+    classMoods.forEach(m => { moodCounts[m.mood] = (moodCounts[m.mood] || 0) + 1; });
+    const totalMoods = classMoods.length;
+    const alertMoods = classMoods.filter(m => NEGATIVE_MOODS.includes(m.mood));
+    const uniqueAlertStudents = [...new Set(alertMoods.map(m => m.studentId))];
+
+    // Mood participation rate
+    const studentsWhoLoggedMood = new Set(classMoods.map(m => m.studentId)).size;
+    const moodParticipation = classStudents.length > 0
+      ? Math.round((studentsWhoLoggedMood / classStudents.length) * 100)
+      : 0;
+
+    // ── Sleep summary for this class ──
+    const classSleep = allWellness.filter(w =>
+      w.type === 'sleep' &&
+      classStudents.some(s => s.id === w.studentId) &&
+      (w.sharedWith?.classId === cls.id || w.sharedWith?.teacherId === CU.id)
+    );
+    const avgSleep = classSleep.length > 0
+      ? (classSleep.reduce((sum, w) => sum + (parseFloat(w.hours) || 0), 0) / classSleep.length).toFixed(1)
+      : null;
+
+    // ── Goal completion for this class ──
+    const classGoals = allGoals.filter(g =>
+      g.classId === cls.id && classStudents.some(s => s.id === g.studentId)
+    );
+    const doneGoals  = classGoals.filter(g => g.done).length;
+    const goalRate   = classGoals.length > 0
+      ? Math.round((doneGoals / classGoals.length) * 100)
+      : null;
+
+    // ── Students needing support ──
+    const supportStudents = uniqueAlertStudents.map(sid => {
+      const s = classStudents.find(x => x.id === sid);
+      const recentMoods = alertMoods.filter(m => m.studentId === sid)
+        .sort((a, b) => b.date.localeCompare(a.date));
+      return { name: s?.name || 'Student', mood: recentMoods[0]?.mood || '' };
+    });
+
+    // ── Mood bar ──
+    const moodBarHtml = totalMoods > 0
+      ? Object.entries(moodCounts).map(([mood, n]) => `
+          <div class="mbar-row" style="align-items:center;gap:8px;margin-bottom:6px">
+            <span style="width:90px;font-size:.78rem;white-space:nowrap">${MOOD_CFG[mood]?.icon || ''} ${escapeHtml(mood)}</span>
+            <div class="mbar-track" style="flex:1"><div class="mbar-fill" style="width:${Math.round(n/totalMoods*100)}%;background:${NEGATIVE_MOODS.includes(mood)?'var(--red)':'var(--blue)'}"></div></div>
+            <span style="font-size:.78rem;color:var(--muted);min-width:24px;text-align:right">${n}</span>
+          </div>`).join('')
+      : '<p style="color:var(--muted);font-size:.85rem">No mood check-ins shared this week.</p>';
+
+    const bannerColor  = cls.color || '#1d5fa6';
+    const bannerText   = getContrastColor(bannerColor);
+
+    html += `
+    <div class="summary-class-block" style="margin-bottom:28px;border-radius:var(--r-md);overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+
+      <!-- Class header banner -->
+      <div style="background:${bannerColor};color:${bannerText};padding:14px 18px;display:flex;align-items:center;gap:10px">
+        ${cls.emoji ? `<span style="font-size:1.4rem">${escapeHtml(cls.emoji)}</span>` : ''}
+        <div>
+          <h4 style="color:${bannerText};margin:0;font-size:1rem">${escapeHtml(cls.subject)}</h4>
+          <span style="font-size:.78rem;opacity:.85">${classStudents.length} student${classStudents.length!==1?'s':''} · ${escapeHtml(cls.startTime)} – ${escapeHtml(cls.endTime)} · ${escapeHtml(cls.days?.join(', ')||'–')}</span>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--border)">
+        <div style="background:var(--surface);padding:14px 16px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:700;color:var(--blue)">${moodParticipation}%</div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:2px">Mood Participation</div>
+        </div>
+        <div style="background:var(--surface);padding:14px 16px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:700;color:${supportStudents.length > 0 ? 'var(--red)' : 'var(--green)'}">
+            ${supportStudents.length > 0 ? '⚠️ ' + supportStudents.length : '✅ 0'}
+          </div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:2px">Need Support</div>
+        </div>
+        <div style="background:var(--surface);padding:14px 16px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:700;color:var(--navy)">
+            ${avgSleep !== null ? avgSleep + 'h' : '–'}
+          </div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:2px">Avg Sleep</div>
+        </div>
+        <div style="background:var(--surface);padding:14px 16px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:700;color:var(--navy)">
+            ${goalRate !== null ? goalRate + '%' : '–'}
+          </div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:2px">Goal Completion</div>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-md) var(--r-md);padding:18px">
+
+        <!-- Mood breakdown -->
+        <h5 style="color:var(--navy);margin:0 0 10px;font-size:.88rem">😊 Mood Breakdown (${totalMoods} check-in${totalMoods!==1?'s':''})</h5>
+        ${moodBarHtml}
+
+        ${supportStudents.length > 0 ? `
+        <!-- Students needing support -->
+        <div style="background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--r-sm);padding:12px 14px;margin-top:14px">
+          <h5 style="color:var(--red);margin:0 0 8px;font-size:.85rem">⚠️ Students who may need support</h5>
+          ${supportStudents.map(ss => `
+            <div style="font-size:.85rem;margin-bottom:4px">
+              • <strong>${escapeHtml(ss.name)}</strong>
+              <span style="color:var(--muted)">– logged <em>${escapeHtml(ss.mood)}</em></span>
+            </div>`).join('')}
+        </div>` : `
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--r-sm);padding:10px 14px;margin-top:14px;font-size:.85rem;color:#166534">
+          ✅ No alerts this week — class is doing well!
+        </div>`}
+
+        ${classSleep.length > 0 ? `
+        <!-- Sleep notes -->
+        <div style="margin-top:14px">
+          <h5 style="color:var(--navy);margin:0 0 8px;font-size:.88rem">😴 Sleep Log (${classSleep.length} entr${classSleep.length!==1?'ies':'y'} shared)</h5>
+          ${[...classSleep].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5).map(w=>{
+            const s = classStudents.find(x => x.id === w.studentId);
+            return `<div style="font-size:.83rem;color:var(--text-2);margin-bottom:4px">
+              <strong>${escapeHtml(s?.name||'Student')}</strong> · ${escapeHtml(w.hours)}h · ${escapeHtml(w.quality)} · <span style="color:var(--muted)">${w.date}</span>
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+
+        ${classGoals.length > 0 ? `
+        <!-- Goal activity -->
+        <div style="margin-top:14px">
+          <h5 style="color:var(--navy);margin:0 0 8px;font-size:.88rem">🎯 Goal Activity (${doneGoals}/${classGoals.length} completed)</h5>
+          <div style="background:var(--bg);border-radius:var(--r-sm);padding:8px 12px">
+            <div class="mbar-track" style="height:10px;border-radius:99px;overflow:hidden;background:var(--border)">
+              <div class="mbar-fill" style="width:${goalRate}%;background:var(--blue);height:100%"></div>
+            </div>
+            <p style="font-size:.78rem;color:var(--muted);margin-top:6px">${goalRate}% of tasks in this class marked complete</p>
+          </div>
+        </div>` : ''}
+
+      </div>
+    </div>`;
+  });
+
+  wrap.innerHTML = html;
+}
+
+function printSummary(){
+  window.print();
+}
 // TEACHER HELP
 function renderTeacherHelp(){
   const province=CU.province||'Ontario';
