@@ -281,7 +281,21 @@ select { cursor:pointer; appearance:none; background-image:url("data:image/svg+x
 .mood-btn[data-m="Confused"].sel  { border-color:var(--amber); background:var(--amber-lt); color:var(--amber); }
 .mood-done { font-size:.8rem; color:var(--muted); margin-top:10px; display:flex; align-items:center; gap:6px; }
 
-.support-popup { position:fixed; bottom:28px; right:28px; width:310px; background:var(--white); border-radius:var(--r-md); box-shadow:var(--sh-lg); padding:22px; z-index:200; animation:slideRight .3s var(--bounce); border:1px solid var(--border); }
+.support-popup {
+  position: fixed !important;
+  bottom: 28px !important;
+  right: 28px !important;
+  top: auto !important;
+  left: auto !important;
+  width: 310px;
+  background: var(--white);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-lg);
+  padding: 22px;
+  z-index: 999;
+  animation: slideRight .3s var(--bounce);
+  border: 1px solid var(--border);
+}
 .sp-inner { display:flex; flex-direction:column; align-items:center; gap:12px; text-align:center; }
 .sp-icon  { font-size:2.6rem; animation:pulse 1.5s ease-in-out infinite; }
 .sp-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
