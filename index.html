@@ -458,6 +458,7 @@
         <a class="sn"        onclick="tSection('wellness')"><i>🌱</i> Wellness Data</a>
         <a class="sn"        onclick="tSection('goals')"   ><i>🎯</i> Goals</a>
         <a class="sn"        onclick="tSection('alerts')"  ><i>⚠️</i> Alerts <span class="nbadge" id="t-alert-badge">0</span></a>
+        <a class="sn"        onclick="tSection('summary')" ><i>📋</i> Weekly Summary</a>
         <a class="sn"        onclick="tSection('help')"    ><i>💙</i> Help Resources</a>
         <a class="sn"        onclick="tSection('settings')"><i>⚙️</i> Settings</a>
         <a class="sn"        onclick="tSection('profile')" ><i>👤</i> My Profile</a>
@@ -502,6 +503,16 @@
       <section class="dsec" id="t-sec-alerts">
         <div class="sec-hdr"><h3>⚠️ Students Needing Support</h3><p>Based on shared mood check-ins</p></div>
         <div id="t-alerts-list"></div>
+      </section>
+      <section class="dsec" id="t-sec-summary">
+        <div class="sec-hdr"><h3>📋 Weekly Class Summary</h3><p>A snapshot of each class for the past 7 days</p></div>
+        <div class="summary-controls" style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+          <select id="summary-class-sel" class="sel" aria-label="Select class to summarize" onchange="renderWeeklySummary()">
+            <option value="">All Classes</option>
+          </select>
+          <button class="btn-outline small" onclick="printSummary()">🖨 Print / Save as PDF</button>
+        </div>
+        <div id="summary-content"></div>
       </section>
       <section class="dsec" id="t-sec-help">
         <div class="sec-hdr"><h3>💙 Wellness Resources</h3></div>
