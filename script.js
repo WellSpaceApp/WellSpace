@@ -1504,7 +1504,8 @@ function getMyStudents(){
 function renderTeacherOverview(){
   const students=getMyStudents();
   const classes=getMyClasses();
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);
+  const myClassIds=classes.map(c=>c.id);
+  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&myClassIds.includes(m.classId));
   const alerts=moods.filter(m=>NEGATIVE_MOODS.includes(m.mood));
   document.getElementById('t-stats-row').innerHTML=`
     <div class="tstat blue"><div class="tstat-n">${students.length}</div><div class="tstat-l">Students</div></div>
@@ -1711,7 +1712,8 @@ function renderTeacherGoals(){
 // ALERTS
 function renderAlerts(){
   const students=getMyStudents();
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&NEGATIVE_MOODS.includes(m.mood));
+  const myClassIds=getMyClasses().map(c=>c.id);
+  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&NEGATIVE_MOODS.includes(m.mood)&&myClassIds.includes(m.classId));
   const el=document.getElementById('t-alerts-list');
   if(moods.length===0){ el.innerHTML='<p style="color:var(--muted);text-align:center;padding:40px 0">🎉 No alerts - all students seem to be doing well!</p>'; return; }
   const grouped={};
