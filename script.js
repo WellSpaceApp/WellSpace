@@ -1112,7 +1112,24 @@ function renderCalendar(){
 
 // STATS
 function renderStats(){
-  const myMoods=gm().filter(m=>m.studentId===CU.id);
+  const classes = gc();
+  const activeClassIds = new Set(classes.map(c => c.id));
+
+  // MOOD PRUNE: a mood tagged with a classId that isn't 'general' and isn't
+  // in the current class list means that class was deleted since the mood
+  // was logged - there's no teacher left who could see it, and it just
+  // clutters the student's own history with dead class references. Drop
+  // those permanently, same way deleted-class wellness logs already get
+  // pruned in renderWellnessSection.
+  const allMoods = gm();
+  const keptMoods = allMoods.filter(m => {
+    if(m.studentId !== CU.id) return true; // never touch other students' rows
+    if(!m.classId || m.classId === 'general') return true;
+    return activeClassIds.has(m.classId);
+  });
+  if(keptMoods.length !== allMoods.length) S.set('moods', keptMoods);
+
+  const myMoods=keptMoods.filter(m=>m.studentId===CU.id);
   const myGoals=ggo().filter(g=>g.studentId===CU.id);
   const completed=myGoals.filter(g=>g.done).length;
   const shared=myMoods.filter(m=>m.shared).length;
@@ -1122,7 +1139,6 @@ function renderStats(){
     <div class="stat-card"><div class="stat-n">${completed}</div><div class="stat-l">Completed</div></div>
     <div class="stat-card"><div class="stat-n">${shared}</div><div class="stat-l">Moods Shared</div></div>
   `;
-  const classes=gc();
   const hist=document.getElementById('mood-history');
   hist.innerHTML=[...myMoods].reverse().slice(0,20).map(m=>{
     const cls=classes.find(c=>c.id===m.classId);
@@ -1133,7 +1149,6 @@ function renderStats(){
     </div>`;
   }).join('')||'<p style="color:var(--muted);padding:16px 0">No mood history yet.</p>';
 }
-
 // ─────────────────────────────────────────────
 // WELLNESS LOG CLEANUP - runs every time the Wellness section loads.
 //   1) Class-deleted prune: if a log was shared to a class that no longer
