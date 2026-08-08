@@ -1134,21 +1134,88 @@ function renderStats(){
   }).join('')||'<p style="color:var(--muted);padding:16px 0">No mood history yet.</p>';
 }
 
-// WELLNESS
-function renderWellnessSection(){
-  const logs = gw().filter(w => w.studentId === CU.id);
-  const sleepLogs = logs.filter(l => l.type==='sleep').slice(-5).reverse();
-  document.getElementById('sleep-log-display').innerHTML = sleepLogs.map(l=>`
+// ─────────────────────────────────────────────
+// WELLNESS LOG CLEANUP - runs every time the Wellness section loads.
+//   1) Class-deleted prune: if a log was shared to a class that no longer
+//      exists, there's no teacher left who can see it - drop it so the
+//      student's own view doesn't show stale "Sent to teacher" entries
+//      for a class that's gone.
+//   2) Weekly rolling window: anything older than 7 days is dropped so
+//      the list doesn't grow forever. Applies to private and shared
+//      entries alike. Journals are untouched - that's a long-term
+//      reflective log, kept on purpose.
+// ─────────────────────────────────────────────
+function pruneWellnessLogs(){
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const activeClassIds = new Set(gc().map(c => c.id));
+
+  const before = gw();
+  const kept = before.filter(w => {
+    if(w.studentId !== CU.id) return true; // never touch other students' rows
+    if(w.date < cutoffStr) return false;
+    if(w.shared && w.sharedWith?.classId && !activeClassIds.has(w.sharedWith.classId)) return false;
+    return true;
+  });
+  if(kept.length !== before.length) S.set('wellness', kept);
+}
+
+// Injects (once) a "view by teacher" filter dropdown above a log list,
+// then re-renders that list whenever it changes.
+function ensureLogFilterDropdown(type, displayElId, myClasses, onChangeFn){
+  const displayEl = document.getElementById(displayElId);
+  if(!displayEl) return;
+  let sel = document.getElementById(`${type}-log-filter`);
+  if(!sel){
+    sel = document.createElement('select');
+    sel.id = `${type}-log-filter`;
+    sel.style.cssText = 'margin-bottom:8px;width:100%;padding:6px 8px;border-radius:6px;border:1px solid var(--border);font-size:.8rem;background:var(--surface)';
+    displayEl.parentNode.insertBefore(sel, displayEl);
+    sel.addEventListener('change', onChangeFn);
+  }
+  const opts = [`<option value="">All entries</option>`]
+    .concat(myClasses.map(c=>`<option value="${c.id}">Sent to ${escapeHtml(c.subject)}</option>`))
+    .concat([`<option value="__private">Private only</option>`]);
+  sel.innerHTML = opts.join('');
+  sel.style.display = myClasses.length ? '' : 'none';
+}
+
+function renderSleepLog(){
+  const filterVal = document.getElementById('sleep-log-filter')?.value || '';
+  let logs = gw().filter(w => w.studentId === CU.id && w.type==='sleep');
+  if(filterVal === '__private') logs = logs.filter(l => !l.shared);
+  else if(filterVal) logs = logs.filter(l => l.shared && l.sharedWith?.classId === filterVal);
+  logs = logs.slice(-5).reverse();
+  document.getElementById('sleep-log-display').innerHTML = logs.map(l=>`
     <div class="wlog-entry">
       <span>${escapeHtml(l.date)} · ${escapeHtml(l.hours)}h · ${escapeHtml(l.quality)}</span>
       <span style="color:var(--muted);font-size:.75rem">${l.sharedWith ? '📤 Sent to teacher' : '🔒 Private'}</span>
-    </div>`).join('');
+    </div>`).join('') || '<p style="color:var(--muted);font-size:.82rem;padding:8px 0">No entries in the last 7 days.</p>';
+}
 
-  const respLogs = logs.filter(l => l.type==='resp').slice(-5).reverse();
-  document.getElementById('resp-log-display').innerHTML = respLogs.map(l=>`
-    <div class="wlog-entry"><span>${escapeHtml(l.text)}</span><span>${escapeHtml(l.date)}</span></div>`).join('');
+function renderRespLog(){
+  const filterVal = document.getElementById('resp-log-filter')?.value || '';
+  let logs = gw().filter(w => w.studentId === CU.id && w.type==='resp');
+  if(filterVal === '__private') logs = logs.filter(l => !l.shared);
+  else if(filterVal) logs = logs.filter(l => l.shared && l.sharedWith?.classId === filterVal);
+  logs = logs.slice(-5).reverse();
+  document.getElementById('resp-log-display').innerHTML = logs.map(l=>`
+    <div class="wlog-entry"><span>${escapeHtml(l.text)}</span><span>${escapeHtml(l.date)}</span></div>`).join('') || '<p style="color:var(--muted);font-size:.82rem;padding:8px 0">No entries in the last 7 days.</p>';
+}
+
+// WELLNESS
+function renderWellnessSection(){
+  pruneWellnessLogs();
 
   const myClasses = gc().filter(c => CU.classIds?.includes(c.id));
+
+  ensureLogFilterDropdown('sleep', 'sleep-log-display', myClasses, renderSleepLog);
+  ensureLogFilterDropdown('resp',  'resp-log-display',  myClasses, renderRespLog);
+
+  renderSleepLog();
+  renderRespLog();
+
   const shareRows = ['sleep-share-row','resp-share-row','energy-share-row'];
   shareRows.forEach(id => {
     const row = document.getElementById(id);
