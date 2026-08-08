@@ -1114,18 +1114,20 @@ function renderCalendar(){
 function renderStats(){
   const classes = gc();
   const activeClassIds = new Set(classes.map(c => c.id));
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
 
-  // MOOD PRUNE: a mood tagged with a classId that isn't 'general' and isn't
-  // in the current class list means that class was deleted since the mood
-  // was logged - there's no teacher left who could see it, and it just
-  // clutters the student's own history with dead class references. Drop
-  // those permanently, same way deleted-class wellness logs already get
-  // pruned in renderWellnessSection.
+  // MOOD PRUNE: drop anything shared to a class that's since been deleted
+  // (no teacher left who could see it), AND anything older than 7 days so
+  // history doesn't grow forever - matches the same weekly-reset behavior
+  // as the Wellness tracker.
   const allMoods = gm();
   const keptMoods = allMoods.filter(m => {
     if(m.studentId !== CU.id) return true; // never touch other students' rows
-    if(!m.classId || m.classId === 'general') return true;
-    return activeClassIds.has(m.classId);
+    if(m.date < cutoffStr) return false;
+    if(m.classId && m.classId !== 'general' && !activeClassIds.has(m.classId)) return false;
+    return true;
   });
   if(keptMoods.length !== allMoods.length) S.set('moods', keptMoods);
 
