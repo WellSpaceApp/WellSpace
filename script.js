@@ -1604,10 +1604,10 @@ function renderStudentTable(){
 // MOOD REPORTS
 function renderMoodReports(){
   const students=getMyStudents();
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);
+  const myClassIds = getMyClasses().map(c => c.id);
+  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&myClassIds.includes(m.classId));
   const grid=document.getElementById('t-mood-grid');
   if(students.length===0){ grid.innerHTML='<p style="color:var(--muted)">No students yet.</p>'; return; }
-const myClassIds = getMyClasses().map(c => c.id);
   const activeStudents = students.filter(s => s.classIds?.some(id => myClassIds.includes(id)));
   grid.innerHTML=activeStudents.map(s=>{
     const sm=moods.filter(m=>m.studentId===s.id);
@@ -1637,15 +1637,14 @@ const myClassIds = getMyClasses().map(c => c.id);
 function renderWellnessTable(){
   const students = getMyStudents();
   const myClassIds = getMyClasses().map(c => c.id);
-  const allW = gw().filter(w =>
+const allW = gw().filter(w =>
     w.shared &&
-    students.some(s => s.id === w.studentId) &&
-    (w.sharedWith?.teacherId === CU.id || myClassIds.includes(w.sharedWith?.classId))
+    myClassIds.includes(w.sharedWith?.classId)
   );
   const allR = S.get('responsibilities',[]).filter(r =>
     r.shared &&
     students.some(s => s.id === r.studentId) &&
-    (r.sharedWith?.teacherId === CU.id || myClassIds.includes(r.sharedWith?.classId) || !r.sharedWith)
+    myClassIds.includes(r.sharedWith?.classId)
   );
   const wrap = document.getElementById('t-wellness-table');
   const classes = getMyClasses();
