@@ -1327,7 +1327,8 @@ function renderClassesSection(){
           <div class="s-class-card-body">
             <div class="s-class-meta">Period ${i+1} · ${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)} · ${escapeHtml(c.days?.join(', ')||'-')}</div>
             <span class="cls-code-badge">${escapeHtml(c.code)}</span>
-            ${c.bannerMsg?`<div class="cls-banner-msg" style="margin-top:10px">${escapeHtml(c.bannerMsg)}</div>`:''}
+         ${c.bannerMsg?`<div class="cls-banner-msg" style="margin-top:10px">${escapeHtml(c.bannerMsg)}</div>`:''}
+            <button class="btn-danger small" style="margin-top:10px" onclick="leaveClass('${c.id}','${escQ(c.subject)}')">Leave Class</button>
           </div>
         </div>`;
     }).join('');
@@ -2284,6 +2285,37 @@ function deleteResp(id){
   S.set('responsibilities', S.get('responsibilities',[]).filter(r => r.id !== id));
   toast('Removed.');
   renderRespList();
+}
+
+async function leaveClass(classId, subject){
+  if(!confirm(`Leave ${subject}? You'll need the class code to rejoin.`)) return;
+
+  CU.classIds = (CU.classIds || []).filter(id => id !== classId);
+
+  const remainingClasses = gc().filter(c => CU.classIds.includes(c.id));
+  const remainingTeacherUids = new Set(remainingClasses.map(c => c.teacherUid || c.teacherId).filter(Boolean));
+  CU.teacherUids = [...remainingTeacherUids];
+
+  const students = gs();
+  const s = students.find(x => x.id === CU.id);
+  if(s){ s.classIds = CU.classIds; S.set('students', students); }
+
+  if(fbAuth?.currentUser){
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ classIds: CU.classIds, teacherUids: CU.teacherUids }, { merge: true });
+
+    const userDoc = await fbDb.collection('users').doc(fbAuth.currentUser.uid).get();
+    let existingStudents = [];
+    if(userDoc.exists){ try{ existingStudents = JSON.parse(userDoc.data().students || '[]'); }catch{} }
+    const myEntry = existingStudents.find(x => x.id === CU.id);
+    if(myEntry){ myEntry.classIds = CU.classIds; }
+    await fbDb.collection('users').doc(fbAuth.currentUser.uid)
+      .set({ students: JSON.stringify(existingStudents) }, { merge: true });
+  }
+
+  invalidateTeacherCache();
+  toast(`Left ${subject}.`);
+  renderClassesSection();
 }
 
 // ─────────────────────────────────────────────
