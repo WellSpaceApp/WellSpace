@@ -1114,25 +1114,32 @@ function renderCalendar(){
 function renderStats(){
   const classes = gc();
   const activeClassIds = new Set(classes.map(c => c.id));
+  const activeClassLabels = new Set(classes.map(c => c.subject));
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 7);
   const cutoffStr = cutoff.toISOString().split('T')[0];
 
-  // MOOD PRUNE: drop anything shared to a class that's since been deleted
-  // (no teacher left who could see it), AND anything older than 7 days so
-  // history doesn't grow forever - matches the same weekly-reset behavior
-  // as the Wellness tracker.
+  // MOOD PRUNE: drop anything tied to a class that's since been deleted or
+  // left (no teacher left who could see it), AND anything older than 7 days
+  // so history doesn't grow forever - matches the Wellness tracker's reset.
+  // A mood only counts as a true "general" check-in (always kept, subject to
+  // the date cutoff) when it has NEITHER a classId NOR a classLabel. Older
+  // data sometimes only has classLabel set with no classId - that still
+  // needs to be validated against the current class list, or deleted
+  // classes leak through under their old label forever.
   const allMoods = gm();
   const keptMoods = allMoods.filter(m => {
     if(m.studentId !== CU.id) return true; // never touch other students' rows
     if(m.date < cutoffStr) return false;
-    if(m.classId && m.classId !== 'general' && !activeClassIds.has(m.classId)) return false;
-    return true;
+    const hasClassRef = (m.classId && m.classId !== 'general') || m.classLabel;
+    if(!hasClassRef) return true; // genuine general check-in
+    const classIdOk    = m.classId && m.classId !== 'general' && activeClassIds.has(m.classId);
+    const classLabelOk = m.classLabel && activeClassLabels.has(m.classLabel);
+    return classIdOk || classLabelOk;
   });
   if(keptMoods.length !== allMoods.length) S.set('moods', keptMoods);
 
-  const myMoods=keptMoods.filter(m=>m.studentId===CU.id);
-  const myGoals=ggo().filter(g=>g.studentId===CU.id);
+  const myMoods=keptMoods.filter(m=>m.studentId===CU.id);  const myGoals=ggo().filter(g=>g.studentId===CU.id);
   const completed=myGoals.filter(g=>g.done).length;
   const shared=myMoods.filter(m=>m.shared).length;
   document.getElementById('stats-cards').innerHTML=`
