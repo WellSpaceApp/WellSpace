@@ -829,8 +829,8 @@ function sSection(name){
   if(name==='mood')     renderMoodCheck();
   if(name==='goals')    renderGoalsSection();
   if(name==='calendar') renderCalendar();
-  if(name==='stats')    renderStats();
-  if(name==='wellness') renderWellnessSection();
+   if(name==='stats')    { renderStats(); }
+   if(name==='wellness') renderWellnessSection();
   if(name==='help')     renderHelpSection();
   if(name==='classes')  renderClassesSection();
   if(name==='profile')  renderStudentProfile();
@@ -1111,8 +1111,14 @@ function renderCalendar(){
 }
 
 // STATS
-function renderStats(){
-  const classes = gc();
+async function renderStats(){
+  // Always fetch the live class list from Firestore before pruning, rather
+  // than trusting the local cache - a class deleted on another device
+  // (e.g. teacher's laptop) wouldn't be reflected in this device's cache
+  // until a full reload, which is exactly how a "deleted" class can keep
+  // showing up in a student's mood history indefinitely.
+  const classes = await fsGetAllClasses();
+  cSet('classes', classes);
   const activeClassIds = new Set(classes.map(c => c.id));
   const activeClassLabels = new Set(classes.map(c => c.subject));
   const cutoff = new Date();
@@ -1169,11 +1175,13 @@ function renderStats(){
 //      entries alike. Journals are untouched - that's a long-term
 //      reflective log, kept on purpose.
 // ─────────────────────────────────────────────
-function pruneWellnessLogs(){
+async function pruneWellnessLogs(){
+  const classes = await fsGetAllClasses();
+  cSet('classes', classes);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 7);
   const cutoffStr = cutoff.toISOString().split('T')[0];
-  const activeClassIds = new Set(gc().map(c => c.id));
+  const activeClassIds = new Set(classes.map(c => c.id));
 
   const before = gw();
   const kept = before.filter(w => {
@@ -1229,8 +1237,8 @@ function renderRespLog(){
 }
 
 // WELLNESS
-function renderWellnessSection(){
-  pruneWellnessLogs();
+async function renderWellnessSection(){
+  await pruneWellnessLogs();
 
   const myClasses = gc().filter(c => CU.classIds?.includes(c.id));
 
