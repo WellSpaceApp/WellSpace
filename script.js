@@ -1607,15 +1607,23 @@ function renderMoodReports(){
   const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared);
   const grid=document.getElementById('t-mood-grid');
   if(students.length===0){ grid.innerHTML='<p style="color:var(--muted)">No students yet.</p>'; return; }
-  grid.innerHTML=students.map(s=>{
+const myClassIds = getMyClasses().map(c => c.id);
+  const activeStudents = students.filter(s => s.classIds?.some(id => myClassIds.includes(id)));
+  grid.innerHTML=activeStudents.map(s=>{
     const sm=moods.filter(m=>m.studentId===s.id);
     const counts={};
     sm.forEach(m=>{ counts[m.mood]=(counts[m.mood]||0)+1; });
     const total=sm.length||1;
     const isAlert=sm.some(m=>NEGATIVE_MOODS.includes(m.mood)&&m.date===today());
+    const studentClasses = getMyClasses().filter(c => s.classIds?.includes(c.id));
+    const classBadges = studentClasses.map(c => {
+      const textColor = getContrastColor(c.color || '#1d5fa6');
+      return `<span style="display:inline-block;background:${c.color||'#1d5fa6'};color:${textColor};border-radius:5px;padding:2px 8px;font-size:.72rem;font-weight:700;margin:2px 2px 6px 0">${escapeHtml(c.subject)}</span>`;
+    }).join('');
     return `
       <div class="t-mood-card" ${isAlert?'style="border:2px solid var(--red)"':''}>
         <h4>${escapeHtml(s.name)} ${isAlert?'⚠️':''}</h4>
+        <div style="margin-bottom:8px">${classBadges}</div>
         ${Object.entries(counts).map(([mood,n])=>`
           <div class="mbar-row">
             <span style="width:80px;font-size:.78rem">${MOOD_CFG[mood]?.icon} ${escapeHtml(mood)}</span>
@@ -1625,7 +1633,6 @@ function renderMoodReports(){
       </div>`;
   }).join('');
 }
-
 // WELLNESS TABLE
 function renderWellnessTable(){
   const students = getMyStudents();
