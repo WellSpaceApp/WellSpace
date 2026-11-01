@@ -218,6 +218,34 @@ async function fsGetJournal(uid){
 }
 
 // ─────────────────────────────────────────────
+// PRIVATE LOGS - moods/wellness/responsibilities entries marked "Keep
+// Private". These used to live in /users/{uid} alongside shared entries,
+// but a linked teacher's read rule grants access to the WHOLE doc, not
+// just the shared fields in it - so "private" entries were readable via
+// direct Firestore access even though the UI never showed them. Same bug
+// class journals had; same fix.
+// ─────────────────────────────────────────────
+async function fsSetPrivate(uid, key, value){
+  if(!fbDb || !uid) return;
+  try {
+    await fbDb.collection('private_logs').doc(uid).set({ [key]: JSON.stringify(value) }, { merge: true });
+  } catch(e){
+    console.error('fsSetPrivate failed for key', key, e);
+    toast('⚠️ Could not save - check your connection and try again.');
+  }
+}
+
+async function fsGetPrivate(uid, key){
+  if(!fbDb || !uid) return [];
+  try {
+    const doc = await fbDb.collection('private_logs').doc(uid).get();
+    if(!doc.exists) return [];
+    const val = doc.data()[key];
+    return val ? JSON.parse(val) : [];
+  } catch(e){ return []; }
+}
+
+// ─────────────────────────────────────────────
 // LOCAL CACHE - fast reads, Firestore is source of truth
 // ─────────────────────────────────────────────
 const cache = {};
@@ -236,6 +264,11 @@ const PRIVATE_KEYS= ['students','teachers'];
 // ─────────────────────────────────────────────
 // UNIFIED S - same API as before, now Firestore-backed
 // ─────────────────────────────────────────────
+// Keys whose entries carry a per-entry "shared" flag: the shared subset
+// stays teacher-readable in /users/{uid}; everything else goes to the
+// owner-only /private_logs/{uid}. See fsSetPrivate above.
+const SPLIT_KEYS = ['moods','wellness','responsibilities'];
+
 const S = {
   get(k, def=null){
     // Return from cache first for speed
@@ -248,6 +281,14 @@ const S = {
       // Journals are private-by-rule and live in their own collection -
       // see fsSetJournal for why this can't just fall through to fsSet().
       if(fbAuth?.currentUser) fsSetJournal(fbAuth.currentUser.uid, v);
+    } else if(SPLIT_KEYS.includes(k)){
+      const uid = fbAuth?.currentUser?.uid;
+      if(uid){
+        const shared   = v.filter(item => item.shared === true);
+        const unshared = v.filter(item => item.shared !== true);
+        fsSet(k, shared);
+        fsSetPrivate(uid, k, unshared);
+      }
     } else if(SHARED_KEYS.includes(k)){
       fsSetShared(k, v);
     } else {
@@ -295,12 +336,42 @@ async function loadUserData(){
             .update({ journals: firebase.firestore.FieldValue.delete() });
         } catch(e){ console.error('journal migration failed', e); }
       }
+
+      // MIGRATION: same issue as journals, for moods/wellness/responsibilities
+      // marked private. Split out anything not explicitly shared:true into
+      // the owner-only /private_logs/{uid} collection.
+      for(const key of SPLIT_KEYS){
+        if(!data[key]) continue;
+        try{
+          const all = JSON.parse(data[key]);
+          const sharedOnly   = all.filter(item => item.shared === true);
+          const unsharedOnly = all.filter(item => item.shared !== true);
+          if(unsharedOnly.length){
+            const existingPrivate = await fsGetPrivate(fbAuth.currentUser.uid, key);
+            await fsSetPrivate(fbAuth.currentUser.uid, key, [...existingPrivate, ...unsharedOnly]);
+          }
+          if(sharedOnly.length !== all.length){
+            await fbDb.collection('users').doc(fbAuth.currentUser.uid)
+              .set({ [key]: JSON.stringify(sharedOnly) }, { merge: true });
+          }
+        } catch(e){ console.error(key+' migration failed', e); }
+      }
     }
 
     // Load journals from their dedicated owner-only collection (source of
     // truth going forward - never from /users/{uid}).
     const journals = await fsGetJournal(fbAuth.currentUser.uid);
     cSet('journals', journals);
+
+    // Merge private (unshared) moods/wellness/responsibilities back in for
+    // this student's own view. Teachers never read /private_logs - they
+    // only ever get the shared subset from /users/{uid}.
+    for(const key of SPLIT_KEYS){
+      const privateItems = await fsGetPrivate(fbAuth.currentUser.uid, key);
+      if(privateItems.length){
+        cSet(key, [...cGet(key, []), ...privateItems]);
+      }
+    }
 
     // ALSO load profile data (classIds, name, etc.) from /profiles/{uid}
     const profileDoc = await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).get();
