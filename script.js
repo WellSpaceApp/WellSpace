@@ -1484,7 +1484,7 @@ function getContrastColor(hex){
 }
 
 // CLASSES (student)
-function renderClassesSection(){
+async function renderClassesSection(){
   const myClasses=gc().filter(c=>CU.classIds&&CU.classIds.includes(c.id));
   const list=document.getElementById('s-classes-list');
   if(myClasses.length===0){
@@ -1493,8 +1493,28 @@ function renderClassesSection(){
     const order = CU.periodOrder?.length ? CU.periodOrder : myClasses.map(c=>c.id);
     const ordered = order.map(id=>myClasses.find(c=>c.id===id)).filter(Boolean);
     myClasses.forEach(c=>{ if(!ordered.find(x=>x.id===c.id)) ordered.push(c); });
+
+    // Look up each class's teacher profile (for socialWorker contact).
+    // Cheap - at most one read per distinct teacher, and only the fields
+    // we need (teacherUid comes off the class doc, not from 'teachers',
+    // which students can't read anyway).
+    const teacherUids = [...new Set(ordered.map(c => c.teacherUid || c.teacherId).filter(Boolean))];
+    const teacherProfiles = {};
+    for(const uid of teacherUids){
+      const p = await getProfile(uid);
+      if(p) teacherProfiles[uid] = p;
+    }
+
     list.innerHTML=ordered.map((c,i)=>{
       const bannerHtml = buildClassBannerHTML(c, false);
+      const teacherProfile = teacherProfiles[c.teacherUid || c.teacherId];
+      const sw = teacherProfile?.socialWorker;
+      const swHtml = sw?.name && sw?.email ? `
+          <div class="sw-contact-box" style="margin-top:10px">
+            <strong>💙 Need to talk to someone?</strong>
+            <div>${escapeHtml(sw.name)}</div>
+            <div><a href="mailto:${escapeHtml(sw.email)}">${escapeHtml(sw.email)}</a></div>
+          </div>` : '';
       return `
         <div class="s-class-card">
           ${bannerHtml}
@@ -1502,6 +1522,7 @@ function renderClassesSection(){
             <div class="s-class-meta">Period ${i+1} · ${escapeHtml(c.startTime)} - ${escapeHtml(c.endTime)} · ${escapeHtml(c.days?.join(', ')||'-')}</div>
             <span class="cls-code-badge">${escapeHtml(c.code)}</span>
          ${c.bannerMsg?`<div class="cls-banner-msg" style="margin-top:10px">${escapeHtml(c.bannerMsg)}</div>`:''}
+         ${swHtml}
             <button class="btn-danger small" style="margin-top:10px" onclick="leaveClass('${c.id}','${escQ(c.subject)}')">Leave Class</button>
           </div>
         </div>`;
@@ -2145,6 +2166,10 @@ function saveSocialWorker(){
   if(!validEmail(email))return toast('Please enter a valid email address.');
   const teachers=gt(); const t=teachers.find(x=>x.id===CU.id);
   if(t){ t.socialWorker={name,email}; S.set('teachers',teachers); CU.socialWorker={name,email}; }
+  // ALSO save to /profiles/{uid} - 'teachers' lives in this teacher's own
+  // private /users/{uid} doc, which students can't read. /profiles/{uid}
+  // is the only place a linked student can actually see this contact.
+  if(fbAuth?.currentUser) saveProfile(fbAuth.currentUser.uid, { socialWorker: {name,email} });
   document.getElementById('sw-saved').classList.remove('hidden');
   setTimeout(()=>document.getElementById('sw-saved').classList.add('hidden'),3000);
   toast('Social worker contact saved! ✓');
