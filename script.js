@@ -977,7 +977,7 @@ function renderMoodCheck(){
         <div class="mood-btns">
           ${Object.keys(MOOD_CFG).map(mood=>`
             <button class="mood-btn ${existing?.mood===mood?'sel':''}" data-m="${mood}"
-              onclick="selectMood('${item.id}','${escQ(item.label)}','${mood}')">
+              onclick="selectMood('${item.id}','${item.isClass ? escQ(item.label) : ''}','${mood}')">
               ${MOOD_CFG[mood].icon} ${mood}
             </button>
           `).join('')}
