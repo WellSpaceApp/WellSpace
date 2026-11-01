@@ -959,7 +959,11 @@ function renderMoodCheck(){
 
   container.innerHTML = items.map(item => {
     const existing = todayMoods.find(m => m.classId === item.id);
-    const shareButtons = hasTeacher
+    // Per-card, not per-page: only a real class check-in has a teacher to
+    // share with. The personal "How are you feeling today?" card has no
+    // teacher attached to it, so it should never show a share prompt, even
+    // if the student happens to be in other classes.
+    const shareButtons = item.isClass
       ? `<button class="btn-green" onclick="saveMood(true)">Share with Teacher</button>
          <button class="btn-outline" onclick="saveMood(false)">Keep Private</button>`
       : `<button class="btn-green" onclick="saveMood(false)">Save</button>`;
