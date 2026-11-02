@@ -1807,13 +1807,25 @@ function renderStudentTable(){
 // MOOD REPORTS
 function renderMoodReports(){
   const students=getMyStudents();
-  const myClassIds = getMyClasses().map(c => c.id);
+  const myClasses = getMyClasses();
+  const myClassIds = myClasses.map(c => c.id);
+
+  const filterSel = document.getElementById('mood-cls-filter');
+  const prevSelection = filterSel ? filterSel.value : '';
+  if(filterSel){
+    filterSel.innerHTML = '<option value="">All Classes</option>' +
+      myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
+    if([...filterSel.options].some(o => o.value === prevSelection)) filterSel.value = prevSelection;
+  }
+  const clsFilter = filterSel ? filterSel.value : '';
+
   const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&myClassIds.includes(m.classId));
   const grid=document.getElementById('t-mood-grid');
   if(students.length===0){ grid.innerHTML='<p style="color:var(--muted)">No students yet.</p>'; return; }
-  const activeStudents = students.filter(s => s.classIds?.some(id => myClassIds.includes(id)));
+  let activeStudents = students.filter(s => s.classIds?.some(id => myClassIds.includes(id)));
+  if(clsFilter) activeStudents = activeStudents.filter(s => s.classIds?.includes(clsFilter));
   grid.innerHTML=activeStudents.map(s=>{
-    const sm=moods.filter(m=>m.studentId===s.id);
+    const sm=moods.filter(m=>m.studentId===s.id && (!clsFilter || m.classId===clsFilter));
     const counts={};
     sm.forEach(m=>{ counts[m.mood]=(counts[m.mood]||0)+1; });
     const total=sm.length||1;
