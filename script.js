@@ -1752,7 +1752,14 @@ function renderStudentTable(){
   const myClasses = getMyClasses();
   const students  = getMyStudents();
   const filterSel = document.getElementById('t-cls-filter');
+  // BUGFIX: rebuilding the dropdown's options on every call (needed so new
+  // classes show up) was also wiping out whatever the user had just
+  // selected, since replacing innerHTML resets a <select> back to its
+  // first option. Save the current selection first and restore it after
+  // rebuilding, so picking a class actually sticks.
+  const prevSelection = filterSel.value;
   filterSel.innerHTML = '<option value="">All Classes</option>' + myClasses.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
+  if([...filterSel.options].some(o => o.value === prevSelection)) filterSel.value = prevSelection;
 
   const search    = (document.getElementById('t-search')?.value||'').toLowerCase();
   const clsFilter = document.getElementById('t-cls-filter')?.value||'';
