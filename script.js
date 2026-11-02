@@ -1944,9 +1944,14 @@ function renderWeeklySummary(){
   const wrap     = document.getElementById('summary-content');
   if(!sel || !wrap) return;
 
-  // Populate the class filter dropdown
+  // BUGFIX: same issue as the Students dropdown - rebuilding the options
+  // on every render was wiping out the user's current selection, since
+  // replacing innerHTML resets a <select> back to its first option. Save
+  // the selection first and restore it after rebuilding.
+  const prevSelection = sel.value;
   sel.innerHTML = '<option value="">All Classes</option>' +
     classes.map(c => `<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
+  if([...sel.options].some(o => o.value === prevSelection)) sel.value = prevSelection;
 
   const filterClassId = sel.value;
   const activeClasses = filterClassId
