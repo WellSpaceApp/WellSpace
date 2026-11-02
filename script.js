@@ -1851,18 +1851,30 @@ function renderMoodReports(){
 // WELLNESS TABLE
 function renderWellnessTable(){
   const students = getMyStudents();
-  const myClassIds = getMyClasses().map(c => c.id);
+  const classes = getMyClasses();
+  const myClassIds = classes.map(c => c.id);
+
+  const filterSel = document.getElementById('wellness-cls-filter');
+  const prevSelection = filterSel ? filterSel.value : '';
+  if(filterSel){
+    filterSel.innerHTML = '<option value="">All Classes</option>' +
+      classes.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
+    if([...filterSel.options].some(o => o.value === prevSelection)) filterSel.value = prevSelection;
+  }
+  const clsFilter = filterSel ? filterSel.value : '';
+
 const allW = gw().filter(w =>
     w.shared &&
-    myClassIds.includes(w.sharedWith?.classId)
+    myClassIds.includes(w.sharedWith?.classId) &&
+    (!clsFilter || w.sharedWith?.classId === clsFilter)
   );
   const allR = S.get('responsibilities',[]).filter(r =>
     r.shared &&
     students.some(s => s.id === r.studentId) &&
-    myClassIds.includes(r.sharedWith?.classId)
+    myClassIds.includes(r.sharedWith?.classId) &&
+    (!clsFilter || r.sharedWith?.classId === clsFilter)
   );
   const wrap = document.getElementById('t-wellness-table');
-  const classes = getMyClasses();
   let html = '';
   if(allR.length > 0){
     const grouped = {};
@@ -1910,9 +1922,22 @@ const allW = gw().filter(w =>
 // GOALS
 function renderTeacherGoals(){
   const students=getMyStudents();
+  const classes = getMyClasses();
+
+  const filterSel = document.getElementById('goals-cls-filter');
+  const prevSelection = filterSel ? filterSel.value : '';
+  if(filterSel){
+    filterSel.innerHTML = '<option value="">All Classes</option>' +
+      classes.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
+    if([...filterSel.options].some(o => o.value === prevSelection)) filterSel.value = prevSelection;
+  }
+  const clsFilter = filterSel ? filterSel.value : '';
+
+  const visibleStudents = clsFilter ? students.filter(s => s.classIds?.includes(clsFilter)) : students;
+
   const el=document.getElementById('t-goals-list');
-  el.innerHTML=students.map(s=>{
-    const gs_=ggo().filter(g=>g.studentId===s.id);
+  el.innerHTML=visibleStudents.map(s=>{
+    const gs_=ggo().filter(g=>g.studentId===s.id && (!clsFilter || g.classId===clsFilter));
     return `<div class="t-goals-student">
       <h4>${escapeHtml(s.name)} <span style="font-weight:400;color:var(--muted);font-size:.82rem">${gs_.length} task${gs_.length!==1?'s':''}</span></h4>
       ${gs_.slice(0,6).map(g=>`
@@ -1920,14 +1945,25 @@ function renderTeacherGoals(){
       || '<p style="font-size:.82rem;color:var(--muted)">No goals entered yet.</p>'}
       ${gs_.length>6?`<p style="font-size:.78rem;color:var(--muted);margin-top:4px">+${gs_.length-6} more</p>`:''}
     </div>`;
-  }).join('')||'<p style="color:var(--muted)">No students yet.</p>';
+  }).join('')||'<p style="color:var(--muted)">No students in this class yet.</p>';
 }
 
 // ALERTS
 function renderAlerts(){
   const students=getMyStudents();
-  const myClassIds=getMyClasses().map(c=>c.id);
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&NEGATIVE_MOODS.includes(m.mood)&&myClassIds.includes(m.classId));
+  const classes = getMyClasses();
+  const myClassIds=classes.map(c=>c.id);
+
+  const filterSel = document.getElementById('alerts-cls-filter');
+  const prevSelection = filterSel ? filterSel.value : '';
+  if(filterSel){
+    filterSel.innerHTML = '<option value="">All Classes</option>' +
+      classes.map(c=>`<option value="${c.id}">${escapeHtml(c.subject)}</option>`).join('');
+    if([...filterSel.options].some(o => o.value === prevSelection)) filterSel.value = prevSelection;
+  }
+  const clsFilter = filterSel ? filterSel.value : '';
+
+  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&NEGATIVE_MOODS.includes(m.mood)&&myClassIds.includes(m.classId)&&(!clsFilter || m.classId===clsFilter));
   const el=document.getElementById('t-alerts-list');
   if(moods.length===0){ el.innerHTML='<p style="color:var(--muted);text-align:center;padding:40px 0">🎉 No alerts - all students seem to be doing well!</p>'; return; }
   const grouped={};
