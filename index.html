@@ -501,14 +501,23 @@
       </section>
       <section class="dsec" id="t-sec-wellness">
         <div class="sec-hdr"><h3>🌱 Student Wellness Data</h3><p>Only data students chose to share</p></div>
+        <select id="wellness-cls-filter" class="sel" aria-label="Filter wellness data by class" onchange="renderWellnessTable()" style="margin-bottom:16px">
+          <option value="">All Classes</option>
+        </select>
         <div id="t-wellness-table"></div>
       </section>
       <section class="dsec" id="t-sec-goals">
         <div class="sec-hdr"><h3>🎯 Student Goals</h3></div>
+        <select id="goals-cls-filter" class="sel" aria-label="Filter goals by class" onchange="renderTeacherGoals()" style="margin-bottom:16px">
+          <option value="">All Classes</option>
+        </select>
         <div id="t-goals-list"></div>
       </section>
       <section class="dsec" id="t-sec-alerts">
         <div class="sec-hdr"><h3>⚠️ Students Needing Support</h3><p>Based on shared mood check-ins</p></div>
+        <select id="alerts-cls-filter" class="sel" aria-label="Filter alerts by class" onchange="renderAlerts()" style="margin-bottom:16px">
+          <option value="">All Classes</option>
+        </select>
         <div id="t-alerts-list"></div>
       </section>
       <section class="dsec" id="t-sec-summary">
