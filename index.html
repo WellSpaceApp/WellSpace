@@ -492,8 +492,11 @@
         </div>
         <div id="t-student-table"></div>
       </section>
-      <section class="dsec" id="t-sec-moods">
+       <section class="dsec" id="t-sec-moods">
         <div class="sec-hdr"><h3>😊 Mood Reports</h3><p>Shared moods from your students</p></div>
+        <select id="mood-cls-filter" class="sel" aria-label="Filter mood reports by class" onchange="renderMoodReports()" style="margin-bottom:16px">
+          <option value="">All Classes</option>
+        </select>
         <div id="t-mood-grid" class="t-mood-grid"></div>
       </section>
       <section class="dsec" id="t-sec-wellness">
