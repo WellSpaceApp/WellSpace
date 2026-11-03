@@ -1772,7 +1772,11 @@ function renderTeacherOverview(){
   const classes=getMyClasses();
   const myClassIds=classes.map(c=>c.id);
   const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&myClassIds.includes(m.classId));
-  const alerts=moods.filter(m=>NEGATIVE_MOODS.includes(m.mood));
+  const alerts=moods.filter(m=>{
+    if(!NEGATIVE_MOODS.includes(m.mood) || m.date!==today()) return false;
+    const cls = classes.find(c=>c.id===m.classId);
+    return cls ? classTimeStatus(cls).open : false;
+  });
   document.getElementById('t-stats-row').innerHTML=`
     <div class="tstat blue"><div class="tstat-n">${students.length}</div><div class="tstat-l">Students</div></div>
     <div class="tstat green"><div class="tstat-n">${classes.length}</div><div class="tstat-l">Classes</div></div>
@@ -1916,8 +1920,55 @@ function renderMoodReports(){
             <div class="mbar-track"><div class="mbar-fill" style="width:${(n/total*100).toFixed(0)}%;background:${NEGATIVE_MOODS.includes(mood)?'var(--red)':'var(--blue)'}"></div></div>
             <span style="font-size:.78rem">${n}</span>
           </div>`).join('')||'<p style="color:var(--muted);font-size:.82rem">No shared moods yet</p>'}
-      </div>`;
+       </div>`;
   }).join('');
+}
+
+function openStudentReport(studentId){
+  document.querySelectorAll('#t-main .dsec').forEach(sec=>sec.classList.remove('active'));
+  document.getElementById('t-sec-student-report').classList.add('active');
+  renderStudentReport(studentId);
+}
+
+function printStudentReport(){ window.print(); }
+
+function renderStudentReport(studentId){
+  const students = getMyStudents();
+  const s = students.find(x => x.id === studentId);
+  const titleEl = document.getElementById('student-report-title');
+  const wrap = document.getElementById('student-report-content');
+  if(!s){ wrap.innerHTML = '<p style="color:var(--muted)">Student not found.</p>'; return; }
+  if(titleEl) titleEl.textContent = `📄 ${s.name}'s Report`;
+
+  const past7 = [];
+  for(let i=0;i<7;i++){ const d=new Date(); d.setDate(d.getDate()-i); past7.push(d.toISOString().split('T')[0]); }
+  const past7Set = new Set(past7);
+  const fmtDate = d => new Date(d+'T00:00:00').toLocaleDateString('en-CA',{weekday:'short',month:'short',day:'numeric'});
+  const myClassIds = getMyClasses().map(c=>c.id);
+
+  const moods = gm().filter(m=>m.studentId===studentId && m.shared && myClassIds.includes(m.classId) && past7Set.has(m.date))
+    .sort((a,b)=>b.date.localeCompare(a.date));
+  const sleep = gw().filter(w=>w.studentId===studentId && w.type==='sleep' && w.shared && past7Set.has(w.date))
+    .sort((a,b)=>b.date.localeCompare(a.date));
+  const goals = ggo().filter(g=>g.studentId===studentId);
+  const doneGoals = goals.filter(g=>g.done).length;
+
+  wrap.innerHTML = `
+    <div style="font-size:.82rem;color:var(--muted);margin-bottom:20px">Period: <strong>${fmtDate(past7[6])} – ${fmtDate(past7[0])}</strong></div>
+    <h4 style="color:var(--navy);margin-bottom:10px">😊 Mood History (${moods.length} shared check-in${moods.length!==1?'s':''})</h4>
+    ${moods.length ? moods.map(m=>{
+      const cls = getMyClasses().find(c=>c.id===m.classId);
+      return `<div class="mood-hist-item">
+        <span class="mtag ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)}</span>
+        <span>${escapeHtml(cls?.subject||'-')}</span>
+        <span style="margin-left:auto;color:var(--muted);font-size:.78rem">${m.date}</span>
+      </div>`;
+    }).join('') : '<p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">No shared moods this week.</p>'}
+    <h4 style="color:var(--navy);margin:20px 0 10px">😴 Sleep Log (${sleep.length} shared entr${sleep.length!==1?'ies':'y'})</h4>
+    ${sleep.length ? sleep.map(w=>`<div class="wlog-entry"><span>${w.date} · ${escapeHtml(w.hours)}h · ${escapeHtml(w.quality)}</span></div>`).join('') : '<p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">No shared sleep logs this week.</p>'}
+    <h4 style="color:var(--navy);margin:20px 0 10px">🎯 Goals</h4>
+    <p style="font-size:.85rem;color:var(--muted)">${doneGoals}/${goals.length} tasks completed (all time)</p>
+  `;
 }
 // WELLNESS TABLE
 function renderWellnessTable(){
@@ -2034,7 +2085,12 @@ function renderAlerts(){
   }
   const clsFilter = filterSel ? filterSel.value : '';
 
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&NEGATIVE_MOODS.includes(m.mood)&&myClassIds.includes(m.classId)&&(!clsFilter || m.classId===clsFilter));
+  const moods=gm().filter(m=>{
+    if(!(students.some(s=>s.id===m.studentId)&&m.shared&&NEGATIVE_MOODS.includes(m.mood)&&myClassIds.includes(m.classId)&&(!clsFilter || m.classId===clsFilter))) return false;
+    if(m.date!==today()) return false;
+    const cls = classes.find(c=>c.id===m.classId);
+    return cls ? classTimeStatus(cls).open : false;
+  });
   const el=document.getElementById('t-alerts-list');
   if(moods.length===0){ el.innerHTML='<p style="color:var(--muted);text-align:center;padding:40px 0">🎉 No alerts - all students seem to be doing well!</p>'; return; }
   const grouped={};
