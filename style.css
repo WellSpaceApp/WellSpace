@@ -711,3 +711,9 @@ html.a11y-reduced-motion *::after {
   .share-toggle { flex-wrap: wrap; }
   .profile-card .fgroup > div[style*="flex"] { flex-wrap: wrap; }
 }
+@media print {
+  .sidebar, .app-header, .ham { display: none !important; }
+  .app-main { padding: 0 !important; }
+  .dsec:not(.active) { display: none !important; }
+  .btn-outline.small[onclick*="print"] { display: none !important; }
+}
