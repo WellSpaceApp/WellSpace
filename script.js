@@ -922,6 +922,33 @@ function renderHome(){
   const [, , msg] = msgs.find(([s,e])=>hour>=s&&hour<e)||msgs[0];
   bannerEl.innerHTML=`<strong>${msg.replace('{n}',escapeHtml(CU.name))}</strong><p>${new Date().toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</p>`;
 
+  const todayMoodsAll = gm().filter(m => m.studentId===CU.id && m.date===today());
+  const todaySleep = gw().find(w => w.studentId===CU.id && w.type==='sleep' && w.date===today());
+  const todaySummaryEl = document.getElementById('s-home-today');
+  if(todaySummaryEl){
+    if(todayMoodsAll.length===0 && !todaySleep){
+      todaySummaryEl.innerHTML='';
+    } else {
+      const poorSleep = todaySleep && (todaySleep.quality==='Poor' || parseFloat(todaySleep.hours) < 6);
+      const needsCare = poorSleep || todayMoodsAll.some(m=>NEGATIVE_MOODS.includes(m.mood));
+      const moodChips = todayMoodsAll.map(m=>{
+        const cls = gc().find(c=>c.id===m.classId);
+        const label = cls?.subject || 'General';
+        return `<span class="mood-tag-sm ${m.mood}" style="margin:2px">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)} <span style="opacity:.7">· ${escapeHtml(label)}</span></span>`;
+      }).join('');
+      todaySummaryEl.innerHTML = `
+        <div class="ai-nudge" style="margin-bottom:16px;${needsCare?'border-color:var(--red)':''}">
+          <div class="ai-nudge-icon">${needsCare?'⚠️':'📊'}</div>
+          <div>
+            <strong>${needsCare?"Today's been a bit rough":"Today's check-in"}</strong>
+            <div style="margin-top:6px">${moodChips}</div>
+            ${todaySleep?`<p style="font-size:.82rem;color:var(--muted);margin-top:6px">😴 ${escapeHtml(todaySleep.hours)}h sleep · ${escapeHtml(todaySleep.quality)}</p>`:''}
+            ${needsCare?`<p style="font-size:.82rem;margin-top:6px">Support is always available - <a href="#" onclick="sSection('help');return false;">see Help & Crisis</a>.</p>`:''}
+          </div>
+        </div>`;
+    }
+  }
+
   const goals=ggo().filter(g=>g.studentId===CU.id&&!g.done).slice(0,4);
   const todayDay=new Date().toLocaleDateString('en-CA',{weekday:'long'});
   const todayGoals=goals.filter(g=>g.day===todayDay);
@@ -942,6 +969,20 @@ function renderHome(){
   }
 }
 
+// Is this class's scheduled period happening right now, today? Powers
+// both the student's time-restricted check-in and the teacher's "only
+// show alerts while the period is live" behavior.
+function classTimeStatus(cls){
+  if(!cls) return { open:false, label:'' };
+  const now = new Date();
+  const dayName = now.toLocaleDateString('en-CA',{weekday:'long'});
+  const curMin = now.getHours()*60 + now.getMinutes();
+  const toMin = t => { const [h,m] = (t||'0:0').split(':').map(Number); return (h||0)*60+(m||0); };
+  const open = (cls.days||[]).includes(dayName) && curMin >= toMin(cls.startTime) && curMin < toMin(cls.endTime);
+  const daysShort = (cls.days||[]).map(d=>d.slice(0,3)).join(', ');
+  return { open, label: `${daysShort} ${cls.startTime||''} - ${cls.endTime||''}` };
+}
+
 // MOOD CHECK
 function renderMoodCheck(){
   const myClasses = gc().filter(c => CU.classIds && CU.classIds.includes(c.id));
@@ -950,8 +991,8 @@ function renderMoodCheck(){
   const hasTeacher = hasClasses();
 
   const items = [
-    ...(hasTeacher ? myClasses.map(c => ({id:c.id, label:c.subject, time:`${c.startTime} - ${c.endTime}`, isClass:true})) : []),
-    {id:'general', label:'How are you feeling today?', time:'', isClass:false},
+    ...(hasTeacher ? myClasses.map(c => ({id:c.id, label:c.subject, time:`${c.startTime} - ${c.endTime}`, isClass:true, cls:c})) : []),
+    {id:'general', label:'How are you feeling today?', time:'', isClass:false, cls:null},
   ];
 
   const sub = document.querySelector('#s-sec-mood .sec-hdr p');
@@ -959,10 +1000,41 @@ function renderMoodCheck(){
 
   container.innerHTML = items.map(item => {
     const existing = todayMoods.find(m => m.classId === item.id);
-    // Per-card, not per-page: only a real class check-in has a teacher to
-    // share with. The personal "How are you feeling today?" card has no
-    // teacher attached to it, so it should never show a share prompt, even
-    // if the student happens to be in other classes.
+    // A class period's check-in only opens while that class is actually
+    // in session (today, within its scheduled start/end time). The
+    // personal card has no schedule and is always open.
+    const status = item.isClass ? classTimeStatus(item.cls) : { open:true, label:'' };
+
+    // Window closed, nothing logged yet - greyed placeholder, no buttons.
+    if(item.isClass && !status.open && !existing){
+      return `
+      <div class="mood-card" style="opacity:.6">
+        <div class="mood-card-hdr">
+          <h4>📚 ${escapeHtml(item.label)}</h4>
+          ${item.time ? `<span class="cls-time">${escapeHtml(item.time)}</span>` : ''}
+        </div>
+        <div style="margin-top:8px;padding:10px 12px;background:var(--bg,#f1f5f9);border-radius:8px;font-size:.85rem;color:var(--muted)">⏰ Available ${escapeHtml(status.label)}</div>
+      </div>`;
+    }
+
+    // Already logged today - locked-in confirmation, kept visible all day
+    // regardless of whether the period has since ended.
+    if(existing){
+      return `
+      <div class="mood-card">
+        <div class="mood-card-hdr">
+          <h4>${item.isClass ? '📚 ' : ''}${escapeHtml(item.label)}</h4>
+          ${item.time ? `<span class="cls-time">${escapeHtml(item.time)}</span>` : ''}
+        </div>
+        <div class="mood-btns">
+          ${Object.keys(MOOD_CFG).map(mood=>`
+            <button class="mood-btn ${existing.mood===mood?'sel':''}" disabled>${MOOD_CFG[mood].icon} ${mood}</button>
+          `).join('')}
+        </div>
+        <div class="mood-done">✓ Mood logged${hasTeacher && existing.shared ? ' · Shared with teacher' : ' · Private'}</div>
+      </div>`;
+    }
+
     const shareButtons = item.isClass
       ? `<button class="btn-green" onclick="saveMood(true)">Share with Teacher</button>
          <button class="btn-outline" onclick="saveMood(false)">Keep Private</button>`
@@ -976,13 +1048,12 @@ function renderMoodCheck(){
         </div>
         <div class="mood-btns">
           ${Object.keys(MOOD_CFG).map(mood=>`
-            <button class="mood-btn ${existing?.mood===mood?'sel':''}" data-m="${mood}"
+            <button class="mood-btn" data-m="${mood}"
               onclick="selectMood('${item.id}','${item.isClass ? escQ(item.label) : ''}','${mood}')">
               ${MOOD_CFG[mood].icon} ${mood}
             </button>
           `).join('')}
         </div>
-        ${existing ? `<div class="mood-done">✓ Mood logged${hasTeacher && existing.shared ? ' · Shared with teacher' : ' · Private'}</div>` : ''}
       </div>
       <div id="mood-support-popup-${item.id}" class="support-popup hidden">
         <div class="sp-inner">
