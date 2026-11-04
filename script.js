@@ -1017,13 +1017,13 @@ function renderMoodCheck(){
       </div>`;
     }
 
-    // Already logged today - locked-in confirmation, kept visible all day
-    // regardless of whether the period has since ended.
-    if(existing){
+    // Period ended with something already logged - final, locked in for
+    // the day.
+    if(item.isClass && !status.open && existing){
       return `
       <div class="mood-card">
         <div class="mood-card-hdr">
-          <h4>${item.isClass ? '📚 ' : ''}${escapeHtml(item.label)}</h4>
+          <h4>📚 ${escapeHtml(item.label)}</h4>
           ${item.time ? `<span class="cls-time">${escapeHtml(item.time)}</span>` : ''}
         </div>
         <div class="mood-btns">
@@ -1035,6 +1035,10 @@ function renderMoodCheck(){
       </div>`;
     }
 
+    // Still open (or the personal card, always open) - fully interactive.
+    // Students can change their mind as many times as they like while the
+    // period is live; saveMood() overwrites the existing entry each time.
+    // It only locks in once the period actually ends.
     const shareButtons = item.isClass
       ? `<button class="btn-green" onclick="saveMood(true)">Share with Teacher</button>
          <button class="btn-outline" onclick="saveMood(false)">Keep Private</button>`
@@ -1048,12 +1052,13 @@ function renderMoodCheck(){
         </div>
         <div class="mood-btns">
           ${Object.keys(MOOD_CFG).map(mood=>`
-            <button class="mood-btn" data-m="${mood}"
+            <button class="mood-btn ${existing?.mood===mood?'sel':''}" data-m="${mood}"
               onclick="selectMood('${item.id}','${item.isClass ? escQ(item.label) : ''}','${mood}')">
               ${MOOD_CFG[mood].icon} ${mood}
             </button>
           `).join('')}
         </div>
+        ${existing ? `<div class="mood-done">✓ Mood logged${hasTeacher && existing.shared ? ' · Shared with teacher' : ' · Private'} · you can still change this</div>` : ''}
       </div>
       <div id="mood-support-popup-${item.id}" class="support-popup hidden">
         <div class="sp-inner">
@@ -1324,9 +1329,10 @@ async function renderStats(){
 async function pruneWellnessLogs(){
   const classes = await fsGetAllClasses();
   cSet('classes', classes);
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 7);
-  const cutoffStr = cutoff.toISOString().split('T')[0];
+  // Calendar-week reset (Sunday) instead of a rolling 7-day window, so
+  // the Wellness Tracker's sleep/responsibility logs go back to zero
+  // every Sunday rather than quietly scrolling day by day.
+  const cutoffStr = startOfWeekStr();
   const activeClassIds = new Set(classes.map(c => c.id));
 
   const before = gw();
@@ -1894,7 +1900,7 @@ function renderMoodReports(){
   }
   const clsFilter = filterSel ? filterSel.value : '';
 
-  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&myClassIds.includes(m.classId));
+  const moods=gm().filter(m=>students.some(s=>s.id===m.studentId)&&m.shared&&myClassIds.includes(m.classId)&&m.date>=startOfWeekStr());
   const grid=document.getElementById('t-mood-grid');
   if(students.length===0){ grid.innerHTML='<p style="color:var(--muted)">No students yet.</p>'; return; }
   let activeStudents = students.filter(s => s.classIds?.some(id => myClassIds.includes(id)));
@@ -1940,32 +1946,52 @@ function renderStudentReport(studentId){
   if(!s){ wrap.innerHTML = '<p style="color:var(--muted)">Student not found.</p>'; return; }
   if(titleEl) titleEl.textContent = `📄 ${s.name}'s Report`;
 
-  const past7 = [];
-  for(let i=0;i<7;i++){ const d=new Date(); d.setDate(d.getDate()-i); past7.push(d.toISOString().split('T')[0]); }
-  const past7Set = new Set(past7);
+  // This week, Sunday through Saturday - matches the weekly reset
+  // everywhere else (Mood Reports, shared responsibilities, Wellness
+  // Tracker), so the report always shows the current week, not a rolling
+  // 7-day window.
+  const weekStart = startOfWeekStr();
+  const weekDates = [];
+  for(let i=0;i<7;i++){ const d=new Date(weekStart+'T00:00:00'); d.setDate(d.getDate()+i); weekDates.push(d.toISOString().split('T')[0]); }
   const fmtDate = d => new Date(d+'T00:00:00').toLocaleDateString('en-CA',{weekday:'short',month:'short',day:'numeric'});
   const myClassIds = getMyClasses().map(c=>c.id);
 
-  const moods = gm().filter(m=>m.studentId===studentId && m.shared && myClassIds.includes(m.classId) && past7Set.has(m.date))
-    .sort((a,b)=>b.date.localeCompare(a.date));
-  const sleep = gw().filter(w=>w.studentId===studentId && w.type==='sleep' && w.shared && past7Set.has(w.date))
-    .sort((a,b)=>b.date.localeCompare(a.date));
+  const moods = gm().filter(m=>m.studentId===studentId && m.shared && myClassIds.includes(m.classId) && m.date>=weekStart);
+  const sleep = gw().filter(w=>w.studentId===studentId && w.type==='sleep' && w.shared && w.date>=weekStart);
+  const resp = S.get('responsibilities',[]).filter(r=>r.studentId===studentId && r.shared && r.date>=weekStart);
   const goals = ggo().filter(g=>g.studentId===studentId);
   const doneGoals = goals.filter(g=>g.done).length;
 
+  // Day-by-day breakdown for the week
+  const dayRows = weekDates.map(date=>{
+    const dayMoods = moods.filter(m=>m.date===date);
+    const daySleep = sleep.find(w=>w.date===date);
+    if(!dayMoods.length && !daySleep) return '';
+    return `<div class="t-goal-row" style="align-items:flex-start">
+      <strong style="min-width:110px">${fmtDate(date)}</strong>
+      <div>
+        ${dayMoods.map(m=>{
+          const cls = getMyClasses().find(c=>c.id===m.classId);
+          return `<span class="mtag ${m.mood}" style="margin-right:6px">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)} · ${escapeHtml(cls?.subject||'-')}</span>`;
+        }).join('')}
+        ${daySleep?`<div style="font-size:.82rem;color:var(--muted);margin-top:4px">😴 ${escapeHtml(daySleep.hours)}h · ${escapeHtml(daySleep.quality)}</div>`:''}
+      </div>
+    </div>`;
+  }).filter(Boolean).join('');
+
   wrap.innerHTML = `
-    <div style="font-size:.82rem;color:var(--muted);margin-bottom:20px">Period: <strong>${fmtDate(past7[6])} – ${fmtDate(past7[0])}</strong></div>
-    <h4 style="color:var(--navy);margin-bottom:10px">😊 Mood History (${moods.length} shared check-in${moods.length!==1?'s':''})</h4>
-    ${moods.length ? moods.map(m=>{
-      const cls = getMyClasses().find(c=>c.id===m.classId);
-      return `<div class="mood-hist-item">
-        <span class="mtag ${m.mood}">${MOOD_CFG[m.mood]?.icon} ${escapeHtml(m.mood)}</span>
-        <span>${escapeHtml(cls?.subject||'-')}</span>
-        <span style="margin-left:auto;color:var(--muted);font-size:.78rem">${m.date}</span>
-      </div>`;
-    }).join('') : '<p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">No shared moods this week.</p>'}
-    <h4 style="color:var(--navy);margin:20px 0 10px">😴 Sleep Log (${sleep.length} shared entr${sleep.length!==1?'ies':'y'})</h4>
-    ${sleep.length ? sleep.map(w=>`<div class="wlog-entry"><span>${w.date} · ${escapeHtml(w.hours)}h · ${escapeHtml(w.quality)}</span></div>`).join('') : '<p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">No shared sleep logs this week.</p>'}
+    <div style="font-size:.82rem;color:var(--muted);margin-bottom:20px">This week: <strong>${fmtDate(weekDates[0])} – ${fmtDate(weekDates[6])}</strong></div>
+
+    <h4 style="color:var(--navy);margin-bottom:10px">📅 Day by Day</h4>
+    ${dayRows || '<p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">No shared check-ins yet this week.</p>'}
+
+    <h4 style="color:var(--navy);margin:20px 0 10px">📋 Responsibilities Shared This Week</h4>
+    ${resp.length ? resp.map(r=>`<div class="t-goal-row">
+        <span>📌</span>
+        <div><strong>${escapeHtml(r.text)}</strong>${r.when?` <span style="color:var(--muted)">(${escapeHtml(r.when)})</span>`:''}</div>
+        ${r.hours?`<span style="margin-left:auto;color:var(--muted);font-size:.8rem">~${escapeHtml(r.hours)}h/wk</span>`:''}
+      </div>`).join('') : '<p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">No shared responsibilities this week.</p>'}
+
     <h4 style="color:var(--navy);margin:20px 0 10px">🎯 Goals</h4>
     <p style="font-size:.85rem;color:var(--muted)">${doneGoals}/${goals.length} tasks completed (all time)</p>
   `;
@@ -1994,7 +2020,8 @@ const allW = gw().filter(w =>
     r.shared &&
     students.some(s => s.id === r.studentId) &&
     myClassIds.includes(r.sharedWith?.classId) &&
-    (!clsFilter || r.sharedWith?.classId === clsFilter)
+    (!clsFilter || r.sharedWith?.classId === clsFilter) &&
+    r.date>=startOfWeekStr()
   );
   const wrap = document.getElementById('t-wellness-table');
   let html = '';
@@ -2560,6 +2587,16 @@ function toggleSB(id){
 }
 
 function today(){ return new Date().toISOString().split('T')[0]; }
+// Sunday of the current week, as YYYY-MM-DD. Used to reset weekly views
+// (Mood Reports, shared responsibilities, the Wellness Tracker's sleep
+// and responsibility logs) every Sunday instead of piling up forever.
+function startOfWeekStr(){
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(now.getDate() - now.getDay());
+  start.setHours(0,0,0,0);
+  return start.toISOString().split('T')[0];
+}
 function uid8(){ return Math.random().toString(36).substr(2,8); }
 // keep old uid name working too
 function uid(){ return uid8(); }
@@ -2725,7 +2762,7 @@ function renderTeacherProfile(){
 
   const myStudents = getMyStudents();
   const allResp = S.get('responsibilities', []).filter(r =>
-    r.shared && myStudents.some(s => s.id === r.studentId)
+    r.shared && myStudents.some(s => s.id === r.studentId) && r.date>=startOfWeekStr()
   );
   const el = document.getElementById('t-resp-view');
   if(allResp.length === 0){
