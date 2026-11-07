@@ -2864,6 +2864,17 @@ async function executeDeleteAccount(){
       await fbDb.collection('journals').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
       await fbDb.collection('private_logs').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
       await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
+      if(CU.role === 'teacher'){
+        try {
+          const mine = await fbDb.collection('shared_classes')
+            .where('teacherUid','==',fbAuth.currentUser.uid).get();
+          for(const d of mine.docs){
+            const code = d.data().code;
+            await d.ref.delete().catch(()=>{});
+            if(code) await fbDb.collection('class_codes').doc(code).delete().catch(()=>{});
+          }
+        } catch(e){ console.error('teacher cleanup failed', e); }
+      }
     }
 
     await fbAuth.currentUser.delete();
