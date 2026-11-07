@@ -2289,7 +2289,7 @@ function renderWeeklySummary(){
     const classSleep = allWellness.filter(w =>
       w.type === 'sleep' &&
       classStudents.some(s => s.id === w.studentId) &&
-      (w.sharedWith?.classId === cls.id || w.sharedWith?.teacherId === CU.id)
+      w.sharedWith?.classId === cls.id
     );
     const avgSleep = classSleep.length > 0
       ? (classSleep.reduce((sum, w) => sum + (parseFloat(w.hours) || 0), 0) / classSleep.length).toFixed(1)
