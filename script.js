@@ -2861,6 +2861,8 @@ async function executeDeleteAccount(){
     // Delete Firestore data
     if(fbDb && fbAuth.currentUser){
       await fbDb.collection('users').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
+      await fbDb.collection('journals').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
+      await fbDb.collection('private_logs').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
       await fbDb.collection('profiles').doc(fbAuth.currentUser.uid).delete().catch(()=>{});
     }
 
