@@ -3063,7 +3063,7 @@ async function confirmVerifyCode(){
         const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
         const uid  = cred.user.uid;
         const localId = 't'+uid8();
-        const profile = { role:'teacher', name, email, province, school, socialWorker:null, joined:today(), localId, uid };
+        const profile = { role:'teacher', name, email, province, school, socialWorker:null, approvedStudentUids:[], joined:today(), localId, uid };
         await saveProfile(uid, profile);
         const teacherEntry = { id:localId, name, email, province, school, socialWorker:null, joined:today() };
         cSet('teachers', [teacherEntry]);
