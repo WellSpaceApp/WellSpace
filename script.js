@@ -800,6 +800,7 @@ async function loadTeacherStudents(){
   if (!myClassIds.length) {
     // No classes yet - clear any stale student data and bail
     cSet('students', []);
+    cSet('pendingStudents', []);
     return;
   }
 
@@ -808,7 +809,26 @@ async function loadTeacherStudents(){
     // instead of passing classIds into getStudentUids - see comment on
     // getStudentUids for why the old classIds-based query was silently
     // returning permission-denied for the whole query.
-    const studentProfiles = await getStudentUids(CU.uid);
+    const linkedProfiles = await getStudentUids(CU.uid);
+
+    // APPROVAL GATE: only students this teacher approved get loaded.
+    // Existing teachers (no approvedStudentUids field yet) get everyone
+    // currently linked auto-approved once, so nothing disappears.
+    const myProfile = (await getProfile(CU.uid)) || {};
+    const blocked = new Set(myProfile.blockedStudentUids || []);
+    let approvedList = myProfile.approvedStudentUids;
+    if (!Array.isArray(approvedList)) {
+      approvedList = linkedProfiles.map(p => p.uid).filter(u => !blocked.has(u));
+      try {
+        await fbDb.collection('profiles').doc(CU.uid)
+          .set({ approvedStudentUids: approvedList }, { merge: true });
+      } catch(e){ console.error('approved list init failed', e); }
+    }
+    const approvedSet = new Set(approvedList);
+    const studentProfiles = linkedProfiles.filter(p => approvedSet.has(p.uid));
+    cSet('pendingStudents', linkedProfiles
+      .filter(p => !approvedSet.has(p.uid) && !blocked.has(p.uid))
+      .map(p => ({ uid: p.uid, name: p.name, email: p.email, grade: p.grade })));
 
     const allStudents = [];
     const allMoods    = cGet('moods', []);
@@ -845,6 +865,7 @@ async function loadTeacherStudents(){
       goals: [...allGoals],
       wellness: [...allWellness],
       responsibilities: [...allResps],
+      pendingStudents: cGet('pendingStudents', []),
     };
     _teacherStudentCacheTime = now;
 
@@ -1772,8 +1793,55 @@ function getMyStudents(){
   return cached;
 }
 
+// PENDING STUDENT APPROVAL
+function renderPendingBox(){
+  const box = document.getElementById('t-pending-box');
+  if(!box) return;
+  const pending = cGet('pendingStudents', []);
+  if(!pending.length){ box.innerHTML=''; return; }
+  box.innerHTML = `
+    <div style="background:var(--amber-lt);border:1px solid #fcd34d;border-radius:var(--r-md);padding:16px 20px;margin-bottom:16px">
+      <h4 style="margin-bottom:6px">🆕 ${pending.length} new student${pending.length>1?'s':''} waiting for approval</h4>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:10px">Only approve students you recognise. Their data stays hidden until you do.</p>
+      ${pending.map(p=>`
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0">
+          <span style="flex:1;min-width:160px;font-size:.88rem"><strong>${escapeHtml(p.name||'Student')}</strong> · ${escapeHtml(p.email||'')}${p.grade?` · Gr ${escapeHtml(String(p.grade))}`:''}</span>
+          <button class="btn-main small" data-uid="${escapeHtml(p.uid)}" onclick="approveStudents([this.dataset.uid])">Approve</button>
+          <button class="btn-outline small" data-uid="${escapeHtml(p.uid)}" onclick="removePendingStudent(this.dataset.uid)">Remove</button>
+        </div>`).join('')}
+      ${pending.length>1?'<button class="btn-main small" style="margin-top:8px" onclick="approveAllStudents()">Approve all</button>':''}
+    </div>`;
+}
+
+async function approveStudents(uids){
+  if(!fbAuth?.currentUser || !uids?.length) return;
+  try {
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ approvedStudentUids: firebase.firestore.FieldValue.arrayUnion(...uids) }, { merge: true });
+  } catch(e){ console.error('approveStudents', e); return toast('⚠️ Could not save - try again.'); }
+  invalidateTeacherCache();
+  await loadTeacherStudents();
+  renderTeacherOverview();
+}
+
+function approveAllStudents(){
+  approveStudents(cGet('pendingStudents', []).map(p => p.uid));
+}
+
+async function removePendingStudent(uid){
+  if(!confirm("Remove this student? They won't show up on your dashboard again.")) return;
+  try {
+    await fbDb.collection('profiles').doc(fbAuth.currentUser.uid)
+      .set({ blockedStudentUids: firebase.firestore.FieldValue.arrayUnion(uid) }, { merge: true });
+  } catch(e){ console.error('removePendingStudent', e); return toast('⚠️ Could not save - try again.'); }
+  invalidateTeacherCache();
+  await loadTeacherStudents();
+  renderTeacherOverview();
+}
+
 // OVERVIEW
 function renderTeacherOverview(){
+  renderPendingBox();
   const students=getMyStudents();
   const classes=getMyClasses();
   const myClassIds=classes.map(c=>c.id);
