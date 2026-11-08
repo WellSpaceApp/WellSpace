@@ -26,4 +26,4 @@ Allow: /
 User-agent: CCBot
 Allow: /
 
-Sitemap: https://wellspaceapp.github.io/WellSpace-Students/sitemap.xml
+Sitemap: https://wellspaceapp.github.io/WellSpaceStudents/sitemap.xml
