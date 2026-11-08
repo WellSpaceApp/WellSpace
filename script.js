@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   WellSpace v2 - script.js
+   WellSpace Students v2 - script.js
    Full application logic
 ═══════════════════════════════════════════════ */
 
@@ -774,6 +774,7 @@ function logout(){
   pendingMoodSel=null;
   Object.keys(cache).forEach(k=>delete cache[k]);
   invalidateTeacherCache();
+  stopTeacherLive();
   if(fbAuth) fbAuth.signOut().catch(()=>{});
   showScreen('screen-entry');
 }
@@ -868,6 +869,7 @@ async function loadTeacherStudents(){
       pendingStudents: cGet('pendingStudents', []),
     };
     _teacherStudentCacheTime = now;
+    startTeacherLive(studentProfiles);
 
   } catch (e) { console.error('loadTeacherStudents error', e); }
 }
@@ -877,6 +879,105 @@ async function loadTeacherStudents(){
 function invalidateTeacherCache(){
   _teacherStudentCache = null;
   _teacherStudentCacheTime = 0;
+}
+
+// ─────────────────────────────────────────────
+// LIVE UPDATES (teacher dashboard)
+// One listener per approved student's /users doc, plus one on the profile
+// query so newly joined students pop into the Pending box.
+// Each listener's first snapshot is ignored (data was just loaded);
+// after that, every change costs 1 read and updates the screen.
+// ─────────────────────────────────────────────
+const _liveStudentUnsubs = {};
+let _livePendingUnsub = null;
+let _liveRenderTimer = null;
+
+function refreshTeacherView(){
+  clearTimeout(_liveRenderTimer);
+  _liveRenderTimer = setTimeout(()=>{
+    if(!CU || CU.role !== 'teacher') return;
+    renderTeacherOverview(); // also refreshes the sidebar alert badge
+    const active = document.querySelector('#t-main .dsec.active')?.id || '';
+    const map = {
+      't-sec-classes': renderTeacherClasses,
+      't-sec-students': renderStudentTable,
+      't-sec-moods': renderMoodReports,
+      't-sec-wellness': renderWellnessTable,
+      't-sec-goals': renderTeacherGoals,
+      't-sec-alerts': renderAlerts,
+      't-sec-summary': renderWeeklySummary,
+    };
+    if(map[active]) map[active]();
+  }, 300);
+}
+
+function applyLiveStudentDoc(raw){
+  const parsed = {};
+  Object.entries(raw).forEach(([k,v])=>{
+    try{ parsed[k] = JSON.parse(v); }catch{ parsed[k] = v; }
+  });
+  const myClassIds = getMyClasses().map(c=>c.id);
+  if(parsed.students){
+    const mine = parsed.students.filter(s => s.classIds && s.classIds.some(id => myClassIds.includes(id)));
+    const all = cGet('students', []);
+    mergeInto(all, mine, 'id');
+    cSet('students', all);
+  }
+  ['moods','goals','wellness','responsibilities'].forEach(k=>{
+    if(parsed[k]){
+      const arr = cGet(k, []);
+      mergeInto(arr, parsed[k], 'studentId');
+      cSet(k, arr);
+    }
+  });
+  // keep the 60s cache in step so switching tabs doesn't re-read everything
+  _teacherStudentCache = {
+    students: [...cGet('students', [])],
+    moods: [...cGet('moods', [])],
+    goals: [...cGet('goals', [])],
+    wellness: [...cGet('wellness', [])],
+    responsibilities: [...cGet('responsibilities', [])],
+    pendingStudents: cGet('pendingStudents', []),
+  };
+  _teacherStudentCacheTime = Date.now();
+}
+
+function startTeacherLive(studentProfiles){
+  if(!fbDb || !CU || CU.role !== 'teacher') return;
+
+  // one listener per approved student
+  studentProfiles.forEach(sp=>{
+    if(_liveStudentUnsubs[sp.uid]) return;
+    let first = true;
+    _liveStudentUnsubs[sp.uid] = fbDb.collection('users').doc(sp.uid).onSnapshot(snap=>{
+      if(first){ first = false; return; }
+      if(!snap.exists) return;
+      applyLiveStudentDoc(snap.data());
+      refreshTeacherView();
+    }, e => console.error('live student listener', sp.uid, e));
+  });
+
+  // watch for newly joined students
+  if(!_livePendingUnsub){
+    let firstP = true;
+    _livePendingUnsub = fbDb.collection('profiles')
+      .where('role','==','student')
+      .where('teacherUids','array-contains', CU.uid)
+      .onSnapshot(snap=>{
+        if(firstP){ firstP = false; return; }
+        if(snap.docChanges().some(c => c.type === 'added')){
+          invalidateTeacherCache();
+          loadTeacherStudents().then(refreshTeacherView);
+        }
+      }, e => console.error('live pending listener', e));
+  }
+}
+
+function stopTeacherLive(){
+  Object.values(_liveStudentUnsubs).forEach(u => { try{ u(); }catch{} });
+  Object.keys(_liveStudentUnsubs).forEach(k => delete _liveStudentUnsubs[k]);
+  if(_livePendingUnsub){ try{ _livePendingUnsub(); }catch{} _livePendingUnsub = null; }
+  clearTimeout(_liveRenderTimer);
 }
 
 // ─────────────────────────────────────────────
