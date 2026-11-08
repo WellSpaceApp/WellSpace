@@ -832,10 +832,12 @@ async function loadTeacherStudents(){
       .map(p => ({ uid: p.uid, name: p.name, email: p.email, grade: p.grade })));
 
     const allStudents = [];
-    const allMoods    = cGet('moods', []);
-    const allGoals    = cGet('goals', []);
-    const allWellness = cGet('wellness', []);
-    const allResps    = cGet('responsibilities', []);
+    // Start empty: every approved student is re-read below, and moods have
+    // no id, so starting from the old cache stacked duplicates on each reload.
+    const allMoods    = [];
+    const allGoals    = [];
+    const allWellness = [];
+    const allResps    = [];
 
     for (const sp of studentProfiles) {
       const data = await loadStudentData(sp.uid);
@@ -911,24 +913,27 @@ function refreshTeacherView(){
   }, 300);
 }
 
-function applyLiveStudentDoc(raw){
+function applyLiveStudentDoc(raw, studentId){
   const parsed = {};
   Object.entries(raw).forEach(([k,v])=>{
     try{ parsed[k] = JSON.parse(v); }catch{ parsed[k] = v; }
   });
   const myClassIds = getMyClasses().map(c=>c.id);
+  const sid = studentId || parsed.students?.[0]?.id;
   if(parsed.students){
     const mine = parsed.students.filter(s => s.classIds && s.classIds.some(id => myClassIds.includes(id)));
     const all = cGet('students', []);
     mergeInto(all, mine, 'id');
     cSet('students', all);
   }
+  // Replace this student's entries (moods have no id, so merging by id
+  // would duplicate them). This also makes deleted entries disappear live.
   ['moods','goals','wellness','responsibilities'].forEach(k=>{
-    if(parsed[k]){
-      const arr = cGet(k, []);
-      mergeInto(arr, parsed[k], 'studentId');
-      cSet(k, arr);
-    }
+    if(!(k in parsed)) return;
+    const incoming = Array.isArray(parsed[k]) ? parsed[k] : [];
+    const removeIds = new Set(sid ? [sid] : incoming.map(x => x.studentId));
+    const kept = cGet(k, []).filter(x => !removeIds.has(x.studentId));
+    cSet(k, [...kept, ...incoming]);
   });
   // keep the 60s cache in step so switching tabs doesn't re-read everything
   _teacherStudentCache = {
@@ -952,7 +957,7 @@ function startTeacherLive(studentProfiles){
     _liveStudentUnsubs[sp.uid] = fbDb.collection('users').doc(sp.uid).onSnapshot(snap=>{
       if(first){ first = false; return; }
       if(!snap.exists) return;
-      applyLiveStudentDoc(snap.data());
+      applyLiveStudentDoc(snap.data(), sp.localId);
       refreshTeacherView();
     }, e => console.error('live student listener', sp.uid, e));
   });
@@ -2570,7 +2575,7 @@ function openClassModal(){ openModal('class-modal'); }
 
 function genCode(){
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code=''; for(let i=0;i<8;i++) code+=chars[Math.floor(Math.random()*chars.length)];
+  let code=''; for(let i=0;i<8;i++) code+=chars[secureRandomInt(chars.length)];
   document.getElementById('cm-code').value=code;
 }
 
@@ -2579,6 +2584,10 @@ let pendingLogoDataUrl = null;
 function previewLogo(input){
   const file = input.files[0];
   if(!file) return;
+  if(file.size > 300 * 1024){
+    input.value = '';
+    return toast('Logo is too big - please use an image under 300 KB.');
+  }
   const reader = new FileReader();
   reader.onload = e => {
     pendingLogoDataUrl = e.target.result;
@@ -2600,10 +2609,11 @@ function clearLogo(){
 // (one doc per class) so this scales past the old single-blob approach.
 // ─────────────────────────────────────────────
 async function fsSetClass(cls){
-  if(!fbDb) return;
+  if(!fbDb) return false;
   try {
     await fbDb.collection('shared_classes').doc(cls.id).set(cls);
-  } catch(e){ console.error('fsSetClass', e); }
+    return true;
+  } catch(e){ console.error('fsSetClass', e); return false; }
 }
 
 async function fsDeleteClass(classId){
@@ -2668,7 +2678,12 @@ async function createClass(){
     return toast('⚠️ Could not create class - check your connection and try again.');
   }
 
-  await fsSetClass(newClass);
+  const saved = await fsSetClass(newClass);
+  if(!saved){
+    // Release the reserved code so it isn't stuck pointing at a class that doesn't exist
+    try { await fbDb.collection('class_codes').doc(code).delete(); } catch(e){}
+    return toast('⚠️ Could not save the class. A large logo can cause this - try a smaller one or none.');
+  }
 
   const updated = [...existingClasses, newClass];
   cSet('classes', updated);
@@ -2766,7 +2781,18 @@ function startOfWeekStr(){
   start.setHours(0,0,0,0);
   return start.toISOString().split('T')[0];
 }
-function uid8(){ return Math.random().toString(36).substr(2,8); }
+// Unbiased random integer in [0, max) from the browser's crypto RNG
+function secureRandomInt(max){
+  const limit = Math.floor(0x100000000 / max) * max;
+  const buf = new Uint32Array(1);
+  do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+  return buf[0] % max;
+}
+function uid8(){
+  const a = '0123456789abcdefghijklmnopqrstuvwxyz';
+  let s = ''; for(let i=0;i<8;i++) s += a[secureRandomInt(a.length)];
+  return s;
+}
 // keep old uid name working too
 function uid(){ return uid8(); }
 
@@ -3066,7 +3092,7 @@ let pendingVerify = null;
 let pendingReset  = null;
 
 function generateCode(){
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return (100000 + secureRandomInt(900000)).toString();
 }
 
 function startSignupVerification(){
