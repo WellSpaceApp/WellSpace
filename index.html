@@ -1,1276 +1,908 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self' https://forms.gle;">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!--
+    Security headers achievable on static GitHub Pages hosting (no server = no
+    real HTTP headers, so this is the meta-tag equivalent, which browsers do
+    honor for CSP and Referrer-Policy specifically).
+    Honest limitation: script-src includes 'unsafe-inline' because the app
+    uses onclick="" attributes throughout script.js/index.html. That means
+    this CSP does NOT stop inline-script based XSS - only the earlier
+    escapeHtml() fixes do that. What this DOES still block: loading any
+    script from a domain that isn't explicitly allow-listed below, which
+    stops a large class of data-exfiltration and third-party-script attacks.
+    X-Frame-Options, X-Content-Type-Options, and HSTS have no meta-tag
+    equivalent - those require a real HTTP header, which means either a
+    server or a CDN like Cloudflare in front of GitHub Pages.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.gstatic.com https://api.emailjs.com; frame-src 'self' https://*.firebaseapp.com; base-uri 'self'; form-action 'self';">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96"/>
 <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
 <link rel="shortcut icon" href="favicon.ico"/>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
-<title>WellSpace Students | Classroom Check-In Tool for Educators</title>
-<meta name="description" content="WellSpace Students is a free student wellness web app for high school students and educators. Private mood check-ins. Teacher dashboards. No download required."/>
-<meta property="og:title" content="WellSpace Students HQ"/>
-<meta property="og:description" content="A free tool so students never have to say it out loud."/>
-<meta property="og:url" content="https://wellspaceapp.github.io/WellSpaceHQ/"/>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "Organization",
-  "name": "WellSpace Students",
-  "url": "https://wellspaceapp.github.io/WellSpaceHQ/",
-  "description": "WellSpace Students is a free student wellness web app for high school students and educators, with private mood check-ins and teacher dashboards.",
-  "sameAs": [
-    "https://github.com/WellSpaceApp/WellSpace-Students",
-    "https://www.linkedin.com/company/wellspacewebapp/"
-  ],
-  "email": "wellspacewebsite@gmail.com"
-}
-</script>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-
-:root{
-  --navy:#0F2942;
-  --navy-mid:#1a3a5c;
-  --green:#2E9E6B;
-  --green-dark:#1B6B47;
-  --green-pale:#E8F5EF;
-  --cream:#F7F4EC;
-  --paper:#FDFCF8;
-  --ink:#1C2B3A;
-  --muted:#5A6B7A;
-  --border:#DDE3E8;
-  --white:#FFFFFF;
-  --red-soft:#FEF2F2;
-  --red:#DC2626;
-  --amber:#D97706;
-}
-
-html{scroll-behavior:smooth}
-
-body{
-  font-family:'Sora',sans-serif;
-  background:var(--paper);
-  color:var(--ink);
-  line-height:1.6;
-  font-size:16px;
-}
-
-/* NAV */
-nav{
-  position:fixed;top:0;left:0;right:0;z-index:100;
-  background:rgba(15,41,66,0.97);
-  backdrop-filter:blur(12px);
-  border-bottom:1px solid rgba(255,255,255,0.06);
-  padding:0 2rem;
-  height:60px;
-  display:flex;align-items:center;justify-content:space-between;
-}
-.nav-brand{
-  font-family:'Sora',sans-serif;
-  font-size:1.25rem;
-  color:var(--white);
-  text-decoration:none;
-  font-weight:600;
-}
-.nav-brand span{color:var(--green);}
-@media(max-width:600px){.nav-brand{font-size:1.05rem;}}
-.nav-links{display:flex;gap:1.5rem;align-items:center;}
-.nav-links a{
-  color:rgba(255,255,255,0.7);
-  text-decoration:none;
-  font-size:0.875rem;
-  font-weight:400;
-  transition:color 0.2s;
-}
-.nav-links a:hover{color:var(--white);}
-.nav-cta{
-  background:var(--green);
-  color:var(--white) !important;
-  padding:0.45rem 1rem;
-  border-radius:6px;
-  font-weight:500 !important;
-  transition:background 0.2s !important;
-}
-.nav-cta:hover{background:var(--green-dark) !important;}
-.nav-toggle{display:none;background:none;border:none;cursor:pointer;padding:4px;}
-.nav-toggle span{display:block;width:22px;height:2px;background:white;margin:5px 0;transition:0.3s;}
-
-/* HERO */
-.hero{
-  min-height:100vh;
-  background:linear-gradient(160deg, var(--navy) 0%, #0d3554 60%, #0a2640 100%);
-  display:flex;align-items:center;
-  padding:100px 2rem 60px;
-  position:relative;
-  overflow:hidden;
-}
-.hero::before{
-  content:'';
-  position:absolute;top:-40%;right:-20%;
-  width:700px;height:700px;
-  background:radial-gradient(circle, rgba(46,158,107,0.08) 0%, transparent 70%);
-  pointer-events:none;
-}
-.hero::after{
-  content:'';
-  position:absolute;bottom:-20%;left:-10%;
-  width:500px;height:500px;
-  background:radial-gradient(circle, rgba(29,95,166,0.1) 0%, transparent 70%);
-  pointer-events:none;
-}
-.hero-inner{
-  max-width:760px;
-  margin:0 auto;
-  text-align:center;
-  position:relative;z-index:1;
-}
-.hero-eyebrow{
-  display:inline-block;
-  font-size:0.8rem;
-  font-weight:500;
-  letter-spacing:0.1em;
-  text-transform:uppercase;
-  color:var(--green);
-  background:rgba(46,158,107,0.12);
-  border:1px solid rgba(46,158,107,0.25);
-  padding:0.35rem 0.9rem;
-  border-radius:20px;
-  margin-bottom:1.75rem;
-}
-.hero h1{
-  font-family:'Sora',sans-serif;
-  font-size:clamp(2.4rem,6vw,4rem);
-  font-weight:600;
-  color:var(--white);
-  line-height:1.15;
-  margin-bottom:1.5rem;
-  letter-spacing:-0.01em;
-}
-.hero h1 em{
-  font-style:italic;
-  color:var(--green);
-}
-.hero-sub{
-  font-size:1.1rem;
-  color:rgba(255,255,255,0.65);
-  max-width:540px;
-  margin:0 auto 2.5rem;
-  line-height:1.7;
-  font-weight:300;
-}
-.hero-actions{
-  display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;
-  margin-bottom:3rem;
-}
-.btn-primary{
-  display:inline-flex;align-items:center;gap:0.5rem;
-  background:var(--green);
-  color:white;
-  padding:0.85rem 1.75rem;
-  border-radius:8px;
-  text-decoration:none;
-  font-weight:500;
-  font-size:0.95rem;
-  transition:background 0.2s,transform 0.15s;
-}
-.btn-primary:hover{background:var(--green-dark);transform:translateY(-1px);}
-.btn-outline-white{
-  display:inline-flex;align-items:center;gap:0.5rem;
-  border:1px solid rgba(255,255,255,0.25);
-  color:rgba(255,255,255,0.85);
-  padding:0.85rem 1.75rem;
-  border-radius:8px;
-  text-decoration:none;
-  font-weight:400;
-  font-size:0.95rem;
-  transition:border-color 0.2s,color 0.2s;
-}
-.btn-outline-white:hover{border-color:rgba(255,255,255,0.5);color:white;}
-.hero-stats{
-  display:flex;gap:2.5rem;justify-content:center;flex-wrap:wrap;
-  border-top:1px solid rgba(255,255,255,0.08);
-  padding-top:2rem;
-}
-.hero-stat{text-align:center;}
-.hero-stat-num{
-  font-family:'Sora',sans-serif;
-  font-size:1.75rem;
-  color:var(--white);
-  font-weight:600;
-  display:block;
-}
-.hero-stat-label{
-  font-size:0.78rem;
-  color:rgba(255,255,255,0.45);
-  letter-spacing:0.04em;
-  text-transform:uppercase;
-}
-
-/* SOCIAL PROOF STRIP */
-.proof-strip{
-  background:var(--cream);
-  border-top:1px solid var(--border);
-  border-bottom:1px solid var(--border);
-  padding:1.25rem 2rem;
-  overflow:hidden;
-}
-.proof-strip-inner{
-  max-width:900px;margin:0 auto;
-  display:flex;gap:2rem;align-items:flex-start;
-  flex-wrap:wrap;
-}
-.proof-quote{
-  flex:1;min-width:240px;
-  display:flex;gap:0.75rem;align-items:flex-start;
-}
-.proof-quote-mark{
-  font-family:'Sora',sans-serif;
-  font-size:2rem;
-  color:var(--green);
-  line-height:1;
-  flex-shrink:0;
-  margin-top:-4px;
-}
-.proof-quote-text{
-  font-size:0.82rem;
-  color:var(--muted);
-  font-style:italic;
-  line-height:1.5;
-}
-.proof-quote-attr{
-  font-size:0.75rem;
-  color:var(--green-dark);
-  font-weight:500;
-  font-style:normal;
-  display:block;
-  margin-top:0.25rem;
-}
-
-/* SECTIONS */
-section{padding:5rem 2rem;}
-.section-inner{max-width:900px;margin:0 auto;}
-.section-eyebrow{
-  font-size:0.75rem;
-  font-weight:600;
-  letter-spacing:0.12em;
-  text-transform:uppercase;
-  color:var(--green);
-  margin-bottom:0.75rem;
-  display:block;
-}
-.section-title{
-  font-family:'Sora',sans-serif;
-  font-size:clamp(1.8rem,4vw,2.6rem);
-  font-weight:600;
-  color:var(--navy);
-  line-height:1.2;
-  margin-bottom:1rem;
-}
-.section-body{
-  font-size:1rem;
-  color:var(--muted);
-  max-width:600px;
-  line-height:1.75;
-}
-
-/* MISSION */
-.mission{background:var(--white);}
-.mission-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:4rem;
-  align-items:center;
-  margin-top:3rem;
-}
-.mission-story{
-  font-size:1rem;
-  color:var(--ink);
-  line-height:1.85;
-}
-.mission-story p{margin-bottom:1.25rem;}
-.mission-story p:last-child{margin-bottom:0;}
-.mission-story strong{color:var(--navy);}
-.mission-values{display:flex;flex-direction:column;gap:1.25rem;}
-.value-card{
-  background:var(--paper);
-  border:1px solid var(--border);
-  border-radius:10px;
-  padding:1.25rem;
-  display:flex;gap:1rem;align-items:flex-start;
-}
-.value-icon{
-  width:36px;height:36px;
-  background:var(--green-pale);
-  border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  color:var(--green-dark);
-  flex-shrink:0;
-}
-.value-title{font-weight:600;color:var(--navy);font-size:0.9rem;margin-bottom:0.25rem;}
-.value-desc{font-size:0.85rem;color:var(--muted);line-height:1.5;}
-
-/* HOW IT WORKS */
-.how{background:var(--cream);}
-.steps{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:1.5rem;
-  margin-top:3rem;
-}
-.step{
-  background:var(--white);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:1.75rem;
-  position:relative;
-}
-.step-num{
-  font-family:'Sora',sans-serif;
-  font-size:2.5rem;
-  font-weight:700;
-  color:var(--muted);
-  line-height:1;
-  margin-bottom:0.75rem;
-}
-.step-title{font-weight:600;color:var(--navy);margin-bottom:0.5rem;font-size:1rem;}
-.step-desc{font-size:0.875rem;color:var(--muted);line-height:1.6;}
-
-/* FOR TEACHERS */
-.teachers{background:var(--white);}
-.teachers-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:3rem;
-  margin-top:3rem;
-  align-items:start;
-}
-.teachers-copy p{
-  font-size:1rem;color:var(--ink);line-height:1.8;margin-bottom:1rem;
-}
-.teachers-copy p:last-child{margin-bottom:0;}
-.privacy-card{
-  background:linear-gradient(135deg,var(--navy) 0%,#1a3a5c 100%);
-  border-radius:14px;
-  padding:2rem;
-  color:white;
-}
-.privacy-card h3{
-  font-family:'Sora',sans-serif;
-  font-size:1.3rem;
-  font-weight:600;
-  margin-bottom:1.5rem;
-  color:white;
-}
-.privacy-item{
-  display:flex;gap:0.75rem;align-items:flex-start;
-  margin-bottom:1.25rem;
-}
-.privacy-item:last-child{margin-bottom:0;}
-.privacy-dot{
-  width:20px;height:20px;
-  background:rgba(46,158,107,0.2);
-  border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;
-  margin-top:2px;
-}
-.privacy-dot::after{
-  content:'';
-  width:6px;height:6px;
-  background:var(--green);
-  border-radius:50%;
-}
-.privacy-item-text{font-size:0.875rem;color:rgba(255,255,255,0.8);line-height:1.5;}
-.privacy-item-text strong{color:white;}
-.data-note{
-  background:rgba(255,255,255,0.07);
-  border:1px solid rgba(255,255,255,0.12);
-  border-radius:8px;
-  padding:1rem;
-  margin-top:1.5rem;
-  font-size:0.8rem;
-  color:rgba(255,255,255,0.6);
-  line-height:1.6;
-}
-.data-note strong{color:rgba(255,255,255,0.85);}
-
-/* QUICK ANSWERS */
-.quick-answers{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:1rem;
-  margin-top:2.5rem;
-}
-.qa-card{
-  background:var(--green-pale);
-  border:1px solid rgba(46,158,107,0.15);
-  border-radius:10px;
-  padding:1.25rem;
-}
-.qa-q{font-size:0.8rem;font-weight:600;color:var(--navy);margin-bottom:0.5rem;}
-.qa-a{font-size:0.875rem;color:var(--ink);line-height:1.5;}
-
-/* TESTIMONIALS */
-.testimonials{background:var(--cream);}
-.testimonials-grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:1.25rem;
-  margin-top:3rem;
-}
-.testimonial{
-  background:var(--white);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:1.5rem;
-}
-.testimonial-text{
-  font-size:0.9rem;
-  color:var(--ink);
-  line-height:1.7;
-  margin-bottom:1rem;
-  font-style:italic;
-}
-.testimonial-text::before{
-  content:'\201C';
-  font-family:'Sora',sans-serif;
-  font-size:1.5rem;
-  color:var(--green);
-  display:block;
-  line-height:1;
-  margin-bottom:0.25rem;
-}
-.testimonial-attr{
-  font-size:0.78rem;
-  font-weight:600;
-  color:var(--muted);
-}
-
-/* FAQ */
-.faq{background:var(--white);}
-.faq-list{margin-top:2.5rem;max-width:700px;}
-.faq-item{
-  border-bottom:1px solid var(--border);
-}
-.faq-q{
-  width:100%;
-  background:none;
-  border:none;
-  text-align:left;
-  padding:1.25rem 0;
-  font-size:0.95rem;
-  font-weight:500;
-  color:var(--navy);
-  cursor:pointer;
-  display:flex;justify-content:space-between;align-items:center;
-  gap:1rem;
-  font-family:'Sora',sans-serif;
-}
-.faq-q:hover{color:var(--green);}
-.faq-icon{
-  width:20px;height:20px;
-  flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;
-  color:var(--green);
-  font-size:1.1rem;
-  transition:transform 0.2s;
-}
-.faq-item.open .faq-icon{transform:rotate(45deg);}
-.faq-a{
-  display:none;
-  padding:0 0 1.25rem;
-  font-size:0.9rem;
-  color:var(--muted);
-  line-height:1.7;
-}
-.faq-item.open .faq-a{display:block;}
-
-/* VOLUNTEER */
-.volunteer{
-  background:linear-gradient(160deg,var(--navy) 0%,#0d3554 100%);
-  color:white;
-}
-.volunteer .section-title{color:white;}
-.volunteer .section-body{color:rgba(255,255,255,0.65);}
-.roles-grid{
-  display:grid;
-  grid-template-columns:repeat(2,1fr);
-  gap:1rem;
-  margin-top:2.5rem;
-  margin-bottom:2.5rem;
-}
-.role-card{
-  background:rgba(255,255,255,0.06);
-  border:1px solid rgba(255,255,255,0.1);
-  border-radius:10px;
-  padding:1.25rem;
-  transition:background 0.2s,border-color 0.2s;
-}
-.role-card:hover{
-  background:rgba(255,255,255,0.09);
-  border-color:rgba(46,158,107,0.4);
-}
-.role-title{
-  font-weight:600;
-  color:white;
-  font-size:0.9rem;
-  margin-bottom:0.4rem;
-  display:flex;align-items:center;gap:0.5rem;
-}
-.role-emoji{display:inline-flex;align-items:center;color:var(--green-dark);}
-.role-emoji svg{width:16px;height:16px;vertical-align:-3px;}
-.role-desc{font-size:0.82rem;color:rgba(255,255,255,0.6);line-height:1.5;}
-.volunteer-cta{text-align:center;}
-.btn-green-lg{
-  display:inline-flex;align-items:center;gap:0.5rem;
-  background:var(--green);
-  color:white;
-  padding:1rem 2.5rem;
-  border-radius:8px;
-  text-decoration:none;
-  font-weight:600;
-  font-size:1rem;
-  transition:background 0.2s,transform 0.15s;
-}
-.btn-green-lg:hover{background:var(--green-dark);transform:translateY(-1px);}
-.consent-note{
-  font-size:0.8rem;
-  color:rgba(255,255,255,0.4);
-  margin-top:0.75rem;
-}
-
-/* TIMELINE */
-.timeline-section{background:var(--cream);}
-.timeline{
-  margin-top:2.5rem;
-  max-width:600px;
-  position:relative;
-  padding-left:1.5rem;
-}
-.timeline::before{
-  content:'';
-  position:absolute;left:0;top:8px;bottom:8px;
-  width:2px;background:var(--border);
-}
-.timeline-item{
-  position:relative;
-  margin-bottom:1.5rem;
-  padding-left:1.25rem;
-}
-.timeline-item::before{
-  content:'';
-  position:absolute;left:-1.875rem;top:6px;
-  width:8px;height:8px;
-  background:var(--green);
-  border-radius:50%;
-  border:2px solid var(--cream);
-}
-.timeline-date{
-  font-size:0.75rem;
-  font-weight:600;
-  color:var(--green);
-  text-transform:uppercase;
-  letter-spacing:0.06em;
-  margin-bottom:0.25rem;
-}
-.timeline-text{
-  font-size:0.9rem;
-  color:var(--ink);
-  line-height:1.5;
-}
-
-/* CONTACT */
-.contact{background:var(--white);}
-.contact-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:3rem;
-  margin-top:2.5rem;
-  align-items:start;
-}
-.contact-item{
-  display:flex;gap:1rem;align-items:flex-start;
-  margin-bottom:1.5rem;
-}
-.contact-icon{
-  width:40px;height:40px;
-  background:var(--green-pale);
-  border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  color:var(--green-dark);
-  flex-shrink:0;
-}
-.contact-label{
-  font-size:0.75rem;
-  font-weight:600;
-  text-transform:uppercase;
-  letter-spacing:0.08em;
-  color:var(--muted);
-  margin-bottom:0.25rem;
-}
-.contact-value{
-  font-size:0.9rem;
-  color:var(--ink);
-}
-.contact-value a{
-  color:var(--green-dark);
-  text-decoration:none;
-  font-weight:500;
-}
-.contact-value a:hover{text-decoration:underline;}
-.socials{display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:0.25rem;}
-.social-pill{
-  display:inline-flex;align-items:center;gap:0.4rem;
-  background:var(--paper);
-  border:1px solid var(--border);
-  border-radius:20px;
-  padding:0.35rem 0.8rem;
-  font-size:0.8rem;
-  color:var(--ink);
-  text-decoration:none;
-  font-weight:500;
-  transition:border-color 0.2s,color 0.2s;
-}
-.social-pill:hover{border-color:var(--green);color:var(--green);}
-.schedule-card{
-  background:linear-gradient(135deg,var(--navy),#1a3a5c);
-  border-radius:12px;
-  padding:2rem;
-  color:white;
-  text-align:center;
-}
-.schedule-card h3{
-  font-family:'Sora',sans-serif;
-  font-size:1.3rem;
-  margin-bottom:0.75rem;
-  color:white;
-}
-.schedule-card p{
-  font-size:0.875rem;
-  color:rgba(255,255,255,0.65);
-  margin-bottom:1.5rem;
-  line-height:1.6;
-}
-.btn-schedule{
-  display:inline-block;
-  background:var(--green);
-  color:white;
-  padding:0.75rem 1.75rem;
-  border-radius:8px;
-  text-decoration:none;
-  font-weight:600;
-  font-size:0.9rem;
-  transition:background 0.2s;
-}
-.btn-schedule:hover{background:var(--green-dark);}
-
-/* FOOTER */
-footer{
-  background:var(--navy);
-  color:rgba(255,255,255,0.5);
-  padding:2.5rem 2rem;
-  text-align:center;
-}
-.footer-inner{max-width:900px;margin:0 auto;}
-.footer-brand{
-  font-family:'Sora',sans-serif;
-  font-size:1.1rem;
-  color:white;
-  margin-bottom:0.5rem;
-}
-.footer-links{
-  display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;
-  margin:1rem 0;
-}
-.footer-links a{
-  color:rgba(255,255,255,0.45);
-  text-decoration:none;
-  font-size:0.82rem;
-  transition:color 0.2s;
-}
-.footer-links a:hover{color:white;}
-.footer-copy{font-size:0.78rem;margin-top:0.5rem;}
-
-/* RESPONSIVE */
-@media(max-width:768px){
-  .nav-links{display:none;}
-  .nav-links.open{
-    display:flex;flex-direction:column;
-    position:fixed;top:60px;left:0;right:0;
-    background:var(--navy);
-    padding:1.5rem 2rem;
-    gap:1rem;
-    border-bottom:1px solid rgba(255,255,255,0.1);
+  <title>WellSpace Students - Wellness & Productivity</title>
+  <meta name="description" content="WellSpace Students is a free wellness platform for high school students and teachers. Students track mood, sleep, energy, goals, and journal entries privately; teachers see classroom wellness trends and get alerts when a student may need support. Built for schools, not advertisers."/>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "WellSpace Students",
+    "url": "https://wellspaceapp.github.io/WellSpaceStudents/",
+    "description": "WellSpace Students is a free wellness platform for high school students and teachers. Students track mood, sleep, energy, goals, and journal entries privately; teachers see classroom wellness trends and get alerts when a student may need support.",
+    "applicationCategory": "EducationApplication",
+    "operatingSystem": "Any (web browser)",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "audience": [
+      { "@type": "EducationalAudience", "educationalRole": "student" },
+      { "@type": "EducationalAudience", "educationalRole": "teacher" }
+    ],
+    "publisher": {
+      "@type": "Organization",
+      "name": "WellSpace Students",
+      "url": "https://wellspaceapp.github.io/WellSpaceStudents/",
+      "email": "wellspacewebsite@gmail.com"
+    }
   }
-  .nav-toggle{display:block;}
-  .mission-grid,
-  .teachers-grid,
-  .contact-grid{grid-template-columns:1fr;}
-  .steps,
-  .testimonials-grid{grid-template-columns:1fr;}
-  .quick-answers{grid-template-columns:1fr;}
-  .roles-grid{grid-template-columns:1fr;}
-  .hero h1{font-size:2rem;}
-  section{padding:3.5rem 1.5rem;}
-}
-
-/* COOKIE CONSENT BANNER */
-.cookie-banner{
-  position:fixed;left:0;right:0;bottom:0;z-index:200;
-  background:var(--navy);color:var(--white);
-  padding:1rem 1.5rem;
-  box-shadow:0 -6px 24px rgba(0,0,0,0.18);
-}
-.cookie-banner.hidden{display:none;}
-.cookie-banner-inner{
-  max-width:1100px;margin:0 auto;
-  display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;
-}
-.cookie-banner-text{flex:1 1 420px;font-size:0.875rem;line-height:1.5;color:rgba(255,255,255,0.85);}
-.cookie-banner-text a{color:var(--green);text-decoration:underline;}
-.cookie-banner-actions{display:flex;gap:0.6rem;flex-shrink:0;}
-.cookie-btn{
-  font-family:'Sora',sans-serif;font-size:0.85rem;font-weight:600;
-  padding:0.55rem 1.1rem;border-radius:6px;cursor:pointer;border:1.5px solid transparent;
-}
-.cookie-btn-accept{background:var(--green);color:var(--white);}
-.cookie-btn-accept:hover{background:var(--green-dark);}
-.cookie-btn-decline{background:transparent;border-color:rgba(255,255,255,0.35);color:var(--white);}
-.cookie-btn-decline:hover{border-color:var(--white);background:rgba(255,255,255,0.08);}
-@media(max-width:600px){
-  .cookie-banner-inner{flex-direction:column;align-items:stretch;}
-  .cookie-banner-actions{justify-content:flex-end;}
-}
-
-/* COOKIE POLICY MODAL */
-.cookie-modal-bg{
-  position:fixed;inset:0;z-index:300;
-  background:rgba(15,41,66,0.55);
-  display:flex;align-items:center;justify-content:center;
-  padding:1.5rem;
-}
-.cookie-modal-bg.hidden{display:none;}
-.cookie-modal{
-  background:var(--paper);border-radius:12px;
-  max-width:600px;width:100%;max-height:80vh;overflow-y:auto;
-  padding:1.75rem 2rem;
-}
-.cookie-modal h3{font-size:1.3rem;color:var(--navy);margin-bottom:0.25rem;}
-.cookie-modal .cookie-modal-updated{font-size:0.78rem;color:var(--muted);margin-bottom:1rem;}
-.cookie-modal p{font-size:0.9rem;line-height:1.7;color:var(--ink);margin-bottom:1rem;}
-.cookie-modal p strong{color:var(--navy);}
-.cookie-modal-close{
-  float:right;background:none;border:none;font-size:1.1rem;color:var(--muted);cursor:pointer;
-}
-.cookie-modal-ok{
-  font-family:'Sora',sans-serif;font-weight:600;font-size:0.9rem;
-  background:var(--green);color:var(--white);border:none;border-radius:6px;
-  padding:0.65rem 1.4rem;cursor:pointer;
-}
-.cookie-modal-ok:hover{background:var(--green-dark);}
-.skip-link{position:absolute;top:-40px;left:8px;background:#0d1b2a;color:#fff;padding:10px 16px;border-radius:6px;z-index:10000;text-decoration:none;font-weight:600;transition:top .15s ease;}
-.skip-link:focus{top:8px;}
-a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:3px solid #4d9fff;outline-offset:2px;}
-</style>
+  </script>
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="theme-color" content="#0f2942"/>
+  <meta property="og:type" content="website" />
+<meta property="og:url" content="https://wellspaceapp.github.io/WellSpaceStudents/" />
+<meta property="og:title" content="WellSpace Students - Wellness Web App" />
+<meta property="og:description" content="Free wellness platform for high school students and educators. Private mood check-ins, goal tracking, and teacher dashboards. No download required." />
+<meta property="og:image" content="https://wellspaceapp.github.io/WellSpaceStudents/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="WellSpace Students - Wellness Web App" />
+<meta name="twitter:description" content="Free wellness platform for high school students and educators. Private mood check-ins, goal tracking, and teacher dashboards." />
+<meta name="twitter:image" content="https://wellspaceapp.github.io/WellSpaceStudents/og-image.png" />
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="WellSpace"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"/>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:wght@600;700&display=swap" rel="stylesheet"/>
+  <style>:root{--font:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;--font-d:'Fraunces',Georgia,'Times New Roman',serif}</style>
 </head>
 <body>
 
-<!-- NAV -->
-<nav>
-  <a href="#" class="nav-brand">Well<span>Space</span> Students HQ</a>
-  <div class="nav-links" id="navLinks">
-    <a href="#mission">Mission</a>
-    <a href="#for-teachers">For Teachers</a>
-    <a href="#faq">FAQ</a>
-    <a href="#volunteer">Volunteer</a>
-    <a href="#contact">Contact</a>
-    <a href="https://wellspaceapp.github.io/WellSpace-Students/" class="nav-cta">Try the Site</a>
-  </div>
-  <button class="nav-toggle" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navLinks">
-    <span></span><span></span><span></span>
-  </button>
-</nav>
-
-<a href="#main-content" class="skip-link">Skip to main content</a>
-
-<!-- HERO -->
-<main id="main-content">
-<section class="hero">
-  <div class="hero-inner">
-    <span class="hero-eyebrow">Free Student Wellness Web App</span>
-    <h1>A private way for students to tell teachers how they're doing.</h1>
-    <p class="hero-sub">Free daily mood check-ins for your classroom. No download, no cost, no signup fees. Students stay in control of what they share.</p>
-    <div class="hero-actions">
-      <a href="https://wellspaceapp.github.io/WellSpace-Students/" class="btn-primary">Try WellSpace Students For Free</a>
-      <a href="#mission" class="btn-outline-white" aria-label="Learn more about our mission">Learn more</a>
-    </div>
-  <div class="hero-stats">
-  <div class="hero-stat">
-    <span class="hero-stat-num">Free</span>
-    <span class="hero-stat-label">Always</span>
-  </div>
-  <div class="hero-stat">
-    <span class="hero-stat-num" id="user-count">20+</span>
-    <span class="hero-stat-label">Users</span>
-  </div>
-  <div class="hero-stat">
-    <span class="hero-stat-num">10 sec</span>
-    <span class="hero-stat-label">Student check-in</span>
-  </div>
-</div>
-</section>
-
-<!-- SOCIAL PROOF STRIP -->
-<div class="proof-strip">
-  <div class="proof-strip-inner">
-    <div class="proof-quote">
-      <span class="proof-quote-mark">"</span>
-      <div class="proof-quote-text">
-        This is really awesome. Thanks for taking the time to make this and keep it free.
-        <span class="proof-quote-attr">Anonymous educator</span>
-      </div>
-    </div>
-    <div class="proof-quote">
-      <span class="proof-quote-mark">"</span>
-      <div class="proof-quote-text">
-        Many students are too nervous to bring up certain issues in front of their peers, so this creates a way to communicate needs.
-        <span class="proof-quote-attr">Anonymous educator</span>
-      </div>
-    </div>
-    <div class="proof-quote">
-      <span class="proof-quote-mark">"</span>
-      <div class="proof-quote-text">
-        Such a brilliant and considerate idea. Thank you.
-        <span class="proof-quote-attr">Anonymous educator</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- MISSION -->
-<section class="mission" id="mission">
-  <div class="section-inner">
-    <span class="section-eyebrow">Why this exists</span>
-    <h2 class="section-title">Built by a student who got tired of the silence.</h2>
-    <div class="mission-grid">
-      <div class="mission-story">
-        <p>The idea came from watching my own teacher run a daily Google Form so students could flag how they were doing before class started. It worked well. But it was a generic form with no real structure, easy to forget, and impossible to build on.</p>
-        <p>Most students would rather say nothing than say <strong>"I'm not okay"</strong> in front of everyone. WellSpace Students gives them a way to say it privately, to the teacher they trust, in ten seconds.</p>
-        <p>Teachers get a simple dashboard showing who might need a check-in that day. Students control everything they share. Nothing is visible to anyone unless the student explicitly sends it.</p>
-        <p>This is not a school board system or an official records platform. It is a classroom tool, built the way it should have been built from the start.</p>
-      </div>
-      <div class="mission-values">
-        <div class="value-card">
-          <div class="value-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-          <div>
-            <div class="value-title">Privacy first</div>
-            <div class="value-desc">Students control their own data at all times. Nothing is shared without their explicit action.</div>
-          </div>
-        </div>
-        <div class="value-card">
-          <div class="value-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7.5-4.6-10-9.3C.5 8 2 4 6 4c2 0 3.5 1.2 4.5 2.8C11.5 5.2 13 4 15 4c4 0 5.5 4 4 7.7C19.5 16.4 12 21 12 21z"/></svg></div>
-          <div>
-            <div class="value-title">Free forever</div>
-            <div class="value-desc">No subscriptions, no ads, no paywalls. No student or school should be priced out of wellness tools.</div>
-          </div>
-        </div>
-        <div class="value-card">
-          <div class="value-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></div>
-          <div>
-            <div class="value-title">Human-centred</div>
-            <div class="value-desc">Every feature exists to help real students with real pressures, not to generate data.</div>
-          </div>
-        </div>
-        <div class="value-card">
-          <div class="value-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
-          <div>
-           <div class="value-title">Made in Canada</div>
-            <div class="value-desc">Built in Ontario for Canadian classrooms, with province-specific crisis resources for students.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- HOW IT WORKS -->
-<section class="how" id="how">
-  <div class="section-inner">
-    <span class="section-eyebrow">How it works</span>
-    <h2 class="section-title">Simple for students. Useful for teachers.</h2>
-    <p class="section-body">WellSpace Students runs in any browser with no download or installation. Teachers create a class and share a code. Students join with that code and start checking in.</p>
-    <div class="steps">
-      <div class="step">
-        <div class="step-num">01</div>
-        <div class="step-title">Teacher creates a class</div>
-        <div class="step-desc">Takes two minutes. Set the subject, schedule, and generate an 8-character code to share with students.</div>
-      </div>
-      <div class="step">
-        <div class="step-num">02</div>
-        <div class="step-title">Students join and check in</div>
-        <div class="step-desc">Students enter the code, sign up, and log how they're feeling at the start of each period. Ten seconds. They choose what to share.</div>
-      </div>
-      <div class="step">
-        <div class="step-num">03</div>
-        <div class="step-title">Teacher sees what matters</div>
-        <div class="step-desc">The teacher dashboard shows who might need support today, based only on what students have chosen to share.</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FOR TEACHERS -->
-<section class="teachers" id="for-teachers">
-  <div class="section-inner">
-    <span class="section-eyebrow">For educators</span>
-    <h2 class="section-title">Does it need school board approval?</h2>
-    <div class="teachers-grid">
-      <div class="teachers-copy">
-        <p>Individual teachers can use WellSpace Students independently in their own classrooms, the same way you would use Google Forms, Notion, or any other tool you choose to adopt on your own initiative. No board approval is needed for personal classroom use.</p>
-        <p>However, if your school board requires formal approval for third-party tools, or if you are looking to roll it out school-wide or district-wide, you can follow your board's standard process for third-party software and data agreements. WellSpace Students is transparent about its privacy practices and happy to provide any documentation your board needs.</p>
-        <p>That said, we understand that data privacy is a real concern in Ontario schools. Here is exactly how WellSpace Students handles data.</p>
-
-        <div class="quick-answers">
-          <div class="qa-card">
-            <div class="qa-q">Is it free?</div>
-            <div class="qa-a">Yes. No subscriptions, no trials, no hidden fees. Free for teachers and students.</div>
-          </div>
-          <div class="qa-card">
-            <div class="qa-q">Is student data private?</div>
-            <div class="qa-a">Yes. Students share only what they choose to share. Nothing is visible by default.</div>
-          </div>
-          <div class="qa-card">
-            <div class="qa-q">Does it need approval?</div>
-            <div class="qa-a">Not for individual teacher use. For board-wide rollout, follow your board's standard third-party tool approval process.</div>
-          </div>
-        </div>
-      </div>
-      <div class="privacy-card">
-        <h3>How your data is stored</h3>
-        <div class="privacy-item">
-          <div class="privacy-dot"></div>
-          <div class="privacy-item-text"><strong>Student data is private by default.</strong> Nothing is shared with a teacher unless the student explicitly clicks "Share with Teacher."</div>
-        </div>
-        <div class="privacy-item">
-          <div class="privacy-dot"></div>
-          <div class="privacy-item-text"><strong>Passwords are never stored by WellSpace Students.</strong> Firebase Authentication handles all credentials using industry-standard encryption.</div>
-        </div>
-        <div class="privacy-item">
-          <div class="privacy-dot"></div>
-          <div class="privacy-item-text"><strong>Each user has their own private document.</strong> No shared blobs. No cross-user access. Firestore security rules are enforced server-side.</div>
-        </div>
-        <div class="privacy-item">
-          <div class="privacy-dot"></div>
-          <div class="privacy-item-text"><strong>No advertising. No tracking pixels.</strong> We use Google Firebase, EmailJS, GitHub Pages, and basic, privacy-safe Google Analytics (never your personal info). See our <a href="#" onclick="openCookieModal();return false;" style="color:var(--green)">Cookie Policy</a>.</div>
-        </div>
-        <div class="privacy-item">
-          <div class="privacy-dot"></div>
-          <div class="privacy-item-text"><strong>Students can delete their account instantly.</strong> All data is permanently removed with no retention.</div>
-        </div>
-        <div class="data-note">
-<strong>Note on Canadian data storage:</strong> Firebase currently stores data on US-based Google servers by default. Canadian data residency (Montreal) is available on Firebase's paid tier. WellSpace Students is currently on the free tier. If your board requires Canadian-only data hosting, this is the current limitation to be aware of. We recommend using WellSpace Students as an independent classroom tool rather than a board-sanctioned system until this changes. We're actively exploring Canadian-hosted infrastructure for institutional deployments.
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- TESTIMONIALS -->
-<section class="testimonials" id="testimonials">
-  <div class="section-inner">
-    <span class="section-eyebrow">What people are saying</span>
-    <h2 class="section-title">Real feedback from real teachers.</h2>
-    <div class="testimonials-grid">
-      <div class="testimonial">
-        <div class="testimonial-text">Hey as a teacher in Ontario who almost exclusively taught Grade 7 and 8, this is really awesome. Thanks for taking the time to make this and keep it free.</div>
-        <div class="testimonial-attr">Anonymous educator</div>
-      </div>
-      <div class="testimonial">
-        <div class="testimonial-text">This is a great idea. Many students are too nervous to bring up certain issues in front of their peers, so this creates a way to communicate needs.</div>
-        <div class="testimonial-attr">Anonymous educator</div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- FAQ -->
-<section class="faq" id="faq">
-  <div class="section-inner">
-    <span class="section-eyebrow">Common questions</span>
-    <h2 class="section-title">Frequently asked questions.</h2>
-    <div class="faq-list">
-
-      <div class="faq-item">
-        <button class="faq-q" id="faq-q-1" aria-expanded="false" aria-controls="faq-a-1" onclick="toggleFaq(this)">
-          Where is student data stored?
-          <span class="faq-icon">+</span>
-        </button><div class="faq-a" id="faq-a-1" role="region" aria-labelledby="faq-q-1">Student data is stored on Google Firebase on North American servers, with encrypted HTTPS connections and strict per-user security rules. Each user's data is stored in their own private Firestore document with no cross-user access possible. Data is kept until a student deletes their account. Accounts inactive for 24 months are automatically deleted along with all data. We are transparent about one current limitation: Canadian data residency on Montreal servers requires Firebase's paid tier, which WellSpace Students does not currently use.</div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-q" id="faq-q-2" aria-expanded="false" aria-controls="faq-a-2" onclick="toggleFaq(this)">
-          Can teachers see everything a student enters?
-          <span class="faq-icon">+</span>
-        </button><div class="faq-a" id="faq-a-2" role="region" aria-labelledby="faq-q-2">No. Teachers only see what a student explicitly chooses to share. Students have a "Share with Teacher" toggle on every entry, including mood check-ins, sleep logs, and wellness data. Private journal entries are never visible to anyone. If a student keeps something private, it stays private.</div>
-      </div>
-<div class="faq-item">
-  <button class="faq-q" id="faq-q-3" aria-expanded="false" aria-controls="faq-a-3" onclick="toggleFaq(this)">How long is student data kept?<span class="faq-icon">+</span></button><div class="faq-a" id="faq-a-3" role="region" aria-labelledby="faq-q-3">Data is stored until a student deletes their account. Accounts inactive for 24 months are automatically deleted along with all associated data. There is no backup and no way to recover deleted data. Students can delete everything instantly at any time from their profile settings.</div>
-</div>
-      
-      <div class="faq-item">
-        <button class="faq-q" id="faq-q-4" aria-expanded="false" aria-controls="faq-a-4" onclick="toggleFaq(this)">
-          Does WellSpace Students replace a school guidance counsellor?
-          <span class="faq-icon">+</span>
-        </button><div class="faq-a" id="faq-a-4" role="region" aria-labelledby="faq-q-4">No. WellSpace Students is a classroom check-in tool, not a counselling or crisis intervention system. If a student shares something that requires escalation, teachers follow the same school procedures they normally would. WellSpace Students does include built-in province-specific crisis helpline resources so students know where to get real support when they need it.</div>
-      </div>
-      <div class="faq-item">
-  <button class="faq-q" id="faq-q-5" aria-expanded="false" aria-controls="faq-a-5" onclick="toggleFaq(this)">Can WellSpace Students be used as an official student record?<span class="faq-icon">+</span></button><div class="faq-a" id="faq-a-5" role="region" aria-labelledby="faq-q-5">No. WellSpace Students is a classroom check-in tool, not an official record system. Teachers should not rely on WellSpace Students as the sole documentation of any student concern. Anything requiring follow-up, safeguarding action, or formal documentation must be recorded through your school's standard procedures. If a student deletes their account, all data is permanently gone and cannot be recovered by anyone including WellSpace Students.</div>
-</div>
-      <div class="faq-item">
-        <button class="faq-q" id="faq-q-6" aria-expanded="false" aria-controls="faq-a-6" onclick="toggleFaq(this)">
-          Do I need school board approval to use this?
-          <span class="faq-icon">+</span>
-        </button><div class="faq-a" id="faq-a-6" role="region" aria-labelledby="faq-q-6">Not for individual teacher use. You can use WellSpace Students the same way you would adopt any classroom tool independently, the same way teachers use Google Forms, Notion, or other tools without requiring district approval. For board-wide rollout, you would want to follow your board's standard process for third-party tools and data agreements.</div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-q" id="faq-q-7" aria-expanded="false" aria-controls="faq-a-7" onclick="toggleFaq(this)">
-          Is this actually free? What is the catch?
-          <span class="faq-icon">+</span>
-        </button><div class="faq-a" id="faq-a-7" role="region" aria-labelledby="faq-q-7">There is no catch. WellSpace Students is free for teachers and students with no subscription, no trial period, and no ads. It is built and maintained by one student who believes no school should be priced out of a wellness tool. The only costs are Firebase's free tier limits, which we manage carefully.</div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-q" id="faq-q-8" aria-expanded="false" aria-controls="faq-a-8" onclick="toggleFaq(this)">
-          Can students see each other's responses?
-          <span class="faq-icon">+</span>
-        </button><div class="faq-a" id="faq-a-8" role="region" aria-labelledby="faq-q-8">No. Student responses are only visible to the teacher whose class they chose to share with. Other students cannot see any responses. The only people who can ever see a student's shared data are that student and the specific teacher they sent it to.</div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-q" id="faq-q-9" aria-expanded="false" aria-controls="faq-a-9" onclick="toggleFaq(this)">
-          What does WellSpace Students actually include?
-          <span class="faq-icon">+</span>
-        </button><div class="faq-a" id="faq-a-9" role="region" aria-labelledby="faq-q-9">For students: daily mood check-ins per class period, a weekly goal planner, a sleep and wellness tracker, a private journal, and province-specific crisis helpline resources. For teachers: a student dashboard showing shared moods and wellness data, a class management system with codes, mood trend alerts, and a social worker contact field that appears when students log a negative mood.</div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-q" id="faq-q-10" aria-expanded="false" aria-controls="faq-a-10" onclick="toggleFaq(this)">
-          Does it work on phones and school Chromebooks?
-          <span class="faq-icon">+</span>
-        </button><div class="faq-a" id="faq-a-10" role="region" aria-labelledby="faq-q-10">Yes. WellSpace Students is a Progressive Web App that works in any browser on any device, including phones, tablets, and Chromebooks. No download or app store is required. Students can also add it to their home screen to use it like a native app.</div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-q" id="faq-q-11" aria-expanded="false" aria-controls="faq-a-11" onclick="toggleFaq(this)">
-          How do I get started as a teacher?
-          <span class="faq-icon">+</span>
-        </button><div class="faq-a" id="faq-a-11" role="region" aria-labelledby="faq-q-11">Go to wellspaceapp.github.io/WellSpace-Students, click "I'm a Teacher," sign up with your email, and create your first class. The whole setup takes under five minutes. Share the class code with your students and they can join immediately. You can also schedule a short walkthrough using the link in the Contact section below if you prefer to see it live first.</div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- VOLUNTEER -->
-<section class="volunteer" id="volunteer">
-  <div class="section-inner">
-    <span class="section-eyebrow" style="color:var(--green)">Get involved</span>
-    <h2 class="section-title">Help build something that matters.</h2>
-    <p class="section-body">WellSpace Students is one student building something real. There are parts of this that are too important to do alone. If any of the roles below sound like you, we want to hear from you.</p>
-    <div class="roles-grid">
-      <div class="role-card">
-        <div class="role-title"><span class="role-emoji"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3z"/></svg></span> Content Creator</div>
-        <div class="role-desc">Plans, films, edits, and posts the videos and graphics that get WellSpace Students in front of people who have never heard of it. You do not need to show your face. Screen recordings, AI voiceover, and text-on-screen are all fine.</div>
-      </div>
-      <div class="role-card">
-        <div class="role-title"><span class="role-emoji"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 5v-16l-4 5H4a1 1 0 0 0-1 1z"/><path d="M17 8a5 5 0 0 1 0 8"/><path d="M20 5a9 9 0 0 1 0 14"/></svg></span> Partnerships and Outreach</div>
-        <div class="role-desc">Finds and contacts teachers, schools, and after-school programs, writes the outreach message, and follows up. Good fit if you are comfortable writing to adults you do not know and seeing it through.</div>
-      </div>
-      <div class="role-card">
-        <div class="role-title"><span class="role-emoji"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1.4 1.2-2.5 2.5-2.5s2.5.9 2.5 2c0 1.5-1.5 2-2.5 2.5-1.5.7-2.5 1.4-2.5 3 0 1.1 1.2 2 2.5 2s2.5-.9 2.5-2"/></svg></span> Grants and Funding</div>
-        <div class="role-desc">Researches scholarships, youth innovation grants, and funding opportunities, and helps put together the actual application. Good fit if you are a strong researcher and writer.</div>
-      </div>
-      <div class="role-card">
-        <div class="role-title"><span class="role-emoji"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.6 8.6 0 0 1-4-1L3 20l1.1-5.5A8.4 8.4 0 1 1 21 11.5z"/></svg></span> Community and Support</div>
-        <div class="role-desc">Handles replies, DMs, and questions from students and teachers. Helps new users get set up and flags anything that needs immediate attention. Good fit if you are organized and responsive.</div>
-      </div>
-      <div class="role-card">
-        <div class="role-title"><span class="role-emoji"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg></span> Research and Strategy</div>
-        <div class="role-desc">Looks at what is working for similar youth-led and wellness projects, brings back real findings, and helps inform decisions about direction. Good fit if you like digging into information and presenting what you find clearly.</div>
-      </div>
-    </div>
-    <div class="volunteer-cta">
-      <a href="https://forms.gle/B25bTZUp7PzgkpXw8" class="btn-green-lg">Apply to Volunteer</a>
-      <p class="consent-note">Volunteers under 18 will be asked to provide parental consent as part of the application. All roles are remote and unpaid.</p>
-    </div>
-  </div>
-</section>
-
-<!-- CONTACT -->
-<section class="contact" id="contact">
-  <div class="section-inner">
-    <span class="section-eyebrow">Get in touch</span>
-    <h2 class="section-title">We read every message.</h2>
-    <div class="contact-grid">
-      <div>
-        <div class="contact-item">
-          <div class="contact-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div>
-          <div>
-            <div class="contact-label">Email</div>
-            <div class="contact-value"><a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></div>
-          </div>
-        </div>
-        <div class="contact-item">
-          <div class="contact-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
-          <div>
-            <div class="contact-label">Creator</div>
-            <div class="contact-value"><a href="https://www.linkedin.com/in/muhammad-taha-480222360/">Muhammad Taha on LinkedIn</a></div>
-          </div>
-        </div>
-        <div class="contact-item">
-          <div class="contact-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></div>
-          <div>
-            <div class="contact-label">Social Media</div>
-            <div class="contact-value">
-              <div class="socials">
-                <a href="https://www.tiktok.com/@wellspaceweb" class="social-pill">TikTok</a>
-                <a href="https://www.instagram.com/wellspaceweb/" class="social-pill">Instagram</a>
-                <a href="https://www.youtube.com/@WellSpaceWeb" class="social-pill">YouTube</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="contact-item">
-          <div class="contact-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></div>
-          <div>
-            <div class="contact-label">The Site</div>
-            <div class="contact-value"><a href="https://wellspaceapp.github.io/WellSpace-Students/">wellspaceapp.github.io/WellSpace-Students</a></div>
-          </div>
-        </div>
-        <div class="contact-item">
-          <div class="contact-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 11h6M9 15h6"/></svg></div>
-          <div>
-            <div class="contact-label">Privacy Policy</div>
-            <div class="contact-value"><a href="https://wellspaceapp.github.io/WellSpace-Students/privacy.html">Read our Privacy Policy</a></div>
-          </div>
-        </div>
-      </div>
-      <div class="schedule-card">
-        <h3>Schedule a walkthrough</h3>
-        <p>If you are a teacher, researcher, or school looking to try WellSpace Students and want a live walkthrough before getting started, book a short call directly.</p>
-        <a href="https://calendar.app.google/GrJgmcMa7WrpBcs96" class="btn-schedule">Book a time</a>
-      </div>
-    </div>
-  </div>
-</section>
+<a href="#" class="skip-link" onclick="event.preventDefault(); const m = document.getElementById('s-main').offsetParent ? 's-main' : (document.getElementById('t-main').offsetParent ? 't-main' : null); if(m){ const el=document.getElementById(m); el.setAttribute('tabindex','-1'); el.focus(); }">Skip to main content</a>
 
 <!-- COOKIE CONSENT BANNER -->
 <div id="cookie-banner" class="cookie-banner hidden">
   <div class="cookie-banner-inner">
-    <p class="cookie-banner-text">
-      🍪 We use a small amount of website analytics (Google Analytics) to see how many people visit this page - never any personal or health info. Read our <a href="#" onclick="openCookieModal();return false;">Cookie Policy</a>.
+    <p class="cookie-text">
+      🍪 We use a small amount of website analytics (Google Analytics) to see how many people visit WellSpace Students and which pages are useful - never your mood check-ins, journal entries, or any personal info. Read our <a href="#" onclick="openModal('cookie-policy-modal');return false;">Cookie Policy</a>.
     </p>
-    <div class="cookie-banner-actions">
-      <button class="cookie-btn cookie-btn-decline" onclick="setCookieConsent(false)">Decline</button>
-      <button class="cookie-btn cookie-btn-accept" onclick="setCookieConsent(true)">Accept</button>
+    <div class="cookie-actions">
+      <button class="btn-outline small" onclick="setCookieConsent(false)">Decline</button>
+      <button class="btn-main small" onclick="setCookieConsent(true)">Accept</button>
     </div>
+  </div>
+</div>
+
+<!-- ENTRY SCREEN -->
+<div id="screen-entry" class="screen active">
+  <div class="entry-bg">
+    <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
+  </div>
+  <div class="entry-glass">
+    <div class="entry-brand"><span class="brand-leaf">🌿</span><span class="brand-name">WellSpace Students</span></div>
+    <p class="entry-sub">Wellness · Productivity · Balance</p>
+    <div class="entry-cards">
+      <button class="role-card student-card" onclick="gotoAuth('student')">
+        <div class="role-icon">🎒</div>
+        <div class="role-text">
+          <div class="role-label">I'm a Student</div>
+          <div class="role-desc">Track moods, goals & stay on track</div>
+        </div>
+        <span class="role-arrow">→</span>
+      </button>
+      <button class="role-card teacher-card" onclick="gotoAuth('teacher')">
+        <div class="role-icon">📋</div>
+        <div class="role-text">
+          <div class="role-label">I'm a Teacher</div>
+          <div class="role-desc">Manage classes & support students</div>
+        </div>
+        <span class="role-arrow">→</span>
+      </button>
+    </div>
+    <p class="entry-help-note">Need mental health support right now? <a href="#" onclick="showHelplines()">Click here</a> - no account needed.</p>
+  </div>
+</div>
+
+<!-- QUICK HELPLINES -->
+<div id="quick-helplines" class="screen">
+  <div class="helpline-full">
+    <button class="back-link" onclick="showScreen('screen-entry')">← Back</button>
+    <div id="quick-helpline-content"></div>
+  </div>
+</div>
+
+<!-- AUTH SCREEN -->
+<div id="screen-auth" class="screen">
+  <div class="auth-bg"></div>
+  <div class="auth-container">
+    <button class="back-link" onclick="showScreen('screen-entry')">← Back</button>
+    <div class="auth-card" id="auth-card">
+      <div class="auth-brand" id="auth-brand-label"></div>
+      <div class="auth-tabs">
+        <button class="atab active" id="atab-login" onclick="authTab('login')">Log In</button>
+        <button class="atab" id="atab-signup" onclick="authTab('signup')">Sign Up</button>
+      </div>
+      <div id="form-login">
+        <div class="fgroup">
+          <label for="login-email">Email Address</label>
+          <input type="email" id="login-email" placeholder="you@email.com" autocomplete="email"/>
+        </div>
+        <div class="fgroup">
+          <label for="login-pass">Password</label>
+          <div class="pw-wrap">
+            <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/>
+            <button class="pw-toggle" onclick="togglePw('login-pass',this)">👁</button>
+          </div>
+        </div>
+        <div id="login-err" class="ferr hidden"></div>
+        <button class="btn-main" onclick="doLogin()">Log In</button>
+        <p style="text-align:center;margin-top:12px;font-size:.85rem">
+          <a href="#" onclick="openModal('forgot-modal')" style="color:var(--blue)">Forgot your password? 🔑 Reset Password</a>
+        </p>
+      </div>
+      <div id="form-signup" class="hidden">
+        <div class="fgroup">
+          <label for="su-name">Full Name</label>
+          <input type="text" id="su-name" placeholder="Your full name"/>
+        </div>
+        <div class="fgroup">
+          <label for="su-email">Email Address</label>
+          <input type="email" id="su-email" placeholder="you@school.ca"/>
+          <span class="field-hint">Must be a valid email (e.g. name@school.ca)</span>
+        </div>
+        <div class="fgroup">
+          <label for="su-pass">Password</label>
+          <div class="pw-wrap">
+            <input type="password" id="su-pass" placeholder="Create password" oninput="checkPwStrength(this.value)"/>
+            <button class="pw-toggle" onclick="togglePw('su-pass',this)">👁</button>
+          </div>
+          <div id="pw-strength-bar"><div id="pw-strength-fill"></div></div>
+          <ul class="pw-rules" id="pw-rules">
+            <li id="r-len">At least 8 characters</li>
+            <li id="r-upper">One uppercase letter</li>
+            <li id="r-num">One number</li>
+            <li id="r-special">One special character (!@#$...)</li>
+          </ul>
+        </div>
+        <div id="su-student-fields">
+          <div class="fgroup">
+            <label for="su-grade">Grade</label>
+            <select id="su-grade">
+              <option value="">Select grade…</option>
+              <option>Grade 9</option><option>Grade 10</option>
+              <option>Grade 11</option><option>Grade 12</option>
+              <option>University Year 1</option><option>University Year 2</option>
+              <option>University Year 3</option><option>University Year 4</option>
+            </select>
+          </div>
+          <div class="fgroup">
+            <label>Class Code <span class="opt-label">(optional - from your teacher)</span></label>
+            <input aria-label="e.g. ENG2D-2024" type="text" id="su-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
+            <span class="field-hint">You can join a class later too</span>
+          </div>
+        </div>
+        <div id="su-teacher-fields" class="hidden">
+          <div class="fgroup">
+            <label for="su-province">Province / Territory</label>
+            <select id="su-province">
+              <option value="">Select province…</option>
+              <option>Ontario</option><option>British Columbia</option>
+              <option>Alberta</option><option>Quebec</option>
+              <option>Nova Scotia</option><option>New Brunswick</option>
+              <option>Manitoba</option><option>Saskatchewan</option>
+              <option>PEI</option><option>Newfoundland & Labrador</option>
+              <option>Northwest Territories</option><option>Nunavut</option><option>Yukon</option>
+            </select>
+          </div>
+          <div class="fgroup">
+            <label for="su-school">School Name</label>
+            <input type="text" id="su-school" placeholder="e.g. Westview Secondary School"/>
+          </div>
+        </div>
+        <div class="privacy-check">
+          <input type="checkbox" id="su-privacy"/>
+          <label for="su-privacy">I agree to the <a href="./privacy.html" target="_blank">Privacy Policy</a> - my data is private and never shared without consent</label>
+        </div>
+        <div id="signup-err" class="ferr hidden"></div>
+        <button class="btn-main" onclick="startSignupVerification()">Create Account</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STUDENT DASHBOARD -->
+<div id="screen-student" class="screen">
+  <div class="app-layout">
+    <aside class="sidebar" id="s-sidebar">
+      <div class="sb-brand"><span>🌿</span> WellSpace Students</div>
+      <nav class="sb-nav">
+        <a class="sn active" onclick="sSection('home')"    ><i>🏠</i> Home</a>
+        <a class="sn"        onclick="sSection('mood')"    ><i>😊</i> Mood Check</a>
+        <a class="sn"        onclick="sSection('goals')"   ><i>🎯</i> Goals</a>
+        <a class="sn"        onclick="sSection('calendar')"><i>📅</i> Calendar</a>
+        <a class="sn"        onclick="sSection('stats')"   ><i>📊</i> My Stats</a>
+        <a class="sn"        onclick="sSection('wellness')"><i>🌱</i> Wellness</a>
+        <a class="sn"        onclick="sSection('help')"    ><i>💙</i> Help & Crisis</a>
+        <a class="sn"        onclick="sSection('classes')" ><i>🏫</i> My Classes</a>
+        <a class="sn"        onclick="sSection('profile')" ><i>👤</i> My Profile</a>
+      </nav>
+      <div class="sb-foot">
+        <button class="sb-logout" onclick="logout()">Log Out</button>
+      </div>
+    </aside>
+    <main class="app-main" id="s-main">
+      <header class="app-header">
+        <button class="ham" onclick="toggleSB('s-sidebar')">☰</button>
+        <div class="hdr-info"><h2 id="s-greet"></h2><p id="s-date"></p></div>
+        <div class="hdr-av" id="s-av">S</div>
+      </header>
+
+      <!-- HOME -->
+      <section class="dsec active" id="s-sec-home">
+        <div class="home-banner" id="s-home-banner"></div>
+        <div id="s-home-today"></div>
+        <div class="home-grid">
+          <div class="home-quick-card" onclick="sSection('mood')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('mood')}"><span>😊</span><strong>Check Mood</strong><p>Log today's feelings</p></div>
+          <div class="home-quick-card" onclick="sSection('goals')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('goals')}"><span>🎯</span><strong>Goals</strong><p>View & add tasks</p></div>
+          <div class="home-quick-card" onclick="sSection('wellness')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sSection('wellness')}"><span>🌱</span><strong>Wellness</strong><p>Sleep, habits & more</p></div>
+        </div>
+        <div id="s-home-goals-preview"></div>
+      </section>
+
+      <!-- MOOD CHECK -->
+      <section class="dsec" id="s-sec-mood">
+        <div class="sec-hdr"><h3>Daily Mood Check</h3><p>How are you feeling in each period today?</p></div>
+        <div id="s-mood-list"></div>
+      </section>
+
+      <!-- GOALS -->
+      <section class="dsec" id="s-sec-goals">
+        <div class="sec-hdr"><h3>Weekly Goals & Planner</h3><p>Stay on track - one task at a time</p></div>
+        <div class="goals-toolbar">
+          <select id="goal-cls-sel" class="sel" onchange="renderGoals()" aria-label="Filter tasks by class"></select>
+          <button class="btn-main small" onclick="openGoalModal()">+ Add Task</button>
+        </div>
+        <div id="goals-container"></div>
+      </section>
+
+      <!-- CALENDAR -->
+      <section class="dsec" id="s-sec-calendar">
+        <div class="sec-hdr"><h3>Weekly Calendar</h3><p>Your full week at a glance</p></div>
+        <div id="cal-wrap" class="cal-wrap"></div>
+      </section>
+
+      <!-- STATS -->
+      <section class="dsec" id="s-sec-stats">
+        <div class="sec-hdr"><h3>My Stats</h3><p>Your progress over time</p></div>
+        <div id="stats-cards" class="stats-grid"></div>
+        <h4 class="sub-hdr">Mood History</h4>
+        <div id="mood-history"></div>
+      </section>
+
+      <!-- WELLNESS -->
+      <section class="dsec" id="s-sec-wellness">
+        <div class="sec-hdr"><h3>🌱 Wellness Tracker</h3><p>Private - only visible to you (unless you choose to share)</p></div>
+        <div class="wellness-grid">
+          <div class="wcard">
+            <h4>😴 Hours Slept Last Night</h4>
+            <div class="sleep-input-row">
+              <input aria-label="e.g. 7.5" type="number" id="w-sleep" min="0" max="24" step="0.5" placeholder="e.g. 7.5"/>
+              <select id="w-sleep-quality" aria-label="Sleep quality">
+                <option value="">Sleep quality…</option>
+                <option>Great</option><option>Okay</option><option>Poor</option>
+              </select>
+            </div>
+            <div class="share-toggle" id="sleep-share-row">
+              <input type="checkbox" id="share-sleep"/>
+              <label for="share-sleep">Send to a teacher</label>
+              <select id="sleep-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share sleep log with"></select>
+            </div>
+            <button class="btn-main small" onclick="logWellness('sleep')">Log Sleep</button>
+            <div id="sleep-log-display" class="wlog-display"></div>
+          </div>
+          <div class="wcard">
+            <h4>📋 Today's Responsibilities</h4>
+            <div class="resp-input-row">
+              <input aria-label="e.g. babysit sibling, part-time job" type="text" id="w-resp" placeholder="e.g. babysit sibling, part-time job…"/>
+            </div>
+            <div class="share-toggle" id="resp-share-row">
+              <input type="checkbox" id="share-resp"/>
+              <label for="share-resp">Send to a teacher</label>
+              <select id="resp-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share responsibilities with"></select>
+            </div>
+            <button class="btn-main small" onclick="logWellness('resp')">Add</button>
+            <div id="resp-log-display" class="wlog-display"></div>
+          </div>
+          <div class="wcard">
+            <h4>⚡ Energy & Hydration</h4>
+            <div class="fgroup">
+              <label for="w-energy">Energy Level (1-10)</label>
+              <input type="range" id="w-energy" min="1" max="10" value="5" oninput="document.getElementById('energy-val').textContent=this.value"/>
+              <span id="energy-val">5</span>
+            </div>
+            <div class="fgroup">
+              <label for="w-water">Glasses of water today</label>
+              <input type="number" id="w-water" min="0" max="20" placeholder="8"/>
+            </div>
+            <div class="share-toggle" id="energy-share-row">
+              <input type="checkbox" id="share-energy"/>
+              <label for="share-energy">Send to a teacher</label>
+              <select id="energy-teacher-sel" class="sel-inline hidden" aria-label="Select teacher to share energy log with"></select>
+            </div>
+            <button class="btn-main small" onclick="logWellness('energy')">Log</button>
+          </div>
+          <div class="wcard">
+            <h4>📝 Private Journal Note</h4>
+            <textarea id="w-journal" rows="4" placeholder="Write anything - thoughts, worries, wins…"></textarea>
+            <p class="privacy-note">🔒 This is always private. Never shared with anyone.</p>
+            <button class="btn-main small" onclick="saveJournal()">Save Note</button>
+            <div id="journal-saved" class="hidden" style="color:var(--green);font-size:.85rem;margin-top:6px">✓ Saved privately</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HELP & CRISIS -->
+      <section class="dsec" id="s-sec-help">
+        <div class="sec-hdr"><h3>💙 Help & Crisis Support</h3><p>You're not alone - real people are available 24/7</p></div>
+        <div id="help-content"></div>
+      </section>
+
+      <!-- MY CLASSES -->
+      <section class="dsec" id="s-sec-classes">
+        <div class="sec-hdr"><h3>🏫 My Classes</h3><p>Classes you've joined via teacher codes</p></div>
+        <div class="join-class-row">
+          <input aria-label="Enter class code from your teacher" type="text" id="join-code" placeholder="Enter class code from your teacher…" style="text-transform:uppercase"/>
+          <button class="btn-main small" onclick="joinClass()">Join Class</button>
+        </div>
+        <div id="s-classes-list"></div>
+        <div id="period-order-wrap" class="hidden">
+          <h4 style="margin:20px 0 6px;color:var(--navy)">Arrange Your Periods in Order</h4>
+          <p class="field-hint">Use the arrows to reorder</p>
+          <div id="period-order-list" class="period-order-list"></div>
+          <button class="btn-main small" onclick="savePeriodOrder()">Save Order</button>
+        </div>
+      </section>
+
+      <!-- MY PROFILE -->
+      <section class="dsec" id="s-sec-profile">
+        <div class="sec-hdr"><h3>👤 My Profile</h3><p>Manage your account and responsibilities</p></div>
+        <div class="profile-grid">
+          <div class="profile-card">
+            <div class="profile-avatar-row">
+              <div class="profile-big-av" id="s-profile-av">A</div>
+              <div>
+                <h3 id="s-profile-name"></h3>
+                <p id="s-profile-email" style="color:var(--muted);font-size:.88rem"></p>
+                <span id="s-profile-grade" class="cls-code-badge" style="margin-top:6px;display:inline-block"></span>
+              </div>
+            </div>
+            <div class="profile-section-title">Edit Name</div>
+            <div class="fgroup"><label for="s-edit-name">Full Name</label><input type="text" id="s-edit-name" placeholder="Your name"/></div>
+            <div class="profile-section-title">Change Password</div>
+            <div class="fgroup"><label for="s-old-pass">Current Password</label><input type="password" id="s-old-pass" placeholder="••••••••"/></div>
+            <div class="fgroup"><label for="s-new-pass">New Password</label><input type="password" id="s-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+            <div id="s-profile-err" class="ferr hidden"></div>
+            <div id="s-profile-ok" class="success-note hidden">✓ Profile updated!</div>
+            <button class="btn-main small" onclick="saveStudentProfile()">Save Changes</button>
+          </div>
+          <div class="profile-card">
+            <h4 style="color:var(--navy);margin-bottom:4px">📋 My Responsibilities</h4>
+            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Add things outside of school - work, family, sports, etc.</p>
+            <div class="fgroup"><label for="resp-text">Responsibility</label><input type="text" id="resp-text" placeholder="e.g. Part-time job, babysit siblings…"/></div>
+            <div class="fgroup"><label for="resp-when">Days / When</label><input type="text" id="resp-when" placeholder="e.g. Mon-Wed 4-8pm"/></div>
+            <div class="fgroup"><label for="resp-hours">Hours per week (approx)</label><input type="number" id="resp-hours" min="0" max="80" placeholder="e.g. 15"/></div>
+            <div class="share-toggle" style="margin-bottom:14px">
+              <input type="checkbox" id="resp-share"/>
+              <label for="resp-share">Share this with my teacher so they understand my workload</label>
+            </div>
+            <button class="btn-main small" onclick="addResponsibility()">Add Responsibility</button>
+            <div id="resp-list" style="margin-top:16px;display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+          <div class="profile-card">
+            <h4 style="color:var(--navy);margin-bottom:4px">♿ Accessibility</h4>
+            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Adjust how WellSpace Students looks and moves. Saved to this browser, so set it up the same way on your phone and your computer.</p>
+            <div class="fgroup">
+              <label id="a11y-text-label">Text Size</label>
+              <div style="display:flex;gap:8px" role="group" aria-labelledby="a11y-text-label">
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(-1)" aria-label="Decrease text size">A−</button>
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(0)" aria-label="Reset text size to default">A</button>
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(1)" aria-label="Increase text size">A+</button>
+              </div>
+            </div>
+            <div class="share-toggle" style="margin-bottom:10px">
+              <input type="checkbox" id="a11y-contrast-toggle" onchange="toggleA11yContrast(this.checked)"/>
+              <label for="a11y-contrast-toggle">High contrast mode</label>
+            </div>
+            <div class="share-toggle">
+              <input type="checkbox" id="a11y-motion-toggle" onchange="toggleA11yReducedMotion(this.checked)"/>
+              <label for="a11y-motion-toggle">Reduce motion & animations</label>
+            </div>
+          </div>
+          <div class="profile-card danger-card">
+            <h4>⚠️ Account Actions</h4>
+            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">These actions are permanent and cannot be undone.</p>
+            <button class="btn-outline" onclick="showPrivacy()" style="margin-bottom:12px">🔒 View Privacy Policy</button>
+            <button class="btn-outline" onclick="showCookiePolicy()" style="margin-bottom:12px">🍪 View Cookie Policy</button>
+            <button class="btn-outline" onclick="toggleCookieConsent()" style="margin-bottom:12px" id="s-cookie-toggle-btn">🍪 Manage Cookie Preference</button>
+            <button class="btn-danger" onclick="confirmDeleteAccount('student')">🗑 Delete My Account</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- TEACHER DASHBOARD -->
+<div id="screen-teacher" class="screen">
+  <div class="app-layout">
+    <aside class="sidebar teacher-sb" id="t-sidebar">
+      <div class="sb-brand"><span>📋</span> WellSpace Students</div>
+      <nav class="sb-nav">
+        <a class="sn active" onclick="tSection('overview')"><i>🏠</i> Overview</a>
+        <a class="sn"        onclick="tSection('classes')" ><i>📚</i> Classes</a>
+        <a class="sn"        onclick="tSection('students')"><i>👥</i> Students</a>
+        <a class="sn"        onclick="tSection('moods')"   ><i>😊</i> Mood Reports</a>
+        <a class="sn"        onclick="tSection('wellness')"><i>🌱</i> Wellness Data</a>
+        <a class="sn"        onclick="tSection('goals')"   ><i>🎯</i> Goals</a>
+        <a class="sn"        onclick="tSection('alerts')"  ><i>⚠️</i> Alerts <span class="nbadge" id="t-alert-badge">0</span></a>
+        <a class="sn"        onclick="tSection('summary')" ><i>📋</i> Weekly Summary</a>
+        <a class="sn"        onclick="tSection('help')"    ><i>💙</i> Help Resources</a>
+        <a class="sn"        onclick="tSection('settings')"><i>⚙️</i> Settings</a>
+        <a class="sn"        onclick="tSection('profile')" ><i>👤</i> My Profile</a>
+      </nav>
+      <div class="sb-foot"><button class="sb-logout" onclick="logout()">Log Out</button></div>
+    </aside>
+    <main class="app-main" id="t-main">
+      <header class="app-header teacher-hdr">
+        <button class="ham" onclick="toggleSB('t-sidebar')">☰</button>
+        <div class="hdr-info"><h2 id="t-greet"></h2><p id="t-date"></p></div>
+        <div class="hdr-av teacher-av" id="t-av">T</div>
+      </header>
+      <section class="dsec active" id="t-sec-overview">
+        <div id="t-stats-row" class="t-stats-row"></div>
+        <div id="t-pending-box"></div>
+        <div id="t-alerts-preview"></div>
+      </section>
+      <section class="dsec" id="t-sec-classes">
+        <div class="sec-hdr"><h3>📚 My Classes</h3><p>Create classes and share codes with students</p></div>
+        <button class="btn-main" onclick="openClassModal()">+ Create Class</button>
+        <div id="t-classes-grid" class="t-classes-grid"></div>
+      </section>
+      <section class="dsec" id="t-sec-students">
+        <div class="sec-hdr"><h3>👥 My Students</h3></div>
+        <div class="t-filter-row">
+          <input aria-label="Search students" type="text" id="t-search" class="search-inp" placeholder="Search students…" oninput="renderStudentTable()"/>
+          <select id="t-cls-filter" class="sel" onchange="renderStudentTable()" aria-label="Filter students by class"><option value="">All Classes</option></select>
+        </div>
+        <div id="t-student-table"></div>
+      </section>
+       <section class="dsec" id="t-sec-moods">
+        <div class="sec-hdr"><h3>😊 Mood Reports</h3><p>Shared moods from your students</p></div>
+        <select id="mood-cls-filter" class="sel" aria-label="Filter mood reports by class" onchange="renderMoodReports()" style="margin-bottom:16px">
+          <option value="">All Classes</option>
+        </select>
+        <div id="t-mood-grid" class="t-mood-grid"></div>
+      </section>
+      <section class="dsec" id="t-sec-wellness">
+        <div class="sec-hdr"><h3>🌱 Student Wellness Data</h3><p>Only data students chose to share</p></div>
+        <select id="wellness-cls-filter" class="sel" aria-label="Filter wellness data by class" onchange="renderWellnessTable()" style="margin-bottom:16px">
+          <option value="">All Classes</option>
+        </select>
+        <div id="t-wellness-table"></div>
+      </section>
+      <section class="dsec" id="t-sec-goals">
+        <div class="sec-hdr"><h3>🎯 Student Goals</h3></div>
+        <select id="goals-cls-filter" class="sel" aria-label="Filter goals by class" onchange="renderTeacherGoals()" style="margin-bottom:16px">
+          <option value="">All Classes</option>
+        </select>
+        <div id="t-goals-list"></div>
+      </section>
+      <section class="dsec" id="t-sec-alerts">
+        <div class="sec-hdr"><h3>⚠️ Students Needing Support</h3><p>Based on shared mood check-ins</p></div>
+        <select id="alerts-cls-filter" class="sel" aria-label="Filter alerts by class" onchange="renderAlerts()" style="margin-bottom:16px">
+          <option value="">All Classes</option>
+        </select>
+        <div id="t-alerts-list"></div>
+      </section>
+      <section class="dsec" id="t-sec-summary">
+        <div class="sec-hdr"><h3>📋 Weekly Class Summary</h3><p>A snapshot of each class for the past 7 days</p></div>
+        <div class="summary-controls" style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+          <select id="summary-class-sel" class="sel" aria-label="Select class to summarize" onchange="renderWeeklySummary()">
+            <option value="">All Classes</option>
+          </select>
+          <button class="btn-outline small" onclick="printSummary()">🖨 Print / Save as PDF</button>
+        </div>
+        <div id="summary-content"></div>
+      </section>
+      <section class="dsec" id="t-sec-student-report">
+        <button class="back-link" onclick="tSection('moods')">← Back to Mood Reports</button>
+        <div class="sec-hdr"><h3 id="student-report-title">📄 Student Report</h3><p>Full check-in history for the past 7 days</p></div>
+        <button class="btn-outline small" onclick="printStudentReport()" style="margin-bottom:16px">🖨 Print / Save as PDF</button>
+        <div id="student-report-content"></div>
+      </section>
+      <section class="dsec" id="t-sec-help">
+        <div class="sec-hdr"><h3>💙 Wellness Resources</h3></div>
+        <div id="t-help-content"></div>
+      </section>
+      <section class="dsec" id="t-sec-settings">
+        <div class="sec-hdr"><h3>⚙️ Account Settings</h3></div>
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h4>School Social Worker</h4>
+            <p class="field-hint">Students who need help will see this contact info</p>
+            <div class="fgroup"><label for="sw-name">Social Worker Name</label><input type="text" id="sw-name" placeholder="e.g. Ms. Thompson"/></div>
+            <div class="fgroup"><label for="sw-email">Social Worker Email</label><input type="email" id="sw-email" placeholder="mthompson@school.ca"/></div>
+            <button class="btn-main small" onclick="saveSocialWorker()">Save Contact</button>
+            <div id="sw-saved" class="hidden success-note">✓ Saved</div>
+          </div>
+          <div class="settings-card">
+            <h4>Province / Territory</h4>
+            <select id="t-province-setting" class="sel" aria-label="Province or territory"></select>
+            <button class="btn-main small" onclick="saveProvince()" style="margin-top:10px">Update Province</button>
+          </div>
+          <div class="settings-card">
+            <h4>Account Info</h4>
+            <div id="t-account-info"></div>
+          </div>
+          <div class="settings-card">
+            <h4>♿ Accessibility</h4>
+            <p class="field-hint">Adjust how WellSpace Students looks and moves. Saved to this browser, so set it up the same way on your phone, tablet, and computer.</p>
+            <div class="fgroup">
+              <label id="t-a11y-text-label">Text Size</label>
+              <div style="display:flex;gap:8px" role="group" aria-labelledby="t-a11y-text-label">
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(-1)" aria-label="Decrease text size">A−</button>
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(0)" aria-label="Reset text size to default">A</button>
+                <button type="button" class="btn-outline small" onclick="setA11yTextSize(1)" aria-label="Increase text size">A+</button>
+              </div>
+            </div>
+            <div class="share-toggle" style="margin-bottom:10px">
+              <input type="checkbox" id="t-a11y-contrast-toggle" onchange="toggleA11yContrast(this.checked)"/>
+              <label for="t-a11y-contrast-toggle">High contrast mode</label>
+            </div>
+            <div class="share-toggle">
+              <input type="checkbox" id="t-a11y-motion-toggle" onchange="toggleA11yReducedMotion(this.checked)"/>
+              <label for="t-a11y-motion-toggle">Reduce motion & animations</label>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="dsec" id="t-sec-profile">
+        <div class="sec-hdr"><h3>👤 My Profile</h3></div>
+        <div class="profile-grid">
+          <div class="profile-card">
+            <div class="profile-avatar-row">
+              <div class="profile-big-av teacher-av" id="t-profile-av">T</div>
+              <div>
+                <h3 id="t-profile-name"></h3>
+                <p id="t-profile-email" style="color:var(--muted);font-size:.88rem"></p>
+                <p id="t-profile-school" style="color:var(--muted);font-size:.82rem;margin-top:2px"></p>
+              </div>
+            </div>
+            <div class="profile-section-title">Edit Details</div>
+            <div class="fgroup"><label for="t-edit-name">Full Name</label><input type="text" id="t-edit-name" placeholder="Your name"/></div>
+            <div class="fgroup"><label for="t-edit-school">School Name</label><input type="text" id="t-edit-school" placeholder="Your school"/></div>
+            <div class="profile-section-title">Change Password</div>
+            <div class="fgroup"><label for="t-old-pass">Current Password</label><input type="password" id="t-old-pass" placeholder="••••••••"/></div>
+            <div class="fgroup"><label for="t-new-pass">New Password</label><input type="password" id="t-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+            <div id="t-profile-err" class="ferr hidden"></div>
+            <div id="t-profile-ok" class="success-note hidden">✓ Profile updated!</div>
+            <button class="btn-main small" onclick="saveTeacherProfile()">Save Changes</button>
+          </div>
+          <div class="profile-card">
+            <h4 style="color:var(--navy);margin-bottom:4px">📋 Student Responsibilities (Shared)</h4>
+            <p style="font-size:.83rem;color:var(--muted);margin-bottom:16px">Responsibilities students chose to share with you</p>
+            <div id="t-resp-view"></div>
+          </div>
+          <div class="profile-card danger-card">
+            <h4>⚠️ Account Actions</h4>
+            <p style="font-size:.85rem;color:var(--text-2);margin-bottom:16px">Deleting your account will remove all your classes and student associations.</p>
+         <button class="btn-outline" onclick="showPrivacy()" style="margin-bottom:12px">🔒 View Privacy Policy</button>
+            <button class="btn-outline" onclick="showCookiePolicy()" style="margin-bottom:12px">🍪 View Cookie Policy</button>
+            <button class="btn-outline" onclick="toggleCookieConsent()" style="margin-bottom:12px" id="t-cookie-toggle-btn">🍪 Manage Cookie Preference</button>
+            <button class="btn-danger" onclick="confirmDeleteAccount('teacher')">🗑 Delete My Account</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- MODALS -->
+
+<!-- GOAL MODAL -->
+<div id="goal-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="goal-modal-title">
+    <div class="modal-hdr"><h3 id="goal-modal-title">➕ Add Task</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('goal-modal')">✕</button></div>
+    <div class="fgroup"><label for="gm-task">Task Name</label><input type="text" id="gm-task" placeholder="e.g. Study Chapter 5"/></div>
+    <div class="fgroup"><label for="gm-day">Day</label>
+      <select id="gm-day">
+        <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+        <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+      </select></div>
+    <div class="fgroup two-col">
+      <div><label for="gm-time">Start Time</label><input type="time" id="gm-time" value="09:00"/></div>
+      <div><label for="gm-dur">Duration</label>
+        <select id="gm-dur">
+          <option>30 min</option><option>45 min</option><option>1 hour</option>
+          <option>1.5 hours</option><option>2 hours</option><option>2.5 hours</option><option>3 hours</option>
+        </select></div>
+    </div>
+    <div class="fgroup"><label for="gm-type">Type</label>
+      <select id="gm-type">
+        <option value="study">📖 Study / Homework</option>
+        <option value="gym">🏋️ Gym / Sport</option>
+        <option value="rest">😴 Rest / Break</option>
+        <option value="personal">🏠 Personal / Chores</option>
+        <option value="social">👥 Social</option>
+        <option value="other">📌 Other</option>
+      </select></div>
+    <div class="fgroup"><label for="gm-class">Class (optional)</label>
+      <select id="gm-class"><option value=""> - No specific class - </option></select></div>
+    <div class="modal-foot">
+      <button class="btn-main" onclick="addGoal()">Add Task</button>
+      <button class="btn-outline" onclick="closeModal('goal-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLASS MODAL -->
+<div id="class-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
+    <div class="modal-hdr"><h3 id="class-modal-title">➕ Create Class</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('class-modal')">✕</button></div>
+    <div class="fgroup"><label for="cm-subject">Subject Name</label><input type="text" id="cm-subject" placeholder="e.g. English - Grade 10 (ENG2D)"/></div>
+    <div class="fgroup two-col">
+      <div><label for="cm-start">Start Time</label><input type="time" id="cm-start" value="09:00"/></div>
+      <div><label for="cm-end">End Time</label><input type="time" id="cm-end" value="09:45"/></div>
+    </div>
+    <div class="fgroup"><label>Days</label>
+      <div class="day-check-row">
+        <label><input type="checkbox" name="cm-day" value="Monday"/> Mon</label>
+        <label><input type="checkbox" name="cm-day" value="Tuesday"/> Tue</label>
+        <label><input type="checkbox" name="cm-day" value="Wednesday"/> Wed</label>
+        <label><input type="checkbox" name="cm-day" value="Thursday"/> Thu</label>
+        <label><input type="checkbox" name="cm-day" value="Friday"/> Fri</label>
+      </div>
+    </div>
+    <div class="fgroup">
+      <label>Class Banner Color</label>
+      <div class="banner-color-row">
+        <label class="color-opt"><input aria-label="Blue" type="radio" name="cm-color" value="#1d5fa6" checked/><span style="background:#1d5fa6"></span></label>
+        <label class="color-opt"><input aria-label="Green" type="radio" name="cm-color" value="#2e9e6b"/><span style="background:#2e9e6b"></span></label>
+        <label class="color-opt"><input aria-label="Purple" type="radio" name="cm-color" value="#7c3aed"/><span style="background:#7c3aed"></span></label>
+        <label class="color-opt"><input aria-label="Orange" type="radio" name="cm-color" value="#d97706"/><span style="background:#d97706"></span></label>
+        <label class="color-opt"><input aria-label="Red" type="radio" name="cm-color" value="#dc2626"/><span style="background:#dc2626"></span></label>
+        <label class="color-opt"><input aria-label="Teal" type="radio" name="cm-color" value="#0f766e"/><span style="background:#0f766e"></span></label>
+      </div>
+    </div>
+    <div class="fgroup">
+      <label>Class Logo / Icon <span class="opt-label">(emoji or upload image)</span></label>
+      <div class="logo-row">
+        <input aria-label="Paste emoji e.g. 📐 🧬 📖" type="text" id="cm-emoji" placeholder="Paste emoji e.g. 📐 🧬 📖" style="max-width:180px"/>
+        <span style="color:var(--muted);font-size:.85rem;align-self:center">or</span>
+        <label class="upload-label">Upload Image<input aria-label="Upload class logo image" type="file" id="cm-logo-file" accept="image/*" onchange="previewLogo(this)" style="display:none"/></label>
+      </div>
+      <div id="logo-preview-wrap" class="hidden" style="margin-top:8px">
+        <img id="logo-preview-img" alt="Class logo preview" style="width:56px;height:56px;border-radius:var(--r-sm);object-fit:cover;border:1px solid var(--border)"/>
+        <button class="btn-outline small" onclick="clearLogo()" style="margin-left:8px">Remove</button>
+      </div>
+    </div>
+    <div class="fgroup">
+      <label>Banner Message <span class="opt-label">(optional)</span></label>
+      <input aria-label="e.g. This week: Macbeth Act 2" type="text" id="cm-banner-msg" placeholder="e.g. This week: Macbeth Act 2"/>
+    </div>
+    <div class="fgroup">
+      <label>Class Code <span class="opt-label">(students use this to join)</span></label>
+      <div class="code-row">
+        <input aria-label="e.g. ENG2D-2024" type="text" id="cm-code" placeholder="e.g. ENG2D-2024" style="text-transform:uppercase"/>
+        <button class="btn-outline small" onclick="genCode()">Generate</button>
+      </div>
+      <span class="field-hint">Share this code with your students</span>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-main" onclick="createClass()">Create Class</button>
+      <button class="btn-outline" onclick="closeModal('class-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- SOCIAL WORKER POPUP -->
+<div id="sw-popup" class="modal-bg hidden">
+  <div class="modal support-modal" role="dialog" aria-modal="true" aria-labelledby="sw-popup-title">
+    <div class="modal-hdr"><h3 id="sw-popup-title">💙 We're Here For You</h3><button class="modal-close" aria-label="Close dialog" onclick="dismissSWPopup(false)">✕</button></div>
+    <p>It sounds like you might be going through something difficult. You don't have to face it alone.</p>
+    <div id="sw-contact-display"></div>
+    <div class="sw-actions">
+      <button class="btn-outline" onclick="dismissSWPopup(false);sSection('help')">See All Support Lines</button>
+      <button class="btn-green" onclick="dismissSWPopup(false)">I'm okay for now</button>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);text-align:center">
+      <button onclick="dismissSWPopup(true)" style="background:none;border:none;color:var(--muted);font-size:.8rem;cursor:pointer;font-family:var(--font);text-decoration:underline">Don't show this again</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRIVACY MODAL -->
+<div id="privacy-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title" style="max-width:600px;max-height:80vh;overflow-y:auto">
+    <div class="modal-hdr"><h3 id="privacy-modal-title">🔒 Privacy Policy</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('privacy-modal')">✕</button></div>
+    <p style="font-size:.78rem;color:var(--muted)">Last updated: November 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
+      <p><strong>What we collect</strong><br>Name, email, grade (students) or school/province (teachers), mood check-ins, sleep logs, energy logs, goals, journal entries, and class codes. Nothing else - no location, no device ID, no browsing history.</p>
+      <p><strong>Student data is private by default</strong><br>Every entry you make is private. Data is only visible to your teacher when YOU actively click "Share with Teacher." Teachers never see anything you haven't explicitly shared. Your journal is always 100% private - no one can ever see it.</p>
+      <p><strong>Who sees your data</strong><br>
+        • You - always see your own data<br>
+        • Your teacher - only data you've shared with them<br>
+        • Other teachers - nothing<br>
+        • Other students - nothing<br>
+        • WellSpace Students - nothing beyond what's needed to run the app
+      </p>
+       <p><strong>How we store it</strong><br>All data is stored on Google Firebase with encrypted HTTPS connections and strict per-user Firestore security rules. Each user's data is stored in their own private document - no shared blobs, no cross-user access. Passwords are never stored by us - Firebase Authentication handles them entirely with industry-standard encryption. Data currently resides on Firebase's US-based servers; we are actively exploring Canadian-hosted infrastructure for institutional deployments.</p>
+      <p><strong>PIPEDA Compliance</strong><br>We comply with Canada's Personal Information Protection and Electronic Documents Act (PIPEDA). We collect only the minimum data necessary to operate WellSpace Students.</p>
+      <p><strong>Deleting your account</strong><br>Delete your account anytime in Profile settings. Your Firebase Auth account, Firestore data, and profile are all permanently deleted immediately. No data is retained after deletion.</p>
+      <p><strong>Third-party services</strong><br>Google Firebase (database & auth), EmailJS (verification emails), GitHub Pages (hosting), Google Analytics (basic website usage stats).</p>
+      <p><strong>Google Analytics - what it does and does not see</strong><br>We use Google Analytics (GA4) only to understand general site usage - things like how many people visit, which pages are viewed, and device/browser type. GA never receives your name, email, mood check-ins, sleep or energy logs, goals, journal entries, or any other health-related data - that information stays only in our encrypted Firebase database and is never sent to Google. See our full <a href="#" onclick="closeModal('privacy-modal');openModal('cookie-policy-modal');return false;">Cookie Policy</a> for details.</p>
+      <p style="font-size:.78rem;color:var(--muted)">Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    </div>
+    <button class="btn-main small" onclick="closeModal('privacy-modal')" style="margin-top:8px">Got It</button>
   </div>
 </div>
 
 <!-- COOKIE POLICY MODAL -->
-<div id="cookie-modal" class="cookie-modal-bg hidden">
-  <div class="cookie-modal">
-    <button class="cookie-modal-close" onclick="closeCookieModal()">✕</button>
-    <h3>🍪 Cookie Policy</h3>
-    <p class="cookie-modal-updated">Last updated: July 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com" style="color:var(--green)">wellspacewebsite@gmail.com</a></p>
-    <p><strong>What cookies are</strong><br>Cookies (and similar tools like local storage) are small pieces of data a website saves in your browser so it can remember things between visits.</p>
-    <p><strong>Cookies this page uses</strong><br>Google Analytics (only if you accept) - basic, anonymized page-visit stats like page views and device type. That is the only cookie this marketing page sets.</p>
-    <p><strong>We only ask once</strong><br>Once you accept or decline, your browser remembers your choice so you will not be asked again on this page.</p>
-    <p><strong>What Google Analytics does not see</strong><br>This page has no accounts, forms, or health data - there is nothing personal for Analytics to collect beyond basic visit stats. We do not use Google Signals or ad personalization, and IP addresses are anonymized.</p>
-    <p><strong>The main WellSpace Students app</strong><br>The WellSpace Students app (where students actually check in) has its own separate Cookie Policy and Privacy Policy, since that is where account and health data live. Find those in the app's Privacy Policy.</p>
-    <p><strong>Managing cookies</strong><br>You can decline anytime in the banner, or clear cookies through your browser settings. Declining does not affect your ability to browse this page.</p>
-    <button class="cookie-modal-ok" onclick="closeCookieModal()">Got It</button>
+<div id="cookie-policy-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cookie-policy-modal-title" style="max-width:600px;max-height:80vh;overflow-y:auto">
+    <div class="modal-hdr"><h3 id="cookie-policy-modal-title">🍪 Cookie Policy</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('cookie-policy-modal')">✕</button></div>
+    <p style="font-size:.78rem;color:var(--muted)">Last updated: July 2026 · Contact: <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    <div class="privacy-text" style="font-size:.88rem;line-height:1.7">
+      <p><strong>What cookies are</strong><br>Cookies (and similar tools like local storage) are small pieces of data a website saves in your browser so it can remember things between visits, like whether you're logged in.</p>
+      <p><strong>Cookies WellSpace Students uses</strong><br>
+        • Login session - keeps you signed in to your account (required for the app to work)<br>
+        • Cookie preference - remembers whether you accepted or declined analytics cookies, so we don't ask you every time<br>
+        • Google Analytics (only if you accept) - basic, anonymized website usage stats
+      </p>
+      <p><strong>We ask once, not every visit</strong><br>When you accept or decline analytics cookies, that choice is saved to your account, not just your browser. So once you've answered, on any device you log in on we already know your answer and won't ask again. You can still change your mind anytime from Profile settings or by clearing your browser data.</p>
+      <p><strong>What Google Analytics does and does not see</strong><br>If you accept, Google Analytics receives basic technical info like page views and device type. It never receives your name, email, mood check-ins, journal entries, or any health-related data - that stays only in our encrypted database. We don't use Google Signals or ad personalization, and IP addresses are anonymized.</p>
+      <p><strong>No advertising cookies</strong><br>WellSpace Students has no ad trackers and does not use cookies for advertising or to build a profile of you for marketing.</p>
+      <p><strong>Managing cookies</strong><br>You can decline analytics cookies anytime in the banner or by emailing us, and you can always clear cookies through your browser settings. Declining does not affect your ability to use WellSpace Students - only the login session cookie is required.</p>
+      <p style="font-size:.78rem;color:var(--muted)">This Cookie Policy works alongside our <a href="#" onclick="closeModal('cookie-policy-modal');openModal('privacy-modal');return false;">Privacy Policy</a>. Questions? Email <a href="mailto:wellspacewebsite@gmail.com">wellspacewebsite@gmail.com</a></p>
+    </div>
+    <button class="btn-main small" onclick="closeModal('cookie-policy-modal')" style="margin-top:8px">Got It</button>
   </div>
 </div>
 
-<!-- FOOTER -->
-</main>
-
-<footer>
-  <div class="footer-inner">
-    <div class="footer-brand">WellSpace Students HQ</div>
-    <div class="footer-links">
-      <a href="https://wellspaceapp.github.io/WellSpace-Students/">The Site</a>
-      <a href="https://forms.gle/B25bTZUp7PzgkpXw8">Volunteer</a>
-      <a href="mailto:wellspacewebsite@gmail.com">Contact</a>
-      <a href="https://www.linkedin.com/company/wellspacewebapp/">LinkedIn</a>
-      <a href="https://github.com/WellSpaceApp/WellSpace-Students">GitHub</a>
-      <a href="https://wellspaceapp.github.io/WellSpace-Students/privacy.html">Privacy Policy</a>
-      <a href="#" onclick="openCookieModal();return false;">Cookie Policy</a>
+<!-- DELETE ACCOUNT MODAL -->
+<div id="delete-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal-hdr"><h3 id="delete-modal-title">🗑 Delete Account</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('delete-modal')">✕</button></div>
+    <div style="background:var(--red-lt);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:18px">
+      <p style="color:var(--red);font-weight:700;margin-bottom:4px">⚠️ This cannot be undone</p>
+      <p style="color:var(--red);font-size:.88rem">All your data will be permanently deleted.</p>
     </div>
-    <div class="footer-copy">Built by Muhammad Taha. Ontario, Canada. 2025 to 2026. Free forever.</div>
+    <div class="fgroup"><label for="delete-confirm-input">Type DELETE to confirm</label><input type="text" id="delete-confirm-input" placeholder="Type DELETE here…"/></div>
+    <div class="fgroup"><label for="delete-pass-input">Enter your password</label><input type="password" id="delete-pass-input" placeholder="••••••••"/></div>
+    <div id="delete-err" class="ferr hidden"></div>
+    <div class="modal-foot">
+      <button class="btn-danger" onclick="executeDeleteAccount()">Permanently Delete</button>
+      <button class="btn-outline" onclick="closeModal('delete-modal')">Cancel</button>
+    </div>
   </div>
-</footer>
+</div>
 
+<!-- FORGOT PASSWORD MODAL -->
+<div id="forgot-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="forgot-modal-title">
+    <div class="modal-hdr"><h3 id="forgot-modal-title">🔑 Reset Password</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('forgot-modal')">✕</button></div>
+    <div id="forgot-step-1">
+      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Enter your email address and we'll send you a reset code.</p>
+      <div class="fgroup"><label for="forgot-email">Email Address</label><input type="email" id="forgot-email" placeholder="you@email.com"/></div>
+      <div id="forgot-err" class="ferr hidden"></div>
+      <button class="btn-main" onclick="sendResetCode()">Send Reset Code</button>
+    </div>
+    <div id="forgot-step-2" class="hidden">
+      <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="forgot-email-display"></strong>. Enter it below.</p>
+      <div class="fgroup"><label for="forgot-code-input">6-digit Code</label><input type="text" id="forgot-code-input" placeholder="123456" maxlength="6"/></div>
+      <div class="fgroup"><label for="forgot-new-pass">New Password</label><input type="password" id="forgot-new-pass" placeholder="8+ chars, uppercase, number, symbol"/></div>
+      <div id="forgot-reset-err" class="ferr hidden"></div>
+      <div id="forgot-reset-ok" class="success-note hidden">✓ Password reset! Redirecting…</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn-main" onclick="confirmResetPassword()">Reset Password</button>
+        <button class="btn-outline small" onclick="resendResetCode()">Resend Code</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EMAIL VERIFY MODAL -->
+<div id="verify-modal" class="modal-bg hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="verify-modal-title">
+    <div class="modal-hdr"><h3 id="verify-modal-title">📧 Verify Your Email</h3><button class="modal-close" aria-label="Close dialog" onclick="closeModal('verify-modal')">✕</button></div>
+    <p style="font-size:.88rem;color:var(--text-2);margin-bottom:16px">Code sent to <strong id="verify-email-display"></strong>. Enter it below to activate your account.</p>
+    <div class="fgroup"><label for="verify-code-input">6-digit Code</label><input type="text" id="verify-code-input" placeholder="123456" maxlength="6"/></div>
+    <div id="verify-err" class="ferr hidden"></div>
+    <div id="verify-ok" class="success-note hidden">✓ Verified! Creating your account…</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn-main" onclick="confirmVerifyCode()">Verify</button>
+      <button class="btn-outline small" onclick="resendVerifyCode()">Resend Code</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- FIREBASE - must load BEFORE script.js -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<!-- EMAILJS -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
-function toggleFaq(btn){
-  const item = btn.closest('.faq-item');
-  const isOpen = item.classList.toggle('open');
-  btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-}
-
-const navToggle = document.getElementById('navToggle');
-const navLinks  = document.getElementById('navLinks');
-navToggle.addEventListener('click',()=>{
-  const isOpen = navLinks.classList.toggle('open');
-  navToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-});
-
-// COOKIE CONSENT + PRIVACY-SAFE GOOGLE ANALYTICS
-var WELLSPACEHQ_GA_ID = 'G-M94V0MQZN8';
-
-function loadGoogleAnalytics(){
-  if(window.__gaLoaded) return;
-  window.__gaLoaded = true;
-  var s = document.createElement('script');
-  s.async = true;
-  s.src = 'https://www.googletagmanager.com/gtag/js?id=' + WELLSPACEHQ_GA_ID;
-  document.head.appendChild(s);
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){ dataLayer.push(arguments); }
-  window.gtag = gtag;
-  gtag('js', new Date());
-  gtag('config', WELLSPACEHQ_GA_ID, {
-    anonymize_ip: true,
-    allow_google_signals: false,
-    allow_ad_personalization_signals: false
-  });
-}
-
-function setCookieConsent(accepted){
-  localStorage.setItem('wellspacehq_cookie_consent', accepted ? 'accepted' : 'declined');
-  document.getElementById('cookie-banner').classList.add('hidden');
-  if(accepted) loadGoogleAnalytics();
-}
-
-function openCookieModal(){ document.getElementById('cookie-modal').classList.remove('hidden'); }
-function closeCookieModal(){ document.getElementById('cookie-modal').classList.add('hidden'); }
-
-(function initCookieConsent(){
-  var consent = localStorage.getItem('wellspacehq_cookie_consent');
-  if(consent === 'accepted'){
-    loadGoogleAnalytics();
-  } else if(consent !== 'declined'){
-    document.getElementById('cookie-banner').classList.remove('hidden');
-  }
-})();
+  if(typeof emailjs !== 'undefined') emailjs.init('hgQbp6YnQ4Y8QabYh');
 </script>
+<!-- GOOGLE ANALYTICS (privacy-safe, loads only after cookie consent) -->
+<script>
+  window.WELLSPACE_GA_ID = 'G-ZE25K1RHBZ';
+
+  function loadGoogleAnalytics(){
+    if(window.__gaLoaded) return;
+    window.__gaLoaded = true;
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.WELLSPACE_GA_ID;
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    window.gtag = gtag;
+    gtag('js', new Date());
+    // Privacy-safe config: no ad personalization, no Google Signals,
+    // IP anonymization (default in GA4), and no automatic PII collection.
+    gtag('config', window.WELLSPACE_GA_ID, {
+      anonymize_ip: true,
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false
+    });
+  }
+
+  function setCookieConsent(accepted){
+    localStorage.setItem('wellspace_cookie_consent', accepted ? 'accepted' : 'declined');
+    document.getElementById('cookie-banner').classList.add('hidden');
+    if(accepted) loadGoogleAnalytics();
+    // If someone is logged in, save the choice to their account too,
+    // so it's remembered on any device, not just this browser.
+    if(typeof window.saveCookieConsentToAccount === 'function'){
+      window.saveCookieConsentToAccount(accepted);
+    }
+  }
+
+  (function initCookieConsent(){
+    var consent = localStorage.getItem('wellspace_cookie_consent');
+    if(consent === 'accepted'){
+      loadGoogleAnalytics();
+    } else if(consent !== 'declined'){
+      document.addEventListener('DOMContentLoaded', function(){
+        document.getElementById('cookie-banner').classList.remove('hidden');
+      });
+    }
+  })();
+</script>
+<!-- APP -->
+<script src="script.js"></script>
 </body>
 </html>
